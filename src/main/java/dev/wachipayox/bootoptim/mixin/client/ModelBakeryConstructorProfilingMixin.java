@@ -10,8 +10,8 @@ import net.minecraft.client.resources.model.UnbakedModel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.profiling.ProfilerFiller;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -28,8 +28,8 @@ import java.util.function.Consumer;
  */
 @Mixin(ModelBakery.class)
 abstract class ModelBakeryConstructorProfilingMixin {
-    @Shadow
-    private abstract void loadItemModelAndDependencies(ResourceLocation location);
+    @Invoker("loadItemModelAndDependencies")
+    abstract void bootoptim$invokeLoadItemModelAndDependencies(ResourceLocation location);
 
     @Unique
     private long bootoptim$itemModelNanos;
@@ -71,13 +71,13 @@ abstract class ModelBakeryConstructorProfilingMixin {
                     target = "Lnet/minecraft/client/resources/model/ModelBakery;loadItemModelAndDependencies(Lnet/minecraft/resources/ResourceLocation;)V"))
     private void bootoptim$profileItemModel(ModelBakery instance, ResourceLocation location) {
         if (!StartupProfiler.isEnabled()) {
-            this.loadItemModelAndDependencies(location);
+            this.bootoptim$invokeLoadItemModelAndDependencies(location);
             return;
         }
 
         long started = System.nanoTime();
         try {
-            this.loadItemModelAndDependencies(location);
+            this.bootoptim$invokeLoadItemModelAndDependencies(location);
         } finally {
             this.bootoptim$itemModelNanos += System.nanoTime() - started;
             this.bootoptim$itemModelCount++;
