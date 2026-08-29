@@ -5,6 +5,7 @@ import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -122,7 +123,8 @@ final class TransformedClassCache {
             }
             String storedFingerprint = in.readUTF();
             if (!storedFingerprint.equals(fingerprint)) {
-                StartupDiagnostics.cache("transformed_class_cache_invalidated reason=fingerprint_changed");
+                StartupDiagnostics.cache("transformed_class_cache_invalidated reason=fingerprint_changed old="
+                        + storedFingerprint + " new=" + fingerprint);
                 return;
             }
             int count = checkedCount(in.readInt());
@@ -221,31 +223,68 @@ final class TransformedClassCache {
         update(digest, "fml=" + String.valueOf(net.neoforged.fml.loading.FMLLoader.class.getPackage().getImplementationVersion()));
         update(digest, "mc=" + System.getProperty("fml.mcVersion", "1.21.1"));
         update(digest, "dist=" + String.valueOf(net.neoforged.fml.loading.FMLEnvironment.dist));
-        updateTree(digest, gameDir, "mods");
-        updateTree(digest, gameDir, "config");
-        updateTree(digest, gameDir, "defaultconfigs");
+        updateMetadataTree(digest, gameDir, "mods");
+        updateContentTree(digest, gameDir, "config");
+        updateContentTree(digest, gameDir, "defaultconfigs");
         return HexFormat.of().formatHex(digest.digest());
     }
 
-    private static void updateTree(MessageDigest digest, Path gameDir, String child) throws IOException {
+    /**
+     * JARs are large and immutable in normal packs, so their identity stays cheap during the experiment.
+     * A production version can retain persistent content hashes keyed by these metadata fields.
+     */
+    private static void updateMetadataTree(MessageDigest digest, Path gameDir, String child) throws IOException {
         Path root = gameDir.resolve(child);
         update(digest, child + ":exists=" + Files.exists(root));
         if (!Files.isDirectory(root)) {
             return;
         }
-
-        List<Path> files;
-        try (var stream = Files.walk(root)) {
-            files = stream.filter(Files::isRegularFile)
-                    .sorted(Comparator.comparing(path -> root.relativize(path).toString()))
-                    .toList();
-        }
-        for (Path file : files) {
+        for (Path file : regularFiles(root)) {
             BasicFileAttributes attrs = Files.readAttributes(file, BasicFileAttributes.class);
-            update(digest, child + "/" + root.relativize(file).toString().replace('\\', '/'));
+            update(digest, child + "/" + relative(root, file));
             update(digest, Long.toString(attrs.size()));
             update(digest, Long.toString(attrs.lastModifiedTime().toMillis()));
         }
+    }
+
+    /**
+     * Config files are commonly rewritten by loaders/mods even when their effective contents do not change.
+     * Hash their bytes rather than mtimes so harmless rewrites do not destroy a warm transformed cache.
+     */
+    private static void updateContentTree(MessageDigest digest, Path gameDir, String child) throws IOException {
+        Path root = gameDir.resolve(child);
+        update(digest, child + ":exists=" + Files.exists(root));
+        if (!Files.isDirectory(root)) {
+            return;
+        }
+        for (Path file : regularFiles(root)) {
+            update(digest, child + "/" + relative(root, file));
+            BasicFileAttributes attrs = Files.readAttributes(file, BasicFileAttributes.class);
+            update(digest, Long.toString(attrs.size()));
+            MessageDigest fileDigest = messageDigest();
+            try (InputStream input = new BufferedInputStream(Files.newInputStream(file))) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) >= 0) {
+                    if (read > 0) {
+                        fileDigest.update(buffer, 0, read);
+                    }
+                }
+            }
+            update(digest, HexFormat.of().formatHex(fileDigest.digest()));
+        }
+    }
+
+    private static List<Path> regularFiles(Path root) throws IOException {
+        try (var stream = Files.walk(root)) {
+            return stream.filter(Files::isRegularFile)
+                    .sorted(Comparator.comparing(path -> relative(root, path)))
+                    .toList();
+        }
+    }
+
+    private static String relative(Path root, Path file) {
+        return root.relativize(file).toString().replace('\\', '/');
     }
 
     private static void update(MessageDigest digest, String value) {
