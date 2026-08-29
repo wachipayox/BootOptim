@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim;
 
+import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import net.neoforged.fml.common.Mod;
 
 /**
@@ -14,5 +15,6 @@ public final class BootOptim {
     public static final String MOD_ID = "boot_optim";
 
     public BootOptim() {
+        StartupProfiler.markModEntrypoint();
     }
 }
