@@ -1,0 +1,134 @@
+name: Class Prewarm A/B
+
+on:
+  pull_request:
+    branches: [ agent/bootstrap-phase-profiling ]
+    paths:
+      - 'src/main/java/dev/wachipayox/bootoptim/profiling/ParallelClassPrewarmer.java'
+      - 'src/main/resources/boot_optim/blocks-prewarm-classes.txt'
+      - 'src/main/java/dev/wachipayox/bootoptim/mixin/BootstrapProfilingMixin.java'
+      - '.github/workflows/class-prewarm-ab.yml'
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    env:
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri
+
+      - name: Seed benchmark client options
+        run: |
+          mkdir -p run-benchmark
+          cat > run-benchmark/options.txt <<'EOF'
+          onboardAccessibility:false
+          narrator:0
+          EOF
+
+      - name: Run interleaved stock/prewarm samples
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_sample() {
+            local name="$1"
+            local enabled="$2"
+            echo "===== ${name} enabled=${enabled} ====="
+            if [[ "$enabled" == "true" ]]; then
+              xvfb-run -a env JAVA_TOOL_OPTIONS='-Dboot_optim.classPrewarm=true' \
+                ./gradlew runBenchmarkClient --no-daemon --console=plain > "${name}.log" 2>&1
+            else
+              xvfb-run -a ./gradlew runBenchmarkClient --no-daemon --console=plain > "${name}.log" 2>&1
+            fi
+            grep 'BOOTOPTIM_' "${name}.log" || true
+            grep -q 'BOOTOPTIM_STARTUP phase=main_menu' "${name}.log"
+          }
+
+          # Warm Gradle/NeoForm caches and both JVM paths before measuring.
+          run_sample warm-stock false
+          run_sample warm-prewarm true
+
+          # Interleave order to reduce runner drift bias.
+          run_sample stock-a false
+          run_sample prewarm-a true
+          run_sample prewarm-b true
+          run_sample stock-b false
+
+      - name: Summarize A/B
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+          from statistics import mean
+
+          names = ['stock-a', 'prewarm-a', 'prewarm-b', 'stock-b']
+          rows = []
+          for name in names:
+              text = Path(name + '.log').read_text(errors='replace')
+              def startup(phase):
+                  m = re.findall(rf'BOOTOPTIM_STARTUP phase={re.escape(phase)} uptime_ms=(\d+)', text)
+                  if not m:
+                      raise SystemExit(f'missing {phase} in {name}')
+                  return int(m[-1])
+              def bootstrap(phase):
+                  m = re.findall(rf'BOOTOPTIM_BOOTSTRAP phase={re.escape(phase)} duration_ms=([0-9.]+)', text)
+                  if not m:
+                      raise SystemExit(f'missing bootstrap {phase} in {name}')
+                  return float(m[-1])
+              discovery = startup('dependency_discovery_end')
+              entry = startup('mod_entrypoint')
+              menu = startup('main_menu')
+              rows.append({
+                  'name': name,
+                  'd2e': entry - discovery,
+                  'menu': menu,
+                  'bootstrap': bootstrap('bootstrap_total'),
+                  'blocks': bootstrap('blocks_clinit'),
+                  'fire': bootstrap('fire_bootstrap'),
+              })
+
+          stock = [r for r in rows if r['name'].startswith('stock')]
+          prewarm = [r for r in rows if r['name'].startswith('prewarm')]
+
+          def delta(metric):
+              s = mean(r[metric] for r in stock)
+              p = mean(r[metric] for r in prewarm)
+              return s, p, (s - p) / s * 100.0
+
+          lines = ['### Parallel class prewarm A/B', '', '| sample | discovery→entry ms | menu ms | bootstrap ms | blocks ms | fire ms |', '|---|---:|---:|---:|---:|---:|']
+          for r in rows:
+              lines.append(f"| {r['name']} | {r['d2e']:.0f} | {r['menu']:.0f} | {r['bootstrap']:.1f} | {r['blocks']:.1f} | {r['fire']:.1f} |")
+          lines += ['', '| metric | stock mean | prewarm mean | improvement |', '|---|---:|---:|---:|']
+          for metric in ['d2e', 'menu', 'bootstrap', 'blocks', 'fire']:
+              s, p, pct = delta(metric)
+              lines.append(f'| {metric} | {s:.1f} | {p:.1f} | {pct:+.2f}% |')
+
+          out = '\n'.join(lines)
+          print(out)
+          with open(Path(__import__('os').environ['GITHUB_STEP_SUMMARY']), 'a') as f:
+              f.write(out + '\n')
+
+      - name: Upload A/B logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: class-prewarm-ab-logs
+          path: '*.log'
+          if-no-files-found: ignore
