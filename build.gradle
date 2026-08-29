@@ -33,6 +33,7 @@ var packBenchmarkDirectory = project.file('run-pack-benchmark')
 var externalPackDirectory = providers.gradleProperty('bootoptimPackDir')
         .orElse(providers.environmentVariable('BOOTOPTIM_PACK_DIR'))
 var connectorCleanMinecraft = project.file('build/createCleanArtifact/minecraft-renamed.jar')
+var parallelModelBakeBenchmark = providers.gradleProperty('bootoptimParallelModelBake').orElse('true')
 
 var preparePackBenchmark = tasks.register('preparePackBenchmark', Sync) {
     into packBenchmarkDirectory
@@ -101,7 +102,7 @@ neoForge {
             gameDirectory = project.file('run-benchmark')
             systemProperty 'boot_optim.profileStartup', 'true'
             systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
-            systemProperty 'boot_optim.parallelModelBake', 'true'
+            systemProperty 'boot_optim.parallelModelBake', parallelModelBakeBenchmark.get()
         }
 
         packBenchmarkClient {
@@ -109,7 +110,7 @@ neoForge {
             gameDirectory = packBenchmarkDirectory
             systemProperty 'boot_optim.profileStartup', 'true'
             systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
-            systemProperty 'boot_optim.parallelModelBake', 'true'
+            systemProperty 'boot_optim.parallelModelBake', parallelModelBakeBenchmark.get()
             systemProperty 'connector.clean.path', connectorCleanMinecraft.absolutePath
         }
 
