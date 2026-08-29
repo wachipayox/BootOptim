@@ -35,6 +35,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libgl1-mesa-dri
 
+      - name: Seed benchmark client options
+        run: |
+          mkdir -p run-benchmark
+          cat > run-benchmark/options.txt <<'EOF'
+          onboardAccessibility:false
+          narrator:0
+          EOF
+
       - name: Launch client to main menu
         shell: bash
         run: |
