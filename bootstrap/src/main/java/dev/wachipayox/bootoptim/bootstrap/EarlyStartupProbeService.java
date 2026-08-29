@@ -56,6 +56,10 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
+        // This callback runs while FML is gathering the final transformer set, immediately before
+        // ModLauncher constructs the GAME classloader. That is the last safe point to swap only the
+        // classloader factory without racing actual Minecraft class definitions.
+        TransformCacheClassLoaderInstaller.installIfRequested();
         return List.of();
     }
 
