@@ -33,7 +33,9 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('jar', Jar).configure {
     manifest {
-        attributes('Automatic-Module-Name': 'dev.wachipayox.bootoptim.bootstrap')
+        attributes(
+                'Automatic-Module-Name': 'dev.wachipayox.bootoptim.bootstrap',
+                'Implementation-Version': project.version)
     }
 }
 
@@ -41,6 +43,7 @@ tasks.named('test', Test).configure {
     dependsOn rootProject.tasks.named('jar')
     useJUnitPlatform()
     systemProperty 'bootoptim.fixtureJar', rootProject.tasks.named('jar', Jar).flatMap { it.archiveFile }.get().asFile.absolutePath
+    systemProperty 'boot_optim.version', rootProject.mod_version
     testLogging.showStandardStreams = true
 
     // SecureJarHandler normally receives these opens/exports from BootstrapLauncher/ModLauncher.
