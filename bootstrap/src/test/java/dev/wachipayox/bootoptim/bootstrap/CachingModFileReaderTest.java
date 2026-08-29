@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.bootstrap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,9 +29,11 @@ class CachingModFileReaderTest {
 
         PrintStream previousOut = System.out;
         String previousProfile = System.getProperty("boot_optim.profileStartup");
+        String previousEnabled = System.getProperty("boot_optim.scanCache");
         ByteArrayOutputStream captured = new ByteArrayOutputStream();
         System.setOut(new PrintStream(captured, true, StandardCharsets.UTF_8));
         System.setProperty("boot_optim.profileStartup", "true");
+        System.setProperty("boot_optim.scanCache", "true");
         try {
             ModFile first = assertInstanceOf(ModFile.class,
                     reader.read(JarContents.of(List.of(fixture)), ModFileDiscoveryAttributes.DEFAULT));
@@ -49,16 +52,40 @@ class CachingModFileReaderTest {
             assertEquals(firstScan.getClasses(), secondScan.getClasses());
             assertEquals(firstScan.getAnnotations(), secondScan.getAnnotations());
         } finally {
-            if (previousProfile == null) {
-                System.clearProperty("boot_optim.profileStartup");
-            } else {
-                System.setProperty("boot_optim.profileStartup", previousProfile);
-            }
+            restoreProperty("boot_optim.profileStartup", previousProfile);
+            restoreProperty("boot_optim.scanCache", previousEnabled);
             System.setOut(previousOut);
         }
 
         String output = captured.toString(StandardCharsets.UTF_8);
         assertTrue(output.contains("BOOTOPTIM_SCAN_CACHE result=miss"), output);
         assertTrue(output.contains("BOOTOPTIM_SCAN_CACHE result=hit"), output);
+        assertTrue(output.contains("elapsed_ms="), output);
+        assertTrue(output.contains("scan_window_ms="), output);
+    }
+
+    @Test
+    void canDisableCacheForRuntimeAbComparisons() {
+        FMLPaths.loadAbsolutePaths(gameDir);
+        Path fixture = Path.of(System.getProperty("bootoptim.fixtureJar"));
+        String previousEnabled = System.getProperty("boot_optim.scanCache");
+        System.setProperty("boot_optim.scanCache", "false");
+        try {
+            CachingModFileReader reader = new CachingModFileReader();
+            ModFile mod = assertInstanceOf(ModFile.class,
+                    reader.read(JarContents.of(List.of(fixture)), ModFileDiscoveryAttributes.DEFAULT));
+            assertFalse(mod.compileContent().getClasses().isEmpty());
+            assertFalse(java.nio.file.Files.exists(gameDir.resolve(".bootoptim/mod-scan-cache-v1")));
+        } finally {
+            restoreProperty("boot_optim.scanCache", previousEnabled);
+        }
+    }
+
+    private static void restoreProperty(String name, String previousValue) {
+        if (previousValue == null) {
+            System.clearProperty(name);
+        } else {
+            System.setProperty(name, previousValue);
+        }
     }
 }
