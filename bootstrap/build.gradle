@@ -41,6 +41,7 @@ tasks.named('test', Test).configure {
     dependsOn rootProject.tasks.named('jar')
     useJUnitPlatform()
     systemProperty 'bootoptim.fixtureJar', rootProject.tasks.named('jar', Jar).flatMap { it.archiveFile }.get().asFile.absolutePath
+    testLogging.showStandardStreams = true
 
     // SecureJarHandler normally receives these opens/exports from BootstrapLauncher/ModLauncher.
     // Plain JUnit runs do not, so mirror the real launch environment for the functional cache test.
