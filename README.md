@@ -11,6 +11,26 @@ BootOptim is a NeoForge 1.21.1 performance mod focused specifically on reducing 
 - Avoid duplicating dedicated optimization mods unless BootOptim can demonstrably replace them with a better implementation.
 - When a multipurpose mod contains an overlapping optimization, prefer disabling only the overlapping feature while keeping the rest of that mod active.
 
+## Startup diagnostics
+
+BootOptim creates `config/boot_optim.properties` on first launch. The startup report is disabled by default:
+
+```properties
+startupLog=false
+```
+
+Set it to `true` to write a lightweight report to `logs/bootoptim-startup.log`. Development/IDE runs force this report on automatically. The report records the BootOptim version, optimization enable/disable decisions and reasons, cache/version events, recoverable failures reported by BootOptim components, important startup milestones, and total JVM uptime when the main menu is first reached.
+
+This lightweight report does **not** enable JFR or the fine-grained startup profiler. Heavy profiling remains opt-in through the existing debug/benchmark tooling.
+
+## Persistent cache
+
+The current mod metadata scan cache is stored under:
+
+`<game directory>/.bootoptim/mod-scan-cache-v1/`
+
+BootOptim also stores `<game directory>/.bootoptim/cache-version.txt`. When the BootOptim mod version changes, the persistent cache namespace is invalidated before it can be reused. The mod version is additionally stamped into the packaged bootstrap JAR so production launches do not depend on Gradle/dev properties for this check.
+
 ## Development baseline
 
 - Minecraft 1.21.1

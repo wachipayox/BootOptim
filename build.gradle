@@ -139,6 +139,10 @@ neoForge {
             // runtime classpath. On a clean checkout its output directories do not exist until this task runs.
             taskBefore prepareBootstrapRunOutputs
 
+            // Every ModDev/IDE run is a debug environment: keep the lightweight startup report on there.
+            systemProperty 'boot_optim.debug', 'true'
+            systemProperty 'boot_optim.version', project.mod_version
+
             // Startup benchmarks must resemble production logging; DEBUG/registry logging can materially skew boot time.
             logLevel = org.slf4j.event.Level.INFO
         }
@@ -185,6 +189,12 @@ var generateModMetadata = tasks.register('generateModMetadata', ProcessResources
 
 sourceSets.main.resources.srcDir generateModMetadata
 neoForge.ideSyncTask generateModMetadata
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes('Implementation-Version': project.version)
+    }
+}
 
 publishing {
     publications {
