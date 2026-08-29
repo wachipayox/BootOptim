@@ -35,7 +35,10 @@ tasks.named('jar', Jar).configure {
     manifest {
         attributes(
                 'Automatic-Module-Name': 'dev.wachipayox.bootoptim.bootstrap',
-                'Implementation-Version': project.version)
+                'Implementation-Version': project.version,
+                // Early-service jars cannot double as normal mods. Mark the wrapper as an FML library so
+                // production discovery keeps it as a mod-file container and JarJar can expose the nested mod.
+                'FMLModType': 'LIBRARY')
     }
 }
 
