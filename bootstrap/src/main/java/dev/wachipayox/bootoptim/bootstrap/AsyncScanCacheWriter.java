@@ -28,6 +28,20 @@ final class AsyncScanCacheWriter {
         return thread;
     });
 
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            WRITER.shutdown();
+            try {
+                if (!WRITER.awaitTermination(10, TimeUnit.SECONDS)) {
+                    WRITER.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                WRITER.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }, "bootoptim-scan-cache-shutdown"));
+    }
+
     private AsyncScanCacheWriter() {}
 
     static boolean submit(Runnable write) {
