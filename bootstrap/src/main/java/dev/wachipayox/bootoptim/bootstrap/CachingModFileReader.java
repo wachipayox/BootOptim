@@ -138,16 +138,25 @@ public final class CachingModFileReader implements IModFileReader {
                 }
 
                 ModFileScanData scanned = super.compileContent();
+                outcome = "miss";
                 if (observedSecurityStatus != null) {
-                    try {
-                        ScanCache.write(cachePath, new ScanCache.Entry(observedSecurityStatus, scanned));
-                    } catch (Throwable ignored) {
-                        // Writing the optional cache must never force a second scan or break startup.
-                        outcome = "miss_write_failed";
-                        return scanned;
+                    ScanCache.Entry entry = new ScanCache.Entry(observedSecurityStatus, scanned);
+                    boolean scheduled = AsyncScanCacheWriter.submit(() -> {
+                        long writeStartedNanos = System.nanoTime();
+                        String writeOutcome = "success";
+                        try {
+                            ScanCache.write(cachePath, entry);
+                        } catch (Throwable ignored) {
+                            // Persistence is optional. The already completed scan remains authoritative.
+                            writeOutcome = "failed";
+                        } finally {
+                            ScanMetrics.cacheWriteFinished(writeOutcome, source, writeStartedNanos);
+                        }
+                    });
+                    if (!scheduled) {
+                        outcome = "miss_write_enqueue_failed";
                     }
                 }
-                outcome = "miss";
                 return scanned;
             } finally {
                 ScanMetrics.finished(outcome, source, startedNanos);
@@ -178,7 +187,6 @@ public final class CachingModFileReader implements IModFileReader {
                     + VERSION;
             String key = hex(MessageDigest.getInstance("SHA-256").digest(identity.getBytes(StandardCharsets.UTF_8)));
             Path dir = FMLPaths.GAMEDIR.get().resolve(".bootoptim").resolve("mod-scan-cache-v1");
-            Files.createDirectories(dir);
             return dir.resolve(key + ".bin");
         }
 
@@ -202,6 +210,7 @@ public final class CachingModFileReader implements IModFileReader {
         }
 
         private static void write(Path path, Entry entry) throws IOException {
+            Files.createDirectories(path.getParent());
             Path temp = path.resolveSibling(path.getFileName() + ".tmp-" + Thread.currentThread().threadId());
             try {
                 try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temp)))) {
@@ -409,6 +418,20 @@ public final class CachingModFileReader implements IModFileReader {
                     elapsedMs,
                     windowMs,
                     finished);
+        }
+
+        private static void cacheWriteFinished(String result, Path source, long startedNanos) {
+            if (!Boolean.getBoolean(PROFILE_PROPERTY)) {
+                return;
+            }
+
+            double elapsedMs = (System.nanoTime() - startedNanos) / 1_000_000.0;
+            System.out.printf(
+                    "BOOTOPTIM_SCAN_CACHE_WRITE result=%s file=%s elapsed_ms=%.3f pending=%d%n",
+                    result,
+                    source.getFileName(),
+                    elapsedMs,
+                    AsyncScanCacheWriter.pendingWrites());
         }
     }
 }
