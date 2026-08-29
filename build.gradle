@@ -26,8 +26,6 @@ sourceSets.main.resources {
 
 sourceSets {
     bootstrap {
-        java.srcDir 'src/bootstrap/java'
-        resources.srcDir 'src/bootstrap/resources'
         compileClasspath += sourceSets.main.compileClasspath
         runtimeClasspath += output + compileClasspath
     }
