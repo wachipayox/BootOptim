@@ -18,7 +18,13 @@ import java.util.Map;
 /** Fine-grained timings inside ModelManager's asynchronous preparation path. */
 @Mixin(ModelBakery.class)
 abstract class ModelBakeryProfilingMixin {
-    @Inject(method = "<init>", at = @At("HEAD"))
+    @Inject(
+            method = "<init>",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/util/profiling/ProfilerFiller;push(Ljava/lang/String;)V",
+                    ordinal = 0,
+                    shift = At.Shift.AFTER))
     private void bootoptim$modelBakeryStart(
             BlockColors blockColors,
             ProfilerFiller profiler,
