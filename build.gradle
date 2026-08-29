@@ -18,6 +18,8 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+evaluationDependsOn(':bootstrap')
+
 sourceSets.main.resources {
     srcDir('src/generated/resources')
     exclude('**/*.bbmodel')
@@ -73,6 +75,10 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+        }
+        // Keep the early transformation service on a distinct path in dev, mirroring the packaged wrapper.
+        'boot_optim_bootstrap' {
+            sourceSet(project(':bootstrap').sourceSets.main)
         }
     }
 }
