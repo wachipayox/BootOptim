@@ -45,16 +45,22 @@ jobs:
           EOF
           done
 
-      - name: Warm stock scan cache and populate transformed cache
+      - name: Warm stock and stabilize transformed cache
         shell: bash
         run: |
           set -euo pipefail
           xvfb-run -a ./gradlew runBenchmarkClient --no-daemon --console=plain > stock-warmup.log 2>&1
+
+          # First transformed run records the classes. Some loader/client configs are created during
+          # that first launch, so run once more before measuring. The second run either hits directly
+          # or repopulates against the now-stable configuration state.
           xvfb-run -a ./gradlew runTransformCacheBenchmarkClient --no-daemon --console=plain > cache-populate.log 2>&1
+          xvfb-run -a ./gradlew runTransformCacheBenchmarkClient --no-daemon --console=plain > cache-prime.log 2>&1
 
           test -f run-transform-cache-benchmark/.bootoptim/cache/transformed-class-cache-v1/classes.bin
           grep -q 'OPTIMIZATION id=transformed_class_cache status=enabled' run-transform-cache-benchmark/logs/bootoptim-startup.log
           grep 'BOOTOPTIM_TRANSFORM_CACHE' cache-populate.log | tail -n 1
+          grep 'BOOTOPTIM_TRANSFORM_CACHE' cache-prime.log | tail -n 1
 
       - name: Run interleaved A-B samples
         shell: bash
@@ -78,7 +84,7 @@ jobs:
             echo "$summary"
             test -n "$summary"
             hits="$(sed -E 's/.*hits=([0-9]+).*/\1/' <<< "$summary")"
-            test "$hits" -gt 100
+            test "$hits" -gt 4000
           done
 
       - name: Summarize A-B result
@@ -139,6 +145,7 @@ jobs:
           path: |
             stock-warmup.log
             cache-populate.log
+            cache-prime.log
             stock-a.log
             cache-a.log
             stock-b.log
