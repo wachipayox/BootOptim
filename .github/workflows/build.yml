@@ -38,6 +38,7 @@ jobs:
           test -n "$packaged"
           echo "Validating $packaged"
           jar tf "$packaged" | grep -qx 'META-INF/services/cpw.mods.modlauncher.api.ITransformationService'
+          unzip -p "$packaged" META-INF/MANIFEST.MF | tr -d '\r' | grep -q '^FMLModType: LIBRARY$'
           jar tf "$packaged" | grep -q '^META-INF/jarjar/.*\.jar$'
           unzip -p "$packaged" META-INF/jarjar/metadata.json | tee bootstrap-jarjar-metadata.json
           grep -q 'boot_optim' bootstrap-jarjar-metadata.json
