@@ -19,27 +19,31 @@ final class AsyncScanCacheWriter {
     private static final ExecutorService WRITER = Executors.newSingleThreadExecutor(r -> {
         Thread thread = Executors.defaultThreadFactory().newThread(r);
         thread.setName("bootoptim-scan-cache-writer");
-        thread.setDaemon(true);
         try {
+            thread.setDaemon(true);
             thread.setPriority(Thread.MIN_PRIORITY);
         } catch (SecurityException ignored) {
-            // Thread priority is only a hint; cache correctness does not depend on it.
+            // Daemon/priority settings are best effort; cache correctness does not depend on them.
         }
         return thread;
     });
 
     static {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            WRITER.shutdown();
-            try {
-                if (!WRITER.awaitTermination(10, TimeUnit.SECONDS)) {
+        try {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                WRITER.shutdown();
+                try {
+                    if (!WRITER.awaitTermination(10, TimeUnit.SECONDS)) {
+                        WRITER.shutdownNow();
+                    }
+                } catch (InterruptedException e) {
                     WRITER.shutdownNow();
+                    Thread.currentThread().interrupt();
                 }
-            } catch (InterruptedException e) {
-                WRITER.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }, "bootoptim-scan-cache-shutdown"));
+            }, "bootoptim-scan-cache-shutdown"));
+        } catch (IllegalStateException | SecurityException ignored) {
+            // Shutdown persistence is best effort and must never interfere with startup.
+        }
     }
 
     private AsyncScanCacheWriter() {}
