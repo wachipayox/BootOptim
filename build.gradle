@@ -56,15 +56,16 @@ var preparePackBenchmark = tasks.register('preparePackBenchmark', Sync) {
         include 'options.txt'
     }
 
-    doLast {
-        var modsDirectory = new File(packBenchmarkDirectory, 'mods')
+    doLast { task ->
+        var modsDirectory = new File(task.destinationDir, 'mods')
         if (!modsDirectory.isDirectory()) {
             throw new GradleException('Benchmark pack must contain a mods/ directory.')
         }
 
-        var existingBootOptim = fileTree(modsDirectory) {
-            include '*.jar'
-        }.files.findAll { file ->
+        var modJars = (modsDirectory.listFiles() ?: [] as File[]).findAll { file ->
+            file.isFile() && file.name.toLowerCase(Locale.ROOT).endsWith('.jar')
+        }
+        var existingBootOptim = modJars.findAll { file ->
             var lower = file.name.toLowerCase(Locale.ROOT)
             lower.contains('bootoptim') || lower.contains('boot_optim')
         }
@@ -72,9 +73,7 @@ var preparePackBenchmark = tasks.register('preparePackBenchmark', Sync) {
             throw new GradleException("Remove BootOptim from the source pack before benchmarking; the dev build is injected separately: ${existingBootOptim*.name}")
         }
 
-        logger.lifecycle('Prepared BootOptim pack benchmark with {} mod JARs from {}',
-                fileTree(modsDirectory).matching { include '*.jar' }.files.size(),
-                externalPackDirectory.get())
+        task.logger.lifecycle('Prepared BootOptim pack benchmark with {} mod JARs', modJars.size())
     }
 }
 
