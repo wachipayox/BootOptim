@@ -7,7 +7,9 @@ on:
       - agent/integration-current
     paths:
       - 'src/**'
+      - 'bootstrap/**'
       - 'build.gradle'
+      - 'settings.gradle'
       - 'gradle.properties'
       - '.github/workflows/startup-benchmark.yml'
 
@@ -78,6 +80,9 @@ jobs:
             exit 1
           fi
 
+          early_marker="$(grep 'BOOTOPTIM_STARTUP phase=transformation_service_construct' startup-benchmark.log | tail -n 1 || true)"
+          test -n "$early_marker"
+          echo "$early_marker"
           echo "$marker"
           kill "$launcher_pid" 2>/dev/null || true
           pkill -P "$launcher_pid" 2>/dev/null || true
@@ -85,6 +90,7 @@ jobs:
           {
             echo '### BootOptim startup benchmark'
             echo
+            echo "\`$early_marker\`"
             echo "\`$marker\`"
           } >> "$GITHUB_STEP_SUMMARY"
 

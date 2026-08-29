@@ -1,0 +1,33 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.144'
+}
+
+version = rootProject.version
+group = rootProject.group
+
+base {
+    archivesName = "${rootProject.mod_id}-bootstrap"
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = rootProject.neo_version
+    addModdingDependenciesTo sourceSets.main
+}
+
+dependencies {
+    // The regular NeoForge mod remains isolated from ModLauncher's SERVICE layer and is loaded from JarJar.
+    jarJar project(':')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes('Automatic-Module-Name': 'dev.wachipayox.bootoptim.bootstrap')
+    }
+}
