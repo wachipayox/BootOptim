@@ -132,7 +132,8 @@ public final class CachingModFileReader implements IModFileReader {
                         outcome = "hit";
                         return cached.scanData();
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable failure) {
+                    StartupDiagnostics.failure("mod_scan_cache_read_" + source.getFileName(), failure);
                     outcome = "fallback";
                     return super.compileContent();
                 }
@@ -146,15 +147,19 @@ public final class CachingModFileReader implements IModFileReader {
                         String writeOutcome = "success";
                         try {
                             ScanCache.write(cachePath, entry);
-                        } catch (Throwable ignored) {
+                        } catch (Throwable failure) {
                             // Persistence is optional. The already completed scan remains authoritative.
                             writeOutcome = "failed";
+                            StartupDiagnostics.failure("mod_scan_cache_write_" + source.getFileName(), failure);
                         } finally {
                             ScanMetrics.cacheWriteFinished(writeOutcome, source, writeStartedNanos);
                         }
                     });
                     if (!scheduled) {
                         outcome = "miss_write_enqueue_failed";
+                        StartupDiagnostics.event(
+                                "FAILURE",
+                                "component=mod_scan_cache_write_queue file=" + source.getFileName() + " detail=enqueue_rejected");
                     }
                 }
                 return scanned;
@@ -176,6 +181,7 @@ public final class CachingModFileReader implements IModFileReader {
         }
 
         private static Path cachePath(Path source) throws Exception {
+            CacheVersioning.ensureCurrent();
             BasicFileAttributes attrs = Files.readAttributes(source, BasicFileAttributes.class);
             String loaderVersion = String.valueOf(ModFile.class.getPackage().getImplementationVersion());
             String identity = source.getFileName() + "\n"
@@ -183,6 +189,7 @@ public final class CachingModFileReader implements IModFileReader {
                     + attrs.lastModifiedTime().toMillis() + "\n"
                     + String.valueOf(attrs.fileKey()) + "\n"
                     + loaderVersion + "\n"
+                    + BootOptimRuntimeInfo.version() + "\n"
                     + Runtime.version().feature() + "\n"
                     + VERSION;
             String key = hex(MessageDigest.getInstance("SHA-256").digest(identity.getBytes(StandardCharsets.UTF_8)));
@@ -200,10 +207,12 @@ public final class CachingModFileReader implements IModFileReader {
                 }
                 SecureJar.Status status = SecureJar.Status.valueOf(in.readUTF());
                 return new Entry(status, readScanData(in));
-            } catch (Exception ignored) {
+            } catch (Exception failure) {
+                StartupDiagnostics.failure("mod_scan_cache_decode_" + path.getFileName(), failure);
                 try {
                     Files.deleteIfExists(path);
-                } catch (IOException ignoredDelete) {
+                } catch (IOException deleteFailure) {
+                    StartupDiagnostics.failure("mod_scan_cache_delete_corrupt_" + path.getFileName(), deleteFailure);
                 }
                 return null;
             }
