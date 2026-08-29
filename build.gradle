@@ -49,6 +49,10 @@ var preparePackBenchmark = tasks.register('preparePackBenchmark', Sync) {
         include 'mods/**'
         include 'config/**'
         include 'defaultconfigs/**'
+        // These locations can materially affect pre-ModLauncher or initial resource loading.
+        include 'automodpack/**'
+        include 'resourcepacks/**'
+        include 'shaderpacks/**'
         include 'options.txt'
     }
 
