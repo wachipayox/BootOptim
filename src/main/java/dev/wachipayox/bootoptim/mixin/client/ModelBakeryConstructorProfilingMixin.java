@@ -52,7 +52,7 @@ abstract class ModelBakeryConstructorProfilingMixin {
         Throwable failure = null;
         try {
             loader.loadAllBlockStates();
-        } catch (Throwable throwable) {
+        } catch (RuntimeException | Error throwable) {
             failure = throwable;
             throw throwable;
         } finally {
@@ -99,7 +99,7 @@ abstract class ModelBakeryConstructorProfilingMixin {
         Throwable failure = null;
         try {
             models.forEach(resolver);
-        } catch (Throwable throwable) {
+        } catch (RuntimeException | Error throwable) {
             failure = throwable;
             throw throwable;
         } finally {
