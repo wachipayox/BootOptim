@@ -22,6 +22,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import net.neoforged.fml.ModLoadingException;
 import net.neoforged.fml.ModLoadingIssue;
 import net.neoforged.fml.loading.FMLPaths;
@@ -104,47 +106,65 @@ public final class CachingModFileReader implements IModFileReader {
 
         @Override
         public ModFileScanData compileContent() {
+            long startedNanos = System.nanoTime();
+            ScanMetrics.started(startedNanos);
             Path source = getFilePath();
-            if (!Files.isRegularFile(source)) {
-                return super.compileContent();
-            }
+            String outcome = "error";
 
-            Path cachePath;
             try {
-                cachePath = ScanCache.cachePath(source);
-                ScanCache.Entry cached = ScanCache.read(cachePath);
-                if (cached != null) {
-                    setSecurityStatus(cached.securityStatus());
-                    cached.scanData().addModFileInfo(getModFileInfo());
-                    ScanCache.mark("hit", source);
-                    return cached.scanData();
+                if (!Files.isRegularFile(source)) {
+                    outcome = "stock_nonregular";
+                    return super.compileContent();
                 }
-            } catch (Throwable ignored) {
-                ScanCache.mark("fallback", source);
-                return super.compileContent();
-            }
 
-            ModFileScanData scanned = super.compileContent();
-            if (observedSecurityStatus != null) {
-                try {
-                    ScanCache.write(cachePath, new ScanCache.Entry(observedSecurityStatus, scanned));
-                } catch (Throwable ignored) {
-                    // Writing the optional cache must never force a second scan or break startup.
-                    ScanCache.mark("write_failed", source);
-                    return scanned;
+                if (!ScanCache.isEnabled()) {
+                    outcome = "stock_disabled";
+                    return super.compileContent();
                 }
+
+                Path cachePath;
+                try {
+                    cachePath = ScanCache.cachePath(source);
+                    ScanCache.Entry cached = ScanCache.read(cachePath);
+                    if (cached != null) {
+                        setSecurityStatus(cached.securityStatus());
+                        cached.scanData().addModFileInfo(getModFileInfo());
+                        outcome = "hit";
+                        return cached.scanData();
+                    }
+                } catch (Throwable ignored) {
+                    outcome = "fallback";
+                    return super.compileContent();
+                }
+
+                ModFileScanData scanned = super.compileContent();
+                if (observedSecurityStatus != null) {
+                    try {
+                        ScanCache.write(cachePath, new ScanCache.Entry(observedSecurityStatus, scanned));
+                    } catch (Throwable ignored) {
+                        // Writing the optional cache must never force a second scan or break startup.
+                        outcome = "miss_write_failed";
+                        return scanned;
+                    }
+                }
+                outcome = "miss";
+                return scanned;
+            } finally {
+                ScanMetrics.finished(outcome, source, startedNanos);
             }
-            ScanCache.mark("miss", source);
-            return scanned;
         }
     }
 
     private static final class ScanCache {
         private static final int MAGIC = 0x424F5343; // BOSC
         private static final int VERSION = 1;
-        private static final String PROFILE_PROPERTY = "boot_optim.profileStartup";
+        private static final String ENABLE_PROPERTY = "boot_optim.scanCache";
 
         private record Entry(SecureJar.Status securityStatus, ModFileScanData scanData) {}
+
+        private static boolean isEnabled() {
+            return !"false".equalsIgnoreCase(System.getProperty(ENABLE_PROPERTY, "true"));
+        }
 
         private static Path cachePath(Path source) throws Exception {
             BasicFileAttributes attrs = Files.readAttributes(source, BasicFileAttributes.class);
@@ -358,11 +378,37 @@ public final class CachingModFileReader implements IModFileReader {
             for (byte value : bytes) out.append(String.format("%02x", value));
             return out.toString();
         }
+    }
 
-        private static void mark(String result, Path source) {
-            if (Boolean.getBoolean(PROFILE_PROPERTY)) {
-                System.out.printf("BOOTOPTIM_SCAN_CACHE result=%s file=%s%n", result, source.getFileName());
+    private static final class ScanMetrics {
+        private static final String PROFILE_PROPERTY = "boot_optim.profileStartup";
+        private static final AtomicLong FIRST_SCAN_NANOS = new AtomicLong();
+        private static final AtomicInteger FINISHED_SCANS = new AtomicInteger();
+
+        private static void started(long startedNanos) {
+            if (!Boolean.getBoolean(PROFILE_PROPERTY)) {
+                return;
             }
+            FIRST_SCAN_NANOS.compareAndSet(0L, startedNanos);
+        }
+
+        private static void finished(String result, Path source, long startedNanos) {
+            if (!Boolean.getBoolean(PROFILE_PROPERTY)) {
+                return;
+            }
+
+            long now = System.nanoTime();
+            long first = FIRST_SCAN_NANOS.get();
+            int finished = FINISHED_SCANS.incrementAndGet();
+            double elapsedMs = (now - startedNanos) / 1_000_000.0;
+            double windowMs = first == 0L ? elapsedMs : (now - first) / 1_000_000.0;
+            System.out.printf(
+                    "BOOTOPTIM_SCAN_CACHE result=%s file=%s elapsed_ms=%.3f scan_window_ms=%.3f finished=%d%n",
+                    result,
+                    source.getFileName(),
+                    elapsedMs,
+                    windowMs,
+                    finished);
         }
     }
 }
