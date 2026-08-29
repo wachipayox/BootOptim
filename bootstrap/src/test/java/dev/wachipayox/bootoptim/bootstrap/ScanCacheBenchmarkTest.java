@@ -2,11 +2,13 @@ package dev.wachipayox.bootoptim.bootstrap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cpw.mods.jarhandling.JarContents;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -56,7 +58,9 @@ class ScanCacheBenchmarkTest {
             Path gameDir = tempDir.resolve("game-" + i);
             FMLPaths.loadAbsolutePaths(gameDir);
 
+            // Cold measures only the startup-critical scan path. Persistence is intentionally asynchronous.
             var cold = scan(new CachingModFileReader(), largeJar);
+            assertTrue(AsyncScanCacheWriter.awaitIdle(Duration.ofSeconds(30)), "Async scan cache writer did not become idle");
             var warm = scan(new CachingModFileReader(), largeJar);
             assertEquals(CLASS_COUNT, cold.data().getClasses().size());
             assertEquals(cold.data().getClasses(), warm.data().getClasses());
