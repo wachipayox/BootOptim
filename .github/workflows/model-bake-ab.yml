@@ -1,0 +1,138 @@
+name: Model Bake A-B Benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - 'src/main/java/dev/wachipayox/bootoptim/mixin/client/ParallelModelBakeExperimentMixin.java'
+      - 'src/main/java/dev/wachipayox/bootoptim/mixin/client/ModelBakeryProfilingMixin.java'
+      - 'src/main/java/dev/wachipayox/bootoptim/mixin/client/ModelManagerProfilingMixin.java'
+      - 'build.gradle'
+      - '.github/workflows/model-bake-ab.yml'
+
+jobs:
+  model-bake-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri
+
+      - name: Seed benchmark client options
+        run: |
+          mkdir -p run-benchmark
+          cat > run-benchmark/options.txt <<'EOF'
+          onboardAccessibility:false
+          narrator:0
+          EOF
+
+      - name: Run same-runner serial and parallel samples
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_case() {
+            local name="$1"
+            local enabled="$2"
+            local log="model-bake-${name}.log"
+            echo "===== ${name} parallel=${enabled} ====="
+            timeout 180s xvfb-run -a ./gradlew runBenchmarkClient \
+              --no-daemon --console=plain \
+              -PbootoptimParallelModelBake="${enabled}" 2>&1 | tee "${log}"
+            grep -q 'BOOTOPTIM_STARTUP phase=main_menu' "${log}"
+            grep -q 'BOOTOPTIM_RESOURCE phase=model_bake_end' "${log}"
+            grep -q 'BOOTOPTIM_RESOURCE phase=model_reload_end' "${log}"
+          }
+
+          # Warm both paths first so measured launches see comparable Gradle, filesystem and scan-cache state.
+          run_case warm-serial false
+          run_case warm-parallel true
+
+          # Balance ordering to reduce time/order bias on the hosted runner.
+          run_case serial-a false
+          run_case parallel-a true
+          run_case parallel-b true
+          run_case serial-b false
+
+      - name: Summarize A-B timings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+          import statistics
+
+          cases = {
+              "serial": [pathlib.Path("model-bake-serial-a.log"), pathlib.Path("model-bake-serial-b.log")],
+              "parallel": [pathlib.Path("model-bake-parallel-a.log"), pathlib.Path("model-bake-parallel-b.log")],
+          }
+
+          resource_patterns = {
+              "model_bake": re.compile(r"BOOTOPTIM_RESOURCE phase=model_bake_end elapsed_ms=([0-9.]+)"),
+              "model_reload": re.compile(r"BOOTOPTIM_RESOURCE phase=model_reload_end elapsed_ms=([0-9.]+)"),
+          }
+          main_menu_pattern = re.compile(r"BOOTOPTIM_STARTUP phase=main_menu uptime_ms=([0-9]+)")
+
+          def extract(path, pattern):
+              matches = pattern.findall(path.read_text(errors="replace"))
+              if not matches:
+                  raise SystemExit(f"Missing timing marker in {path}: {pattern.pattern}")
+              return float(matches[-1])
+
+          values = {}
+          for mode, paths in cases.items():
+              values[mode] = {
+                  phase: [extract(path, pattern) for path in paths]
+                  for phase, pattern in resource_patterns.items()
+              }
+              values[mode]["main_menu"] = [extract(path, main_menu_pattern) for path in paths]
+
+          rows = []
+          for phase in ("model_bake", "model_reload", "main_menu"):
+              serial = statistics.mean(values["serial"][phase])
+              parallel = statistics.mean(values["parallel"][phase])
+              improvement = (serial - parallel) / serial * 100.0
+              rows.append((phase, serial, parallel, improvement))
+
+          print("A/B samples:")
+          for mode in ("serial", "parallel"):
+              print(mode, values[mode])
+          for phase, serial, parallel, improvement in rows:
+              print(f"{phase}: serial={serial:.3f} ms parallel={parallel:.3f} ms improvement={improvement:+.2f}%")
+
+          summary = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a", encoding="utf-8") as out:
+              out.write("### Same-runner model bake A/B\n\n")
+              out.write("| Phase | Serial mean | Parallel mean | Improvement |\n")
+              out.write("|---|---:|---:|---:|\n")
+              for phase, serial, parallel, improvement in rows:
+                  out.write(f"| `{phase}` | {serial:.3f} ms | {parallel:.3f} ms | {improvement:+.2f}% |\n")
+              out.write("\nMeasured samples per mode: 2, after one warm-up launch per mode.\n")
+          PY
+
+      - name: Upload A-B logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-bake-ab-logs
+          path: model-bake-*.log
+          if-no-files-found: ignore
