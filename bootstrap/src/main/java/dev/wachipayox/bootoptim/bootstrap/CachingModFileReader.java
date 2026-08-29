@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,8 +22,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.IntFunction;
-import java.util.jar.Attributes;
 import net.neoforged.fml.ModLoadingException;
 import net.neoforged.fml.ModLoadingIssue;
 import net.neoforged.fml.loading.FMLPaths;
@@ -112,8 +109,9 @@ public final class CachingModFileReader implements IModFileReader {
                 return super.compileContent();
             }
 
+            Path cachePath;
             try {
-                Path cachePath = ScanCache.cachePath(source);
+                cachePath = ScanCache.cachePath(source);
                 ScanCache.Entry cached = ScanCache.read(cachePath);
                 if (cached != null) {
                     setSecurityStatus(cached.securityStatus());
@@ -121,18 +119,23 @@ public final class CachingModFileReader implements IModFileReader {
                     ScanCache.mark("hit", source);
                     return cached.scanData();
                 }
-
-                ModFileScanData scanned = super.compileContent();
-                if (observedSecurityStatus != null) {
-                    ScanCache.write(cachePath, new ScanCache.Entry(observedSecurityStatus, scanned));
-                }
-                ScanCache.mark("miss", source);
-                return scanned;
             } catch (Throwable ignored) {
-                // A startup cache is never allowed to make an otherwise valid pack fail to launch.
                 ScanCache.mark("fallback", source);
                 return super.compileContent();
             }
+
+            ModFileScanData scanned = super.compileContent();
+            if (observedSecurityStatus != null) {
+                try {
+                    ScanCache.write(cachePath, new ScanCache.Entry(observedSecurityStatus, scanned));
+                } catch (Throwable ignored) {
+                    // Writing the optional cache must never force a second scan or break startup.
+                    ScanCache.mark("write_failed", source);
+                    return scanned;
+                }
+            }
+            ScanCache.mark("miss", source);
+            return scanned;
         }
     }
 
@@ -143,7 +146,7 @@ public final class CachingModFileReader implements IModFileReader {
 
         private record Entry(SecureJar.Status securityStatus, ModFileScanData scanData) {}
 
-        private static Path cachePath(Path source) throws IOException {
+        private static Path cachePath(Path source) throws Exception {
             BasicFileAttributes attrs = Files.readAttributes(source, BasicFileAttributes.class);
             String loaderVersion = String.valueOf(ModFile.class.getPackage().getImplementationVersion());
             String identity = source.getFileName() + "\n"
@@ -245,7 +248,10 @@ public final class CachingModFileReader implements IModFileReader {
                 String member = in.readUTF();
                 annotations.add(new ModFileScanData.AnnotationData(annotationType, target, clazz, member, readMap(in)));
             }
-            return new ModFileScanData(annotations, classes);
+            ModFileScanData data = new ModFileScanData();
+            data.getAnnotations().addAll(annotations);
+            data.getClasses().addAll(classes);
+            return data;
         }
 
         private static void writeMap(DataOutputStream out, Map<String, Object> values) throws IOException {
@@ -328,7 +334,12 @@ public final class CachingModFileReader implements IModFileReader {
             return values;
         }
 
-        private static byte[] readBytes(DataInputStream in) throws IOException { int n = checkedCount(in.readInt()); return in.readNBytes(n); }
+        private static byte[] readBytes(DataInputStream in) throws IOException {
+            int n = checkedCount(in.readInt());
+            byte[] bytes = in.readNBytes(n);
+            if (bytes.length != n) throw new IOException("Truncated cache payload");
+            return bytes;
+        }
         private static boolean[] readBooleans(DataInputStream in) throws IOException { int n = checkedCount(in.readInt()); boolean[] a = new boolean[n]; for (int i=0;i<n;i++) a[i]=in.readBoolean(); return a; }
         private static short[] readShorts(DataInputStream in) throws IOException { int n = checkedCount(in.readInt()); short[] a = new short[n]; for (int i=0;i<n;i++) a[i]=in.readShort(); return a; }
         private static char[] readChars(DataInputStream in) throws IOException { int n = checkedCount(in.readInt()); char[] a = new char[n]; for (int i=0;i<n;i++) a[i]=in.readChar(); return a; }
