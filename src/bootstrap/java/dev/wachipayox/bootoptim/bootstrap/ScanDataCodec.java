@@ -88,7 +88,10 @@ final class ScanDataCodec {
             annotations.add(new ModFileScanData.AnnotationData(annotationType, elementTypes[targetOrdinal], clazz, memberName, values));
         }
 
-        return new ModFileScanData(annotations, classes);
+        ModFileScanData result = new ModFileScanData();
+        result.getClasses().addAll(classes);
+        result.getAnnotations().addAll(annotations);
+        return result;
     }
 
     private static void writeType(DataOutput output, Type type) throws IOException {
