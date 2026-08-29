@@ -110,6 +110,14 @@ neoForge {
             systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
         }
 
+        transformCacheBenchmarkClient {
+            client()
+            gameDirectory = project.file('run-transform-cache-benchmark')
+            systemProperty 'boot_optim.profileStartup', 'true'
+            systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
+            systemProperty 'boot_optim.transformedClassCache', 'true'
+        }
+
         packBenchmarkClient {
             client()
             gameDirectory = packBenchmarkDirectory
