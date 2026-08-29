@@ -103,6 +103,17 @@ neoForge {
             systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
         }
 
+        startupJfrClient {
+            client()
+            gameDirectory = project.file('run-jfr-benchmark')
+            systemProperty 'boot_optim.profileStartup', 'true'
+            systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
+            // Keep this diagnostic-only: JFR's profile preset samples the launch critical path
+            // without changing Minecraft/FML behavior. The benchmark exits at the title screen,
+            // allowing dumponexit to produce a complete recording.
+            jvmArgument '-XX:StartFlightRecording=filename=' + project.file('build/startup-profile.jfr').absolutePath + ',settings=profile,dumponexit=true,maxsize=256m'
+        }
+
         packBenchmarkClient {
             client()
             gameDirectory = packBenchmarkDirectory
