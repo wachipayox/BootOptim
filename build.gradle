@@ -34,6 +34,13 @@ var externalPackDirectory = providers.gradleProperty('bootoptimPackDir')
         .orElse(providers.environmentVariable('BOOTOPTIM_PACK_DIR'))
 var connectorCleanMinecraft = project.file('build/createCleanArtifact/minecraft-renamed.jar')
 
+// IntelliJ launches the root project but MOD_CLASSES also points at the bootstrap subproject outputs.
+// Keep the IDE before-run task in the root project (as ModDevGradle expects) and bridge to the
+// bootstrap compile from there. This also makes Gradle run tasks safe on a clean checkout.
+var prepareBootstrapRunOutputs = tasks.register('prepareBootstrapRunOutputs') {
+    dependsOn ':bootstrap:classes'
+}
+
 var preparePackBenchmark = tasks.register('preparePackBenchmark', Sync) {
     into packBenchmarkDirectory
 
@@ -129,9 +136,8 @@ neoForge {
 
         configureEach {
             // The bootstrap source set is passed to FML through MOD_CLASSES instead of the run source set's
-            // runtime classpath. IntelliJ therefore does not know it must build that subproject before launch.
-            // On a clean checkout SecureJarHandler otherwise receives non-existent bootstrap output paths.
-            taskBefore project(':bootstrap').tasks.named('classes')
+            // runtime classpath. On a clean checkout its output directories do not exist until this task runs.
+            taskBefore prepareBootstrapRunOutputs
 
             // Startup benchmarks must resemble production logging; DEBUG/registry logging can materially skew boot time.
             logLevel = org.slf4j.event.Level.INFO
