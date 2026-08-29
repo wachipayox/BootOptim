@@ -171,7 +171,7 @@ public final class CachingModFileReader implements IModFileReader {
 
     private static final class ScanCache {
         private static final int MAGIC = 0x424F5343; // BOSC
-        private static final int VERSION = 1;
+        private static final int VERSION = 2;
         private static final String ENABLE_PROPERTY = "boot_optim.scanCache";
 
         private record Entry(SecureJar.Status securityStatus, ModFileScanData scanData) {}
@@ -242,7 +242,11 @@ public final class CachingModFileReader implements IModFileReader {
             out.writeInt(data.getClasses().size());
             for (var cls : data.getClasses()) {
                 out.writeUTF(cls.clazz().getInternalName());
-                out.writeUTF(cls.parent().getInternalName());
+                Type parent = cls.parent();
+                out.writeBoolean(parent != null);
+                if (parent != null) {
+                    out.writeUTF(parent.getInternalName());
+                }
                 out.writeInt(cls.interfaces().size());
                 for (Type iface : cls.interfaces()) {
                     out.writeUTF(iface.getInternalName());
@@ -264,7 +268,7 @@ public final class CachingModFileReader implements IModFileReader {
             Set<ModFileScanData.ClassData> classes = new LinkedHashSet<>(classCount);
             for (int i = 0; i < classCount; i++) {
                 Type clazz = Type.getObjectType(in.readUTF());
-                Type parent = Type.getObjectType(in.readUTF());
+                Type parent = in.readBoolean() ? Type.getObjectType(in.readUTF()) : null;
                 int interfaceCount = checkedCount(in.readInt());
                 Set<Type> interfaces = new HashSet<>(interfaceCount);
                 for (int j = 0; j < interfaceCount; j++) {
