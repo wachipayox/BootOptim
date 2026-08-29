@@ -51,7 +51,7 @@ final class TransformedClassCache {
         }
 
         var gameDir = BootstrapStartupConfig.state().gameDirectory();
-        cacheFile = gameDir.resolve(".bootoptim").resolve("transformed-class-cache-v1").resolve("classes.bin");
+        cacheFile = CacheVersioning.cacheRoot().resolve("transformed-class-cache-v1").resolve("classes.bin");
         try {
             fingerprint = buildFingerprint(gameDir);
             load();
