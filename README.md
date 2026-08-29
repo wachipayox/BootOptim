@@ -1,25 +1,22 @@
+# BootOptim
 
-Installation information
-=======
+BootOptim is a NeoForge 1.21.1 performance mod focused specifically on reducing the time from process launch to the Minecraft main menu, with compatible server-side startup improvements where they are worthwhile.
 
-This template repository can be directly cloned to get you started with a new
-mod. Simply create a new repository cloned from this one, by following the
-instructions provided by [GitHub](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template).
+## Goals
 
-Once you have your clone, simply open the repository in the IDE of your choice. The usual recommendation for an IDE is either IntelliJ IDEA or Eclipse.
+- Measure startup phases before optimizing them.
+- Target improvements large enough to matter in real modpacks, especially expensive shared paths such as mod discovery/scanning, resource loading, model loading, and lifecycle work.
+- Preserve compatibility with large mixed NeoForge/Sinytra/Create-based packs.
+- Scale sensibly across both high-core-count and resource-constrained systems instead of assuming that more parallelism is always faster.
+- Avoid duplicating dedicated optimization mods unless BootOptim can demonstrably replace them with a better implementation.
+- When a multipurpose mod contains an overlapping optimization, prefer disabling only the overlapping feature while keeping the rest of that mod active.
 
-If at any point you are missing libraries in your IDE, or you've run into problems you can
-run `gradlew --refresh-dependencies` to refresh the local cache. `gradlew clean` to reset everything 
-{this does not affect your code} and then start the process again.
+## Development baseline
 
-Mapping Names:
-============
-By default, the MDK is configured to use the official mapping names from Mojang for methods and fields 
-in the Minecraft codebase. These names are covered by a specific license. All modders should be aware of this
-license. For the latest license text, refer to the mapping file itself, or the reference copy here:
-https://github.com/NeoForged/NeoForm/blob/main/Mojang.md
+- Minecraft 1.21.1
+- NeoForge 21.1.248
+- Java 21
+- Mod id: `boot_optim`
+- Author: Wachipayoxx
 
-Additional Resources: 
-==========
-Community Documentation: https://docs.neoforged.net/  
-NeoForged Discord: https://discord.neoforged.net/
+The project starts intentionally minimal. Profiling hooks and optimizations are added only when they can be benchmarked and isolated.
