@@ -4,6 +4,7 @@ import cpw.mods.modlauncher.api.IEnvironment;
 import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
 import java.lang.management.ManagementFactory;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 
@@ -20,9 +21,29 @@ public final class EarlyStartupProbeService implements ITransformationService {
             || Boolean.getBoolean(BENCHMARK_PROPERTY);
 
     public EarlyStartupProbeService() {
-        var config = BootstrapStartupConfig.state();
+        // ModLauncher's GAMEDIR is not populated yet while SERVICE implementations are constructed.
+        // Delay every filesystem decision until initialize(IEnvironment), which runs after argument parsing.
         BootOptimRuntimeInfo.version();
+        mark("transformation_service_construct");
+    }
+
+    @Override
+    public String name() {
+        return "boot_optim_startup_probe";
+    }
+
+    @Override
+    public void initialize(IEnvironment environment) {
+        var gameDirectoryProperty = environment.getProperty(IEnvironment.Keys.GAMEDIR.get());
+        Path fallback = Path.of(System.getProperty("user.dir", "."));
+        Path gameDirectory = gameDirectoryProperty.orElse(fallback);
+        boolean authoritative = gameDirectoryProperty.isPresent();
+
+        var config = BootstrapStartupConfig.initialize(gameDirectory);
         StartupDiagnostics.initialize();
+        StartupDiagnostics.event(
+                "STARTUP_PATH",
+                "game_dir=" + config.gameDirectory() + " source=" + (authoritative ? "modlauncher" : "user_dir_fallback"));
         CacheVersioning.ensureCurrent();
 
         boolean scanCacheEnabled = !"false".equalsIgnoreCase(System.getProperty("boot_optim.scanCache", "true"));
@@ -36,16 +57,6 @@ public final class EarlyStartupProbeService implements ITransformationService {
                 scanCacheEnabled ? "enabled_with_mod_scan_cache" : "mod_scan_cache_disabled");
         StartupDiagnostics.cache("mod_scan_cache_path="
                 + config.gameDirectory().resolve(".bootoptim").resolve("mod-scan-cache-v1"));
-        mark("transformation_service_construct");
-    }
-
-    @Override
-    public String name() {
-        return "boot_optim_startup_probe";
-    }
-
-    @Override
-    public void initialize(IEnvironment environment) {
         mark("transformation_service_initialize");
     }
 
@@ -56,6 +67,10 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
+        // This callback runs while FML is gathering the final transformer set, immediately before
+        // ModLauncher constructs the GAME classloader. That is the last safe point to swap only the
+        // classloader factory without racing actual Minecraft class definitions.
+        TransformCacheClassLoaderInstaller.installIfRequested();
         return List.of();
     }
 
