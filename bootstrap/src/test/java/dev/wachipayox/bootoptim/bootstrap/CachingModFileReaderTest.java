@@ -3,20 +3,27 @@ package dev.wachipayox.bootoptim.bootstrap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cpw.mods.jarhandling.JarContents;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
+import net.neoforged.neoforgespi.language.ModFileScanData;
 import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.objectweb.asm.Type;
 
 class CachingModFileReaderTest {
     @TempDir
@@ -65,6 +72,35 @@ class CachingModFileReaderTest {
         assertTrue(output.contains("BOOTOPTIM_SCAN_CACHE_WRITE result=success"), output);
         assertTrue(output.contains("elapsed_ms="), output);
         assertTrue(output.contains("scan_window_ms="), output);
+    }
+
+    @Test
+    void scanCacheRoundTripsClassesWithNoParent() throws Exception {
+        ModFileScanData original = new ModFileScanData();
+        Type clazz = Type.getObjectType("example/NoParent");
+        original.getClasses().add(new ModFileScanData.ClassData(clazz, null, Set.of()));
+
+        Class<?> scanCache = Class.forName(CachingModFileReader.class.getName() + "$ScanCache");
+        var writeScanData = scanCache.getDeclaredMethod("writeScanData", DataOutputStream.class, ModFileScanData.class);
+        var readScanData = scanCache.getDeclaredMethod("readScanData", DataInputStream.class);
+        writeScanData.setAccessible(true);
+        readScanData.setAccessible(true);
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bytes)) {
+            writeScanData.invoke(null, out, original);
+        }
+
+        ModFileScanData decoded;
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            decoded = (ModFileScanData) readScanData.invoke(null, in);
+        }
+
+        assertEquals(1, decoded.getClasses().size());
+        var decodedClass = decoded.getClasses().iterator().next();
+        assertEquals(clazz, decodedClass.clazz());
+        assertNull(decodedClass.parent());
+        assertTrue(decodedClass.interfaces().isEmpty());
     }
 
     @Test
