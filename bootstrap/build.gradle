@@ -15,11 +15,16 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 neoForge {
     version = rootProject.neo_version
     addModdingDependenciesTo sourceSets.main
+    addModdingDependenciesTo sourceSets.test
 }
 
 dependencies {
     // The regular NeoForge mod remains isolated from ModLauncher's SERVICE layer and is loaded from JarJar.
     jarJar project(':')
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -30,4 +35,16 @@ tasks.named('jar', Jar).configure {
     manifest {
         attributes('Automatic-Module-Name': 'dev.wachipayox.bootoptim.bootstrap')
     }
+}
+
+tasks.named('test', Test).configure {
+    dependsOn rootProject.tasks.named('jar')
+    useJUnitPlatform()
+    systemProperty 'bootoptim.fixtureJar', rootProject.tasks.named('jar', Jar).flatMap { it.archiveFile }.get().asFile.absolutePath
+
+    // SecureJarHandler normally receives these opens/exports from BootstrapLauncher/ModLauncher.
+    // Plain JUnit runs do not, so mirror the real launch environment for the functional cache test.
+    jvmArgs '--add-opens=java.base/java.lang.invoke=ALL-UNNAMED',
+            '--add-opens=java.base/java.util.jar=ALL-UNNAMED',
+            '--add-exports=java.base/sun.security.util=ALL-UNNAMED'
 }
