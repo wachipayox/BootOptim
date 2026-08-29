@@ -24,6 +24,15 @@ sourceSets.main.resources {
     exclude('src/generated/**/.cache')
 }
 
+sourceSets {
+    bootstrap {
+        java.srcDir 'src/bootstrap/java'
+        resources.srcDir 'src/bootstrap/resources'
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
 repositories {
 }
 
@@ -70,6 +79,8 @@ neoForge {
         }
     }
 
+    // Development runs use the core source set directly. The distributable jar wraps
+    // this core as a Jar-in-Jar so the outer artifact can live in FML's SERVICE layer.
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
@@ -79,6 +90,9 @@ neoForge {
 
 configurations {
     runtimeClasspath.extendsFrom localRuntime
+    bootstrapImplementation.extendsFrom implementation
+    bootstrapCompileOnly.extendsFrom compileOnly
+    bootstrapAnnotationProcessor.extendsFrom annotationProcessor
 }
 
 dependencies {
@@ -104,10 +118,30 @@ var generateModMetadata = tasks.register('generateModMetadata', ProcessResources
 sourceSets.main.resources.srcDir generateModMetadata
 neoForge.ideSyncTask generateModMetadata
 
+tasks.named('jar', Jar).configure {
+    archiveClassifier.set('core')
+    manifest.attributes('Automatic-Module-Name': 'dev.wachipayox.bootoptim')
+}
+
+var bootstrapJar = tasks.register('bootstrapJar', Jar) {
+    dependsOn tasks.named('jar')
+    archiveClassifier.set('')
+    from sourceSets.bootstrap.output
+    from(tasks.named('jar', Jar).flatMap { it.archiveFile }) {
+        into 'META-INF/jarjar'
+        rename { "${mod_id}-${mod_version}-core.jar" }
+    }
+    manifest.attributes('Automatic-Module-Name': 'dev.wachipayox.bootoptim.bootstrap')
+}
+
+tasks.named('assemble').configure {
+    dependsOn bootstrapJar
+}
+
 publishing {
     publications {
         register('mavenJava', MavenPublication) {
-            from components.java
+            artifact bootstrapJar
         }
     }
     repositories {
