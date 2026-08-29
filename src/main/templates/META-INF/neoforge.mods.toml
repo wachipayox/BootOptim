@@ -11,9 +11,6 @@ description='''
 BootOptim researches, measures, and optimizes Minecraft/NeoForge startup performance while preserving modpack compatibility.
 '''
 
-[[mixins]]
-config="${mod_id}.mixins.json"
-
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"
