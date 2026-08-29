@@ -40,12 +40,29 @@ public final class ModelReloadProfiler {
         if (started == null) {
             return;
         }
-        double elapsedMs = (System.nanoTime() - started) / 1_000_000.0;
-        LOGGER.info("BOOTOPTIM_RESOURCE phase={}_end elapsed_ms={} uptime_ms={} thread={} result={}",
-                phase,
-                String.format(java.util.Locale.ROOT, "%.3f", elapsedMs),
-                ManagementFactory.getRuntimeMXBean().getUptime(),
-                Thread.currentThread().getName(),
-                failure == null ? "success" : "failed");
+        record(phase, System.nanoTime() - started, failure, -1);
+    }
+
+    public static void record(String phase, long elapsedNanos, Throwable failure, int operations) {
+        if (!StartupProfiler.isEnabled()) {
+            return;
+        }
+        double elapsedMs = elapsedNanos / 1_000_000.0;
+        if (operations >= 0) {
+            LOGGER.info("BOOTOPTIM_RESOURCE phase={}_end elapsed_ms={} uptime_ms={} thread={} result={} operations={}",
+                    phase,
+                    String.format(java.util.Locale.ROOT, "%.3f", elapsedMs),
+                    ManagementFactory.getRuntimeMXBean().getUptime(),
+                    Thread.currentThread().getName(),
+                    failure == null ? "success" : "failed",
+                    operations);
+        } else {
+            LOGGER.info("BOOTOPTIM_RESOURCE phase={}_end elapsed_ms={} uptime_ms={} thread={} result={}",
+                    phase,
+                    String.format(java.util.Locale.ROOT, "%.3f", elapsedMs),
+                    ManagementFactory.getRuntimeMXBean().getUptime(),
+                    Thread.currentThread().getName(),
+                    failure == null ? "success" : "failed");
+        }
     }
 }
