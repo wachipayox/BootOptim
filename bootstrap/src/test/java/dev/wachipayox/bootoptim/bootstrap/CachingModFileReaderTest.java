@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.fml.loading.moddiscovery.ModFile;
@@ -38,6 +39,7 @@ class CachingModFileReaderTest {
             ModFile first = assertInstanceOf(ModFile.class,
                     reader.read(JarContents.of(List.of(fixture)), ModFileDiscoveryAttributes.DEFAULT));
             var firstScan = first.compileContent();
+            assertTrue(AsyncScanCacheWriter.awaitIdle(Duration.ofSeconds(10)), "Async scan cache writer did not become idle");
 
             Path cacheDir = gameDir.resolve(".bootoptim/mod-scan-cache-v1");
             assertTrue(java.nio.file.Files.isDirectory(cacheDir));
@@ -60,6 +62,7 @@ class CachingModFileReaderTest {
         String output = captured.toString(StandardCharsets.UTF_8);
         assertTrue(output.contains("BOOTOPTIM_SCAN_CACHE result=miss"), output);
         assertTrue(output.contains("BOOTOPTIM_SCAN_CACHE result=hit"), output);
+        assertTrue(output.contains("BOOTOPTIM_SCAN_CACHE_WRITE result=success"), output);
         assertTrue(output.contains("elapsed_ms="), output);
         assertTrue(output.contains("scan_window_ms="), output);
     }
