@@ -30,6 +30,9 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public void initialize(IEnvironment environment) {
+        // Install as early as possible. The installer is fail-open and does nothing unless the benchmark
+        // property is explicitly enabled, so normal launches retain the stock RuntimeDistCleaner path.
+        RuntimeDistCleanerFilterInstaller.install(environment);
         mark("transformation_service_initialize");
     }
 
