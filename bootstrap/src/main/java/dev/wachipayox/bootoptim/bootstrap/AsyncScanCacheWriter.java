@@ -16,17 +16,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 final class AsyncScanCacheWriter {
     private static final AtomicInteger PENDING = new AtomicInteger();
-    private static final ExecutorService WRITER = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = Executors.defaultThreadFactory().newThread(r);
-        thread.setName("bootoptim-scan-cache-writer");
-        try {
-            thread.setDaemon(true);
-            thread.setPriority(Thread.MIN_PRIORITY);
-        } catch (SecurityException ignored) {
-            // Daemon/priority settings are best effort; cache correctness does not depend on them.
-        }
-        return thread;
-    });
+    private static final ExecutorService WRITER = Executors.newSingleThreadExecutor(
+            Thread.ofPlatform()
+                    .name("bootoptim-scan-cache-writer")
+                    .daemon(true)
+                    .priority(Thread.MIN_PRIORITY)
+                    .factory());
 
     static {
         try {
