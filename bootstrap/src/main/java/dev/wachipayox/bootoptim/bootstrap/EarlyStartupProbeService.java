@@ -20,6 +20,22 @@ public final class EarlyStartupProbeService implements ITransformationService {
             || Boolean.getBoolean(BENCHMARK_PROPERTY);
 
     public EarlyStartupProbeService() {
+        var config = BootstrapStartupConfig.state();
+        BootOptimRuntimeInfo.version();
+        StartupDiagnostics.initialize();
+        CacheVersioning.ensureCurrent();
+
+        boolean scanCacheEnabled = !"false".equalsIgnoreCase(System.getProperty("boot_optim.scanCache", "true"));
+        StartupDiagnostics.optimization(
+                "mod_scan_cache",
+                scanCacheEnabled,
+                scanCacheEnabled ? "enabled_by_default" : "disabled_by_system_property");
+        StartupDiagnostics.optimization(
+                "async_scan_cache_write",
+                scanCacheEnabled,
+                scanCacheEnabled ? "enabled_with_mod_scan_cache" : "mod_scan_cache_disabled");
+        StartupDiagnostics.cache("mod_scan_cache_path="
+                + config.gameDirectory().resolve(".bootoptim").resolve("mod-scan-cache-v1"));
         mark("transformation_service_construct");
     }
 
