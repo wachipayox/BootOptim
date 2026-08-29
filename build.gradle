@@ -128,6 +128,11 @@ neoForge {
         }
 
         configureEach {
+            // The bootstrap source set is passed to FML through MOD_CLASSES instead of the run source set's
+            // runtime classpath. IntelliJ therefore does not know it must build that subproject before launch.
+            // On a clean checkout SecureJarHandler otherwise receives non-existent bootstrap output paths.
+            taskBefore project(':bootstrap').tasks.named('classes')
+
             // Startup benchmarks must resemble production logging; DEBUG/registry logging can materially skew boot time.
             logLevel = org.slf4j.event.Level.INFO
         }
