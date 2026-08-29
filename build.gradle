@@ -32,6 +32,7 @@ repositories {
 var packBenchmarkDirectory = project.file('run-pack-benchmark')
 var externalPackDirectory = providers.gradleProperty('bootoptimPackDir')
         .orElse(providers.environmentVariable('BOOTOPTIM_PACK_DIR'))
+var connectorCleanMinecraft = project.file('build/createCleanArtifact/minecraft-renamed.jar')
 
 var preparePackBenchmark = tasks.register('preparePackBenchmark', Sync) {
     into packBenchmarkDirectory
@@ -85,6 +86,10 @@ neoForge {
         minecraftVersion = project.parchment_minecraft_version
     }
 
+    // Sinytra Connector needs an unpatched/deobfuscated Minecraft artifact when it runs under ModDevGradle.
+    // This mirrors the minimal setup from Sinytra Adapter's userdev plugin without making BootOptim depend on it.
+    additionalMinecraftArtifacts.put('vanillaDeobfuscated', connectorCleanMinecraft)
+
     runs {
         client {
             client()
@@ -103,6 +108,7 @@ neoForge {
             gameDirectory = packBenchmarkDirectory
             systemProperty 'boot_optim.profileStartup', 'true'
             systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
+            systemProperty 'connector.clean.path', connectorCleanMinecraft.absolutePath
         }
 
         server {
