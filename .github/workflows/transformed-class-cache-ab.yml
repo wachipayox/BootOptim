@@ -1,0 +1,147 @@
+name: Transformed Class Cache A-B
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - 'bootstrap/**'
+      - 'build.gradle'
+      - '.github/workflows/transformed-class-cache-ab.yml'
+
+jobs:
+  transformed-cache-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri
+
+      - name: Seed benchmark clients
+        run: |
+          rm -rf run-benchmark run-transform-cache-benchmark
+          for dir in run-benchmark run-transform-cache-benchmark; do
+            mkdir -p "$dir"
+            cat > "$dir/options.txt" <<'EOF'
+          onboardAccessibility:false
+          narrator:0
+          EOF
+          done
+
+      - name: Warm stock scan cache and populate transformed cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a ./gradlew runBenchmarkClient --no-daemon --console=plain > stock-warmup.log 2>&1
+          xvfb-run -a ./gradlew runTransformCacheBenchmarkClient --no-daemon --console=plain > cache-populate.log 2>&1
+
+          test -f run-transform-cache-benchmark/.bootoptim/cache/transformed-class-cache-v1/classes.bin
+          grep -q 'OPTIMIZATION id=transformed_class_cache status=enabled' run-transform-cache-benchmark/logs/bootoptim-startup.log
+          grep 'BOOTOPTIM_TRANSFORM_CACHE' cache-populate.log | tail -n 1
+
+      - name: Run interleaved A-B samples
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_case() {
+            local label="$1"
+            local task="$2"
+            xvfb-run -a ./gradlew "$task" --no-daemon --console=plain > "$label.log" 2>&1
+            grep 'BOOTOPTIM_STARTUP phase=main_menu' "$label.log" | tail -n 1
+          }
+
+          run_case stock-a runBenchmarkClient
+          run_case cache-a runTransformCacheBenchmarkClient
+          run_case stock-b runBenchmarkClient
+          run_case cache-b runTransformCacheBenchmarkClient
+
+          for log in cache-a.log cache-b.log; do
+            summary="$(grep 'BOOTOPTIM_TRANSFORM_CACHE' "$log" | tail -n 1)"
+            echo "$summary"
+            test -n "$summary"
+            hits="$(sed -E 's/.*hits=([0-9]+).*/\1/' <<< "$summary")"
+            test "$hits" -gt 100
+          done
+
+      - name: Summarize A-B result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          def metric(path, phase):
+              text = Path(path).read_text(errors='replace')
+              matches = re.findall(rf'BOOTOPTIM_STARTUP phase={re.escape(phase)}[^\n]*uptime_ms=(\d+)', text)
+              if not matches:
+                  raise SystemExit(f'missing {phase} in {path}')
+              return int(matches[-1])
+
+          def sample(path):
+              menu = metric(path, 'main_menu')
+              discovery = metric(path, 'dependency_discovery_end')
+              entry = metric(path, 'mod_entrypoint')
+              return {
+                  'menu': menu,
+                  'discovery_to_entry': entry - discovery,
+                  'entry_to_menu': menu - entry,
+              }
+
+          stock = [sample('stock-a.log'), sample('stock-b.log')]
+          cached = [sample('cache-a.log'), sample('cache-b.log')]
+
+          def mean(rows, key):
+              return sum(r[key] for r in rows) / len(rows)
+
+          print('stock:', stock)
+          print('cache:', cached)
+          for key in ('menu', 'discovery_to_entry', 'entry_to_menu'):
+              s = mean(stock, key)
+              c = mean(cached, key)
+              pct = (s - c) / s * 100.0
+              print(f'{key}: stock={s:.1f}ms cache={c:.1f}ms improvement={pct:+.2f}% delta={s-c:+.1f}ms')
+
+          with open(Path(__import__('os').environ['GITHUB_STEP_SUMMARY']), 'a') as out:
+              out.write('### Transformed class cache A/B\n\n')
+              out.write('| Metric | Stock mean | Cache mean | Improvement |\n')
+              out.write('|---|---:|---:|---:|\n')
+              for key in ('menu', 'discovery_to_entry', 'entry_to_menu'):
+                  s = mean(stock, key)
+                  c = mean(cached, key)
+                  pct = (s - c) / s * 100.0
+                  out.write(f'| {key} | {s:.1f} ms | {c:.1f} ms | {pct:+.2f}% |\n')
+          PY
+
+      - name: Upload A-B diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transformed-class-cache-ab
+          path: |
+            stock-warmup.log
+            cache-populate.log
+            stock-a.log
+            cache-a.log
+            stock-b.log
+            cache-b.log
+            run-transform-cache-benchmark/logs/bootoptim-startup.log
+          if-no-files-found: ignore
