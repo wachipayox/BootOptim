@@ -22,4 +22,22 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew build :bootstrap:jarJar
+
+      - name: Validate packaged bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          packaged=""
+          for candidate in bootstrap/build/libs/*.jar; do
+            if jar tf "$candidate" | grep -qx 'META-INF/jarjar/metadata.json'; then
+              packaged="$candidate"
+              break
+            fi
+          done
+          test -n "$packaged"
+          echo "Validating $packaged"
+          jar tf "$packaged" | grep -qx 'META-INF/services/cpw.mods.modlauncher.api.ITransformationService'
+          jar tf "$packaged" | grep -q '^META-INF/jarjar/.*\.jar$'
+          unzip -p "$packaged" META-INF/jarjar/metadata.json | tee bootstrap-jarjar-metadata.json
+          grep -q 'boot_optim' bootstrap-jarjar-metadata.json
