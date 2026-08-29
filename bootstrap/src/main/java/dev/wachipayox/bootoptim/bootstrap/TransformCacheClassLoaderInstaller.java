@@ -12,6 +12,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.objectweb.asm.ClassWriter;
@@ -51,10 +52,10 @@ final class TransformCacheClassLoaderInstaller {
             return transformStore != null;
         }
 
-        String version = String.valueOf(TransformingClassLoader.class.getPackage().getImplementationVersion());
-        if (!version.startsWith(EXPECTED_MODLAUNCHER)) {
+        String versionEvidence = identifySupportedModLauncher();
+        if (versionEvidence == null) {
             StartupDiagnostics.optimization(
-                    "transformed_class_cache", false, "unsupported_modlauncher_" + version);
+                    "transformed_class_cache", false, "unsupported_or_unidentified_modlauncher");
             return false;
         }
 
@@ -69,6 +70,7 @@ final class TransformCacheClassLoaderInstaller {
             ModuleLayerHandler layerHandler = (ModuleLayerHandler) readField(unsafe, launcher, Launcher.class, "moduleLayerHandler");
             Class<?> handlerClass = Class.forName(HANDLER_NAME, false, Launcher.class.getClassLoader());
 
+            verifyExpectedStructure(handlerClass);
             TransformedClassCache.initialize();
             transformStore = store;
 
@@ -97,7 +99,7 @@ final class TransformCacheClassLoaderInstaller {
             writeField(unsafe, launcher, Launcher.class, "transformationServicesHandler", replacement);
 
             StartupDiagnostics.optimization("transformed_class_cache", true, "experimental_modlauncher_factory_hook");
-            StartupDiagnostics.event("TRANSFORM_CACHE", "installer=active modlauncher=" + version);
+            StartupDiagnostics.event("TRANSFORM_CACHE", "installer=active modlauncher=" + versionEvidence);
             return true;
         } catch (Throwable t) {
             transformStore = null;
@@ -105,6 +107,49 @@ final class TransformCacheClassLoaderInstaller {
             StartupDiagnostics.failure("transformed_class_cache_installer", t);
             System.out.println("BOOTOPTIM_TRANSFORM_CACHE installer=failed type=" + t.getClass().getName());
             return false;
+        }
+    }
+
+    private static String identifySupportedModLauncher() {
+        String implementationVersion = TransformingClassLoader.class.getPackage().getImplementationVersion();
+        if (implementationVersion != null && implementationVersion.startsWith(EXPECTED_MODLAUNCHER)) {
+            return implementationVersion;
+        }
+
+        // ModDev loads ModLauncher from the dependency JAR but the Package object has no manifest
+        // implementation version. The CodeSource remains the exact resolved artifact and therefore
+        // gives us a second independent, fail-closed version signal for development/CI.
+        try {
+            var protectionDomain = TransformingClassLoader.class.getProtectionDomain();
+            var source = protectionDomain == null ? null : protectionDomain.getCodeSource();
+            var location = source == null ? null : source.getLocation();
+            String text = location == null ? null : location.toExternalForm();
+            if (text != null && (text.contains("/modlauncher/" + EXPECTED_MODLAUNCHER + "/")
+                    || text.contains("modlauncher-" + EXPECTED_MODLAUNCHER + ".jar"))) {
+                return EXPECTED_MODLAUNCHER + "@codesource";
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private static void verifyExpectedStructure(Class<?> handlerClass) throws ReflectiveOperationException {
+        Field transformationServicesHandler = Launcher.class.getDeclaredField("transformationServicesHandler");
+        if (!transformationServicesHandler.getType().getName().equals(HANDLER_NAME)) {
+            throw new NoSuchFieldException("Unexpected Launcher.transformationServicesHandler type: "
+                    + transformationServicesHandler.getType().getName());
+        }
+        Launcher.class.getDeclaredField("transformStore");
+        Launcher.class.getDeclaredField("moduleLayerHandler");
+
+        handlerClass.getDeclaredConstructor(TransformStore.class, ModuleLayerHandler.class);
+        Method build = handlerClass.getDeclaredMethod(
+                "buildTransformingClassLoader",
+                LaunchPluginHandler.class,
+                Environment.class,
+                ModuleLayerHandler.class);
+        if (build.getReturnType() != TransformingClassLoader.class) {
+            throw new NoSuchMethodException("Unexpected buildTransformingClassLoader return type");
         }
     }
 
