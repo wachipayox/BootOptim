@@ -82,8 +82,18 @@ jobs:
 
           early_marker="$(grep 'BOOTOPTIM_STARTUP phase=transformation_service_construct' startup-benchmark.log | tail -n 1 || true)"
           test -n "$early_marker"
+
+          config='run-benchmark/config/boot_optim.properties'
+          report='run-benchmark/logs/bootoptim-startup.log'
+          test -f "$config"
+          test -f "$report"
+          grep -q '^startupLog=false$' "$config"
+          grep -q 'OPTIMIZATION id=mod_scan_cache status=enabled' "$report"
+          grep -Eq 'SUMMARY version=0\.1\.0 total_startup_ms=[0-9]+ status=main_menu_reached' "$report"
+
           echo "$early_marker"
           echo "$marker"
+          cat "$report"
           kill "$launcher_pid" 2>/dev/null || true
           pkill -P "$launcher_pid" 2>/dev/null || true
           wait "$launcher_pid" 2>/dev/null || true
@@ -92,6 +102,8 @@ jobs:
             echo
             echo "\`$early_marker\`"
             echo "\`$marker\`"
+            echo
+            echo 'Startup diagnostics validated.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark diagnostics
@@ -102,4 +114,6 @@ jobs:
           path: |
             startup-benchmark.log
             startup-thread-dump.log
+            run-benchmark/config/boot_optim.properties
+            run-benchmark/logs/bootoptim-startup.log
           if-no-files-found: ignore
