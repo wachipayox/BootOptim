@@ -1,0 +1,161 @@
+name: RuntimeDistCleaner A-B Benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - 'bootstrap/src/main/java/dev/wachipayox/bootoptim/bootstrap/DistCleanerClassIndex.java'
+      - 'bootstrap/src/main/java/dev/wachipayox/bootoptim/bootstrap/RuntimeDistCleanerFilterInstaller.java'
+      - 'bootstrap/src/main/java/dev/wachipayox/bootoptim/bootstrap/EarlyStartupProbeService.java'
+      - 'build.gradle'
+      - '.github/workflows/dist-cleaner-ab.yml'
+
+jobs:
+  dist-cleaner-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri
+
+      - name: Seed benchmark client options
+        run: |
+          mkdir -p run-benchmark
+          cat > run-benchmark/options.txt <<'EOF'
+          onboardAccessibility:false
+          narrator:0
+          EOF
+
+      - name: Run same-runner stock and filtered samples
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_case() {
+            local name="$1"
+            local enabled="$2"
+            local log="dist-cleaner-${name}.log"
+            echo "===== ${name} filter=${enabled} ====="
+            timeout 180s xvfb-run -a ./gradlew runBenchmarkClient \
+              --no-daemon --console=plain \
+              -PbootoptimDistCleanerFilter="${enabled}" 2>&1 | tee "${log}"
+            grep -q 'BOOTOPTIM_STARTUP phase=main_menu' "${log}"
+            if [[ "${enabled}" == "true" ]]; then
+              grep -q 'BOOTOPTIM_DIST_FILTER installed=true' "${log}"
+              grep -q 'BOOTOPTIM_DIST_FILTER_SUMMARY' "${log}"
+            fi
+          }
+
+          # Warm Gradle/filesystem/scan cache first. The filtered warm-up also builds its persistent class index.
+          run_case warm-stock false
+          run_case warm-filter true
+
+          # Balanced ordering reduces runner drift.
+          run_case stock-a false
+          run_case filter-a true
+          run_case filter-b true
+          run_case stock-b false
+
+      - name: Summarize A-B timings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+          import statistics
+
+          cases = {
+              "stock": [pathlib.Path("dist-cleaner-stock-a.log"), pathlib.Path("dist-cleaner-stock-b.log")],
+              "filter": [pathlib.Path("dist-cleaner-filter-a.log"), pathlib.Path("dist-cleaner-filter-b.log")],
+          }
+
+          patterns = {
+              "dependency_discovery_end": re.compile(r"BOOTOPTIM_STARTUP phase=dependency_discovery_end uptime_ms=([0-9]+)"),
+              "mod_entrypoint": re.compile(r"BOOTOPTIM_STARTUP phase=mod_entrypoint uptime_ms=([0-9]+)"),
+              "main_menu": re.compile(r"BOOTOPTIM_STARTUP phase=main_menu uptime_ms=([0-9]+)"),
+          }
+          summary_pattern = re.compile(r"BOOTOPTIM_DIST_FILTER_SUMMARY skipped=([0-9]+) delegated=([0-9]+) known=([0-9]+) marked=([0-9]+)")
+
+          def extract(path, pattern):
+              matches = pattern.findall(path.read_text(errors="replace"))
+              if not matches:
+                  raise SystemExit(f"Missing marker in {path}: {pattern.pattern}")
+              value = matches[-1]
+              return float(value if isinstance(value, str) else value[0])
+
+          values = {}
+          for mode, paths in cases.items():
+              values[mode] = {}
+              for phase, pattern in patterns.items():
+                  values[mode][phase] = [extract(path, pattern) for path in paths]
+              values[mode]["discovery_to_entry"] = [
+                  entry - discovery
+                  for entry, discovery in zip(values[mode]["mod_entrypoint"], values[mode]["dependency_discovery_end"])
+              ]
+              values[mode]["entry_to_menu"] = [
+                  menu - entry
+                  for menu, entry in zip(values[mode]["main_menu"], values[mode]["mod_entrypoint"])
+              ]
+
+          metrics = ("discovery_to_entry", "mod_entrypoint", "entry_to_menu", "main_menu")
+          rows = []
+          for metric in metrics:
+              stock = statistics.mean(values["stock"][metric])
+              filtered = statistics.mean(values["filter"][metric])
+              improvement = (stock - filtered) / stock * 100.0
+              rows.append((metric, stock, filtered, improvement))
+
+          filter_summaries = []
+          for path in cases["filter"]:
+              matches = summary_pattern.findall(path.read_text(errors="replace"))
+              if not matches:
+                  raise SystemExit(f"Missing filter summary in {path}")
+              skipped, delegated, known, marked = map(int, matches[-1])
+              filter_summaries.append((skipped, delegated, known, marked))
+
+          print("A/B samples:")
+          for mode in ("stock", "filter"):
+              print(mode, values[mode])
+          for metric, stock, filtered, improvement in rows:
+              print(f"{metric}: stock={stock:.3f} ms filter={filtered:.3f} ms improvement={improvement:+.2f}%")
+          print("filter summaries:", filter_summaries)
+
+          summary = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a", encoding="utf-8") as out:
+              out.write("### Same-runner RuntimeDistCleaner A/B\n\n")
+              out.write("| Metric | Stock mean | Filtered mean | Improvement |\n")
+              out.write("|---|---:|---:|---:|\n")
+              for metric, stock, filtered, improvement in rows:
+                  out.write(f"| `{metric}` | {stock:.3f} ms | {filtered:.3f} ms | {improvement:+.2f}% |\n")
+              out.write("\nFiltered samples (`skipped`, `delegated`, `known`, `marked`):\n\n")
+              for sample in filter_summaries:
+                  out.write(f"- `{sample}`\n")
+              out.write("\nMeasured samples per mode: 2, after one warm-up launch per mode.\n")
+          PY
+
+      - name: Upload A-B logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-cleaner-ab-logs
+          path: dist-cleaner-*.log
+          if-no-files-found: ignore
