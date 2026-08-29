@@ -29,6 +29,32 @@ public final class BootstrapStartupConfig {
     private BootstrapStartupConfig() {
     }
 
+    /**
+     * Initializes startup paths from ModLauncher's authoritative game directory.
+     *
+     * <p>Launchers commonly keep their process working directory separate from the instance's
+     * {@code --gameDir}. Using {@code user.dir} here would therefore place BootOptim's config and
+     * caches outside the selected modpack instance.</p>
+     */
+    public static State initialize(Path gameDirectory) {
+        Path resolved = normalize(gameDirectory);
+        State current = state;
+        if (current != null && current.gameDirectory().equals(resolved)) {
+            return current;
+        }
+        synchronized (BootstrapStartupConfig.class) {
+            current = state;
+            if (current == null || !current.gameDirectory().equals(resolved)) {
+                state = load(resolved);
+            }
+            return state;
+        }
+    }
+
+    /**
+     * Fallback for code paths that do not have access to ModLauncher's environment.
+     * Startup initialization should call {@link #initialize(Path)} first.
+     */
     public static State state() {
         State current = state;
         if (current != null) {
@@ -36,16 +62,16 @@ public final class BootstrapStartupConfig {
         }
         synchronized (BootstrapStartupConfig.class) {
             if (state == null) {
-                state = load();
+                state = load(normalize(Path.of(System.getProperty("user.dir", "."))));
             }
             return state;
         }
     }
 
-    private static State load() {
-        Path gameDirectory = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
-        Path configPath = gameDirectory.resolve("config").resolve(CONFIG_NAME);
-        Path logPath = gameDirectory.resolve("logs").resolve(LOG_NAME);
+    static State load(Path gameDirectory) {
+        Path resolvedGameDirectory = normalize(gameDirectory);
+        Path configPath = resolvedGameDirectory.resolve("config").resolve(CONFIG_NAME);
+        Path logPath = resolvedGameDirectory.resolve("logs").resolve(LOG_NAME);
         boolean configured = false;
         String problem = null;
 
@@ -79,7 +105,12 @@ public final class BootstrapStartupConfig {
         System.setProperty(RESOLVED_LOG_PATH_PROPERTY, logPath.toString());
         System.setProperty(RESOLVED_CONFIG_PATH_PROPERTY, configPath.toString());
 
-        return new State(gameDirectory, configPath, logPath, configured, debug, profiling, enabled, problem);
+        return new State(resolvedGameDirectory, configPath, logPath, configured, debug, profiling, enabled, problem);
+    }
+
+    private static Path normalize(Path gameDirectory) {
+        Path candidate = gameDirectory == null ? Path.of(System.getProperty("user.dir", ".")) : gameDirectory;
+        return candidate.toAbsolutePath().normalize();
     }
 
     public record State(
