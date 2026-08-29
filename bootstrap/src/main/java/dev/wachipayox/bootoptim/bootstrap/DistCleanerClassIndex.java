@@ -5,7 +5,6 @@ import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.lang.annotation.ElementType;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -14,8 +13,10 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,7 +35,7 @@ import net.neoforged.neoforgespi.language.ModFileScanData;
  */
 final class DistCleanerClassIndex {
     private static final int MAGIC = 0x424F4449; // BODI
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final String ONLY_IN = "net/neoforged/api/distmarker/OnlyIn";
     private static final String ONLY_INS = "net/neoforged/api/distmarker/OnlyIns";
 
@@ -102,6 +103,11 @@ final class DistCleanerClassIndex {
     }
 
     private static void collectMissing(List<ModFile> files) {
+        // A single physical artifact can appear as multiple logical ModFiles with different filtered SecureJar views.
+        // NeoForge's userdev artifact does this for the Minecraft and NeoForge portions. Persist the union once per
+        // physical path so one logical view cannot overwrite the cache produced by another view.
+        Map<Path, IndexData> persistentBySource = new HashMap<>();
+
         for (ModFile file : files) {
             try {
                 ModFileScanData scanData = file.getScanResult();
@@ -110,7 +116,13 @@ final class DistCleanerClassIndex {
                 }
                 IndexData data = buildIndex(scanData);
                 absorb(data);
-                writeCached(file, data);
+
+                Path source = file.getFilePath();
+                if (Files.isRegularFile(source)) {
+                    Path normalizedSource = source.toAbsolutePath().normalize();
+                    persistentBySource.merge(normalizedSource, data, IndexData::merge);
+                }
+
                 System.out.printf(
                         "BOOTOPTIM_DIST_INDEX status=collected file=%s known=%d marked=%d%n",
                         file.getFileName(),
@@ -123,6 +135,10 @@ final class DistCleanerClassIndex {
                         file.getFileName(),
                         throwable.getClass().getSimpleName());
             }
+        }
+
+        for (var entry : persistentBySource.entrySet()) {
+            writeCached(entry.getKey(), entry.getValue());
         }
     }
 
@@ -180,8 +196,7 @@ final class DistCleanerClassIndex {
         }
     }
 
-    private static void writeCached(ModFile file, IndexData data) {
-        Path source = file.getFilePath();
+    private static void writeCached(Path source, IndexData data) {
         if (!Files.isRegularFile(source)) {
             return;
         }
@@ -230,7 +245,7 @@ final class DistCleanerClassIndex {
                 + loaderVersion + "\n"
                 + VERSION;
         String key = hex(MessageDigest.getInstance("SHA-256").digest(identity.getBytes(StandardCharsets.UTF_8)));
-        return FMLPaths.GAMEDIR.get().resolve(".bootoptim").resolve("dist-cleaner-index-v1").resolve(key + ".bin");
+        return FMLPaths.GAMEDIR.get().resolve(".bootoptim").resolve("dist-cleaner-index-v2").resolve(key + ".bin");
     }
 
     private static int checkedCount(int count) throws IOException {
@@ -249,5 +264,13 @@ final class DistCleanerClassIndex {
         return out.toString();
     }
 
-    private record IndexData(Set<String> knownClasses, Set<String> distMarkedClasses) {}
+    private record IndexData(Set<String> knownClasses, Set<String> distMarkedClasses) {
+        private static IndexData merge(IndexData left, IndexData right) {
+            Set<String> known = new HashSet<>(left.knownClasses());
+            known.addAll(right.knownClasses());
+            Set<String> marked = new HashSet<>(left.distMarkedClasses());
+            marked.addAll(right.distMarkedClasses());
+            return new IndexData(known, marked);
+        }
+    }
 }
