@@ -45,6 +45,7 @@ public abstract class StitchedSpriteCreateCrnCompatMixin {
 
         ALL = new ConcurrentHashMap<>(ALL);
         bootoptim$legacyCreateCrnCache = true;
+        CreateCrnStitchedSpriteCompat.markApplied();
     }
 
     @Redirect(
