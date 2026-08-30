@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
+import dev.wachipayox.bootoptim.profiling.client.CustomGeometryBakeProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ModelBakeDistributionProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ModelReloadProfiler;
 import java.util.List;
@@ -35,6 +36,7 @@ abstract class ModelBakeryProfilingMixin {
     @Inject(method = "bakeModels", at = @At("HEAD"))
     private void bootoptim$modelBakeStart(ModelBakery.TextureGetter textureGetter, CallbackInfo ci) {
         ModelReloadProfiler.begin("model_bake");
+        CustomGeometryBakeProfiler.begin();
     }
 
     @Redirect(
@@ -48,6 +50,7 @@ abstract class ModelBakeryProfilingMixin {
 
     @Inject(method = "bakeModels", at = @At("RETURN"))
     private void bootoptim$modelBakeEnd(ModelBakery.TextureGetter textureGetter, CallbackInfo ci) {
+        CustomGeometryBakeProfiler.finish();
         ModelReloadProfiler.end("model_bake", null);
     }
 }
