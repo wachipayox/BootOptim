@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
 import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
@@ -15,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  */
 @Mixin(SimpleReloadInstance.class)
 abstract class SimpleReloadInstanceProfilingMixin {
+    @Unique
     private static final AtomicBoolean BOOTOPTIM$REPORTED = new AtomicBoolean();
 
     @ModifyVariable(method = "create", at = @At("HEAD"), argsOnly = true)
@@ -26,10 +28,12 @@ abstract class SimpleReloadInstanceProfilingMixin {
         return enabled;
     }
 
+    @Unique
     private static Logger logger() {
         return LoggerHolder.LOGGER;
     }
 
+    @Unique
     private static final class LoggerHolder {
         private static final Logger LOGGER = LogUtils.getLogger();
     }
