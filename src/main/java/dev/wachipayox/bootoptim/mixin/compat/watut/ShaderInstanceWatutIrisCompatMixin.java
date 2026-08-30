@@ -12,7 +12,9 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  * Wraps the particle ShaderInstance resource provider only when WATUT and Iris are present.
  *
  * <p>The handler must remain static: this injection runs at constructor HEAD before the
- * target instance has completed its {@code this()/super()} constructor invocation.</p>
+ * target instance has completed its {@code this()/super()} constructor invocation. Static
+ * {@code @ModifyVariable} handlers which capture target arguments receive the modified value
+ * first, followed by the complete target argument list.</p>
  */
 @Mixin(ShaderInstance.class)
 public abstract class ShaderInstanceWatutIrisCompatMixin {
@@ -24,6 +26,7 @@ public abstract class ShaderInstanceWatutIrisCompatMixin {
             require = 0)
     private static ResourceProvider bootoptim$wrapWatutParticleResources(
             ResourceProvider original,
+            ResourceProvider constructorProvider,
             String shaderName,
             VertexFormat vertexFormat) {
         return WatutIrisParticleShaderCompat.wrapIfNeeded(original, shaderName);
