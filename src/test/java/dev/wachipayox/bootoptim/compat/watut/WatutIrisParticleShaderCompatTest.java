@@ -18,13 +18,20 @@ class WatutIrisParticleShaderCompatTest {
     }
 
     @Test
-    void constructorHeadModifyVariableHandlerRemainsStatic() throws IOException {
+    void constructorHeadModifyVariableHandlerKeepsRequiredStaticSignature() throws IOException {
         String mixinSource = Files.readString(Path.of(
                 "src/main/java/dev/wachipayox/bootoptim/mixin/compat/watut/ShaderInstanceWatutIrisCompatMixin.java"));
 
+        String requiredSignature = """
+                private static ResourceProvider bootoptim$wrapWatutParticleResources(
+                            ResourceProvider original,
+                            ResourceProvider constructorProvider,
+                            String shaderName,
+                            VertexFormat vertexFormat) {
+                """;
         assertTrue(
-                mixinSource.contains("private static ResourceProvider bootoptim$wrapWatutParticleResources("),
-                "Constructor HEAD @ModifyVariable handlers must be static before this()/super() invocation");
+                mixinSource.contains(requiredSignature),
+                "Constructor HEAD @ModifyVariable must be static and receive the modified value followed by all target arguments");
     }
 
     @Test
