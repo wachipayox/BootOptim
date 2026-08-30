@@ -14,15 +14,20 @@ jobs:
           set -euo pipefail
           url='https://cdn.modrinth.com/data/Wq5SjeWM/versions/ERSQlY78/sources_fancymenu_neoforge_3.9.0_MC_1.21.1.jar'
           curl -L --fail --retry 3 "$url" -o fancymenu-sources.jar
-          echo '=== MATCHING FILES ==='
-          jar tf fancymenu-sources.jar | grep -E '(^|/)(ResourcePreLoader|ResourceHandler|ResourceHandlers|ImageResourceHandler|TextureResource|ResourceSource).*\.java$|util/resource/.+\.java$' | sort | tee matches.txt
-          echo '=== SOURCE CONTENT ==='
-          while IFS= read -r file; do
-            case "$file" in
-              *ResourcePreLoader.java|*ResourceHandler.java|*ResourceHandlers.java|*ImageResourceHandler.java|*ResourceSource.java)
-                echo "===== $file ====="
-                unzip -p fancymenu-sources.jar "$file"
-                echo
-                ;;
-            esac
-          done < matches.txt
+          files=(
+            'de/keksuccino/fancymenu/util/resource/Resource.java'
+            'de/keksuccino/fancymenu/util/resource/ResourceSupplier.java'
+            'de/keksuccino/fancymenu/util/resource/preload/ResourcePreLoader.java'
+            'de/keksuccino/fancymenu/util/resource/resources/texture/ITexture.java'
+            'de/keksuccino/fancymenu/util/resource/resources/texture/PngTexture.java'
+            'de/keksuccino/fancymenu/customization/panorama/LocalTexturePanoramaRenderer.java'
+            'de/keksuccino/fancymenu/customization/slideshow/ExternalTextureSlideshowRenderer.java'
+          )
+          echo '=== REQUESTED SOURCE CONTENT ==='
+          for file in "${files[@]}"; do
+            echo "===== $file ====="
+            unzip -p fancymenu-sources.jar "$file"
+            echo
+          done
+          echo '=== PNG / IMAGE FILE TYPE CANDIDATES ==='
+          jar tf fancymenu-sources.jar | grep -E 'util/file/type/.+(Png|PNG|Image).+\.java$' | sort
