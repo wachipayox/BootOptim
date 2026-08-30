@@ -20,10 +20,15 @@ jobs:
         run: |
           curl -fL --retry 3 'https://cdn.modrinth.com/data/IZJSgKZe/versions/Z8xm2POI/decocraft-3.0.11-1.21.1-neoforge.jar' -o /tmp/decocraft.jar
           sha256sum /tmp/decocraft.jar
-          unzip -l /tmp/decocraft.jar | grep 'com/razz/decocraft/models/bbmodel/' | head -100
 
-      - name: Decompile BBGeometry
+      - name: Decompile model bake path
         run: |
-          javap -classpath /tmp/decocraft.jar -c -p -s 'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader$BBGeometry'
-          javap -classpath /tmp/decocraft.jar -c -p -s 'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader'
-          javap -classpath /tmp/decocraft.jar -c -p -s 'com.razz.decocraft.models.bbmodel.BBModel'
+          for cls in \
+            'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader$BBGeometry' \
+            'com.razz.decocraft.models.bbmodel.BBUnbakedModel' \
+            'com.razz.decocraft.models.bbmodel.BlockbenchBakery' \
+            'com.razz.decocraft.models.bbmodel.BlockbenchBakery$VertexData' \
+            'com.razz.decocraft.models.bbmodel.BlockbenchModel'; do
+            echo "===== JAVAP $cls ====="
+            javap -classpath /tmp/decocraft.jar -c -p -s "$cls"
+          done
