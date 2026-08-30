@@ -11,6 +11,17 @@ BootOptim is a NeoForge 1.21.1 performance mod focused specifically on reducing 
 - Avoid duplicating dedicated optimization mods unless BootOptim can demonstrably replace them with a better implementation.
 - When a multipurpose mod contains an overlapping optimization, prefer disabling only the overlapping feature while keeping the rest of that mod active.
 
+## Optimization catalog
+
+Production optimizations, their safety invariants, kill switches, resource trade-offs and measured results are documented under [`docs/optimizations/`](docs/optimizations/README.md).
+
+The catalog explicitly separates:
+
+- **global optimizations** for shared Minecraft/NeoForge/FML startup paths; and
+- **mod-specific compatibility optimizations** that are enabled only when a profiled third-party path matches strict safety guards.
+
+Third-party compatibility hooks must remain optional: an absent or changed target mod must not prevent BootOptim or Minecraft from loading.
+
 ## Startup diagnostics
 
 BootOptim creates `config/boot_optim.properties` on first launch. The startup report is disabled by default:
