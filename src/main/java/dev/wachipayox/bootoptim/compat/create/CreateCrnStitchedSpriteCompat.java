@@ -4,7 +4,6 @@ import com.mojang.logging.LogUtils;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 import net.neoforged.fml.ModList;
-import org.slf4j.Logger;
 
 /**
  * Compatibility gate for the legacy Ponder StitchedSprite cache race exposed during NeoForge parallel mod construction.
@@ -15,7 +14,6 @@ import org.slf4j.Logger;
 public final class CreateCrnStitchedSpriteCompat {
     public static final String CREATE_MOD_ID = "create";
     public static final String CRN_MOD_ID = "createrailwaysnavigator";
-    private static final Logger LOGGER = LogUtils.getLogger();
 
     private CreateCrnStitchedSpriteCompat() {}
 
@@ -38,7 +36,8 @@ public final class CreateCrnStitchedSpriteCompat {
     }
 
     public static void markApplied() {
-        LOGGER.info(
+        // Resolve the Minecraft logger only on the real compatibility path so the pure gate stays unit-testable.
+        LogUtils.getLogger().info(
                 "BOOTOPTIM_COMPAT id=create_crn_stitched_sprite status=applied strategy=ponder_threadsafe_cache_backport");
     }
 
