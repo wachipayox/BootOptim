@@ -3,19 +3,35 @@ package dev.wachipayox.bootoptim.compat.watut;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class WatutIrisParticleShaderCompatTest {
     @Test
-    void gatesToWatutParticleShaderWithIris() {
-        assertTrue(WatutIrisParticleShaderCompat.shouldPatch(
-                "particle", "com.corosus.watut.ShaderInstanceBlur", true, true));
-        assertFalse(WatutIrisParticleShaderCompat.shouldPatch(
-                "particle", "com.corosus.watut.ShaderInstanceBlur", true, false));
-        assertFalse(WatutIrisParticleShaderCompat.shouldPatch(
-                "position_tex_blur", "com.corosus.watut.ShaderInstanceBlur", true, true));
-        assertFalse(WatutIrisParticleShaderCompat.shouldPatch(
-                "particle", "net.minecraft.client.renderer.ShaderInstance", true, true));
+    void gatesToParticleShaderWithWatutAndIris() {
+        assertTrue(WatutIrisParticleShaderCompat.shouldPatch("particle", true, true));
+        assertFalse(WatutIrisParticleShaderCompat.shouldPatch("particle", true, false));
+        assertFalse(WatutIrisParticleShaderCompat.shouldPatch("particle", false, true));
+        assertFalse(WatutIrisParticleShaderCompat.shouldPatch("position_tex_blur", true, true));
+    }
+
+    @Test
+    void constructorHeadModifyVariableHandlerKeepsRequiredStaticSignature() throws IOException {
+        String mixinSource = Files.readString(Path.of(
+                "src/main/java/dev/wachipayox/bootoptim/mixin/compat/watut/ShaderInstanceWatutIrisCompatMixin.java"));
+
+        String requiredSignature = """
+                private static ResourceProvider bootoptim$wrapWatutParticleResources(
+                            ResourceProvider original,
+                            ResourceProvider constructorProvider,
+                            String shaderName,
+                            VertexFormat vertexFormat) {
+                """;
+        assertTrue(
+                mixinSource.contains(requiredSignature),
+                "Constructor HEAD @ModifyVariable must be static and receive the modified value followed by all target arguments");
     }
 
     @Test
@@ -25,6 +41,14 @@ class WatutIrisParticleShaderCompatTest {
 
         assertTrue(patched.contains("fog_distance(Position, FogShape)"));
         assertFalse(patched.contains("fog_distance(ModelViewMat, Position, FogShape)"));
+    }
+
+    @Test
+    void leavesModernParticleShaderUntouched() {
+        String modern = "vertexDistance = fog_distance(Position, FogShape);";
+        String patched = WatutIrisParticleShaderCompat.patchSource("shaders/core/particle.vsh", modern);
+
+        assertTrue(patched.equals(modern));
     }
 
     @Test

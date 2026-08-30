@@ -17,13 +17,12 @@ import org.slf4j.Logger;
  * <p>WATUT's legacy shader calls {@code fog_distance(ModelViewMat, Position, FogShape)} and ships a matching three-argument
  * {@code fog.glsl}. Minecraft 1.21.1 changed the vanilla helper to {@code fog_distance(Position, FogShape)}. Iris can resolve
  * WATUT's unqualified {@code <fog.glsl>} import against the vanilla helper, which makes the shader fail compilation and forces
- * Minecraft through a full fallback resource reload. Patch only WATUT's ShaderInstanceBlur resource provider and leave every
- * other core shader/resource provider untouched.</p>
+ * Minecraft through a full fallback resource reload. The wrapper is enabled only for the particle shader while WATUT and Iris
+ * are loaded, and it mutates resources only when the exact legacy WATUT source patterns are present.</p>
  */
 public final class WatutIrisParticleShaderCompat {
     private static final String WATUT_MOD_ID = "watut";
     private static final String IRIS_MOD_ID = "iris";
-    private static final String WATUT_SHADER_CLASS = "com.corosus.watut.ShaderInstanceBlur";
     private static final String PARTICLE_SHADER_NAME = "particle";
     private static final String PARTICLE_VERTEX_PATH = "shaders/core/particle.vsh";
     private static final String FOG_INCLUDE_PATH = "shaders/include/fog.glsl";
@@ -58,19 +57,16 @@ public final class WatutIrisParticleShaderCompat {
     private WatutIrisParticleShaderCompat() {
     }
 
-    public static ResourceProvider wrapIfNeeded(ResourceProvider original, String shaderName, String runtimeShaderClass) {
-        if (!PARTICLE_SHADER_NAME.equals(shaderName)
-                || !WATUT_SHADER_CLASS.equals(runtimeShaderClass)
-                || !modsPresent()) {
+    public static ResourceProvider wrapIfNeeded(ResourceProvider original, String shaderName) {
+        if (!shouldPatch(shaderName, modsPresent(WATUT_MOD_ID), modsPresent(IRIS_MOD_ID))) {
             return original;
         }
 
         return location -> patchResource(original, location);
     }
 
-    static boolean shouldPatch(String shaderName, String runtimeShaderClass, boolean watutLoaded, boolean irisLoaded) {
+    static boolean shouldPatch(String shaderName, boolean watutLoaded, boolean irisLoaded) {
         return PARTICLE_SHADER_NAME.equals(shaderName)
-                && WATUT_SHADER_CLASS.equals(runtimeShaderClass)
                 && watutLoaded
                 && irisLoaded;
     }
@@ -111,9 +107,8 @@ public final class WatutIrisParticleShaderCompat {
         }));
     }
 
-    private static boolean modsPresent() {
-        ModList modList = ModList.get();
-        return modList.isLoaded(WATUT_MOD_ID) && modList.isLoaded(IRIS_MOD_ID);
+    private static boolean modsPresent(String modId) {
+        return ModList.get().isLoaded(modId);
     }
 
     private static void markApplied(String path) {
