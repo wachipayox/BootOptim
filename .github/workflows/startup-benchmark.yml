@@ -80,6 +80,15 @@ jobs:
             exit 1
           fi
 
+          if grep -Eq 'Mixin (apply|prepare) for mod boot_optim failed|InvalidInjectionException.*boot_optim|boot_optim.*InvalidInjectionException' startup-benchmark.log; then
+            echo 'BootOptim mixin application failed during startup.'
+            grep -E 'Mixin (apply|prepare) for mod boot_optim failed|InvalidInjectionException.*boot_optim|boot_optim.*InvalidInjectionException' startup-benchmark.log || true
+            kill "$launcher_pid" 2>/dev/null || true
+            pkill -P "$launcher_pid" 2>/dev/null || true
+            wait "$launcher_pid" 2>/dev/null || true
+            exit 1
+          fi
+
           early_marker="$(grep 'BOOTOPTIM_STARTUP phase=transformation_service_construct' startup-benchmark.log | tail -n 1 || true)"
           test -n "$early_marker"
 
