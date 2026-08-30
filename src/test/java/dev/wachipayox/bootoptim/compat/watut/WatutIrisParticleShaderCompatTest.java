@@ -3,10 +3,9 @@ package dev.wachipayox.bootoptim.compat.watut;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.mojang.blaze3d.vertex.VertexFormat;
-import dev.wachipayox.bootoptim.mixin.compat.watut.ShaderInstanceWatutIrisCompatMixin;
-import java.lang.reflect.Modifier;
-import net.minecraft.server.packs.resources.ResourceProvider;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class WatutIrisParticleShaderCompatTest {
@@ -19,14 +18,12 @@ class WatutIrisParticleShaderCompatTest {
     }
 
     @Test
-    void constructorHeadModifyVariableHandlerRemainsStatic() throws NoSuchMethodException {
-        var handler = ShaderInstanceWatutIrisCompatMixin.class.getDeclaredMethod(
-                "bootoptim$wrapWatutParticleResources",
-                ResourceProvider.class,
-                String.class,
-                VertexFormat.class);
+    void constructorHeadModifyVariableHandlerRemainsStatic() throws IOException {
+        String mixinSource = Files.readString(Path.of(
+                "src/main/java/dev/wachipayox/bootoptim/mixin/compat/watut/ShaderInstanceWatutIrisCompatMixin.java"));
 
-        assertTrue(Modifier.isStatic(handler.getModifiers()),
+        assertTrue(
+                mixinSource.contains("private static ResourceProvider bootoptim$wrapWatutParticleResources("),
                 "Constructor HEAD @ModifyVariable handlers must be static before this()/super() invocation");
     }
 
