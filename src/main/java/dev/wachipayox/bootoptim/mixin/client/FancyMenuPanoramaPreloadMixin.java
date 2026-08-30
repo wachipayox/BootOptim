@@ -3,6 +3,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 import com.mojang.logging.LogUtils;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -104,7 +105,7 @@ abstract class FancyMenuPanoramaPreloadMixin {
                     }
                 } catch (ReflectiveOperationException | RuntimeException ex) {
                     bootoptim$prelaunchFailures++;
-                    throw ex;
+                    throw new IllegalStateException("FancyMenu supplier prelaunch failed", ex);
                 }
             }
         } catch (ReflectiveOperationException | RuntimeException ex) {
@@ -131,7 +132,7 @@ abstract class FancyMenuPanoramaPreloadMixin {
                 bootoptim$panoramas,
                 bootoptim$suppliersPrelaunched,
                 bootoptim$prelaunchFailures,
-                String.format(java.util.Locale.ROOT, "%.3f", elapsedMs));
+                String.format(Locale.ROOT, "%.3f", elapsedMs));
         bootoptim$preloadStartNanos = 0L;
     }
 }
