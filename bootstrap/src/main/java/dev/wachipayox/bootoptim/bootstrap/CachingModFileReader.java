@@ -242,7 +242,7 @@ public final class CachingModFileReader implements IModFileReader {
             out.writeInt(data.getClasses().size());
             for (var cls : data.getClasses()) {
                 out.writeUTF(cls.clazz().getInternalName());
-                out.writeUTF(cls.parent().getInternalName());
+                out.writeUTF(ScanCacheTypeCodec.encodeNullable(cls.parent()));
                 out.writeInt(cls.interfaces().size());
                 for (Type iface : cls.interfaces()) {
                     out.writeUTF(iface.getInternalName());
@@ -264,7 +264,7 @@ public final class CachingModFileReader implements IModFileReader {
             Set<ModFileScanData.ClassData> classes = new LinkedHashSet<>(classCount);
             for (int i = 0; i < classCount; i++) {
                 Type clazz = Type.getObjectType(in.readUTF());
-                Type parent = Type.getObjectType(in.readUTF());
+                Type parent = ScanCacheTypeCodec.decodeNullable(in.readUTF());
                 int interfaceCount = checkedCount(in.readInt());
                 Set<Type> interfaces = new HashSet<>(interfaceCount);
                 for (int j = 0; j < interfaceCount; j++) {
