@@ -4,8 +4,7 @@
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "compat.create.StitchedSpriteCreateCrnCompatMixin",
-    "compat.watut.ShaderInstanceWatutIrisCompatMixin"
+    "compat.create.StitchedSpriteCreateCrnCompatMixin"
   ],
   "injectors": {
     "defaultRequire": 1
