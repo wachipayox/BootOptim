@@ -27,6 +27,12 @@ sourceSets.main.resources {
 }
 
 repositories {
+    maven {
+        url = uri('https://api.modrinth.com/maven')
+        content {
+            includeGroup 'maven.modrinth'
+        }
+    }
 }
 
 var packBenchmarkDirectory = project.file('run-pack-benchmark')
@@ -165,6 +171,7 @@ tasks.named('runPackBenchmarkClient').configure {
 
 configurations {
     runtimeClasspath.extendsFrom localRuntime
+    decocraftInspect
 }
 
 var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
@@ -191,6 +198,42 @@ tasks.named('jar', Jar).configure {
     manifest {
         attributes('Implementation-Version': project.version)
     }
+}
+
+dependencies {
+    decocraftInspect 'maven.modrinth:IZJSgKZe:Z8xm2POI'
+}
+
+var inspectDecocraftBytecode = tasks.register('inspectDecocraftBytecode') {
+    doLast {
+        var decocraftJar = configurations.decocraftInspect.singleFile
+        println "DECOCRAFT_INSPECT jar=${decocraftJar.name} size=${decocraftJar.length()}"
+        var interesting = zipTree(decocraftJar).matching {
+            include 'com/razz/decocraft/models/bbmodel/**/*.class'
+        }.files.collect { it.path.substring(it.path.indexOf('com/')).replace(File.separatorChar, '.' as char).replaceAll(/\.class$/, '') }.sort()
+        println 'DECOCRAFT_BBMODEL_CLASSES ' + interesting.join(',')
+        [
+                'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader',
+                'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader$BBGeometry',
+                'com.razz.decocraft.models.bbmodel.BBModel'
+        ].each { className ->
+            println "===== JAVAP ${className} ====="
+            var javap = new File(System.getProperty('java.home'), 'bin/javap').absolutePath
+            var result = providers.exec {
+                commandLine javap, '-classpath', decocraftJar.absolutePath, '-c', '-p', '-s', className
+                ignoreExitValue = true
+            }
+            println result.standardOutput.asText.get()
+            def err = result.standardError.asText.get()
+            if (!err.isBlank()) {
+                println err
+            }
+        }
+    }
+}
+
+tasks.named('build').configure {
+    dependsOn inspectDecocraftBytecode
 }
 
 publishing {
