@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "dev.wachipayox.bootoptim.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "client.ModelBakeryDecocraftReuseMixin",
+    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
