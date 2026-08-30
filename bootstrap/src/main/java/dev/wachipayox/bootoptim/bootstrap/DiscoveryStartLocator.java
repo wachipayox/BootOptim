@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforgespi.ILaunchContext;
 import net.neoforged.neoforgespi.locating.IDiscoveryPipeline;
 import net.neoforged.neoforgespi.locating.IModFileCandidateLocator;
@@ -36,14 +37,15 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
     public void findCandidates(ILaunchContext context, IDiscoveryPipeline pipeline) {
         DiscoveryProfiler.beginRoot();
 
-        Path wrapper = locateWrapper(context).orElse(null);
+        Path gameDirectory = FMLPaths.GAMEDIR.get();
+        Path wrapper = locateWrapper(gameDirectory).orElse(null);
         if (wrapper == null || !Files.isRegularFile(wrapper)) {
             // Development runs load the ordinary mod directly and do not necessarily execute from a packaged wrapper.
             return;
         }
 
         try {
-            Path nestedMod = extractNestedMod(context.gameDirectory(), wrapper);
+            Path nestedMod = extractNestedMod(gameDirectory, wrapper);
             pipeline.addPath(
                     nestedMod,
                     ModFileDiscoveryAttributes.DEFAULT.withLocator(this),
@@ -57,7 +59,7 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
         }
     }
 
-    private static Optional<Path> locateWrapper(ILaunchContext context) {
+    private static Optional<Path> locateWrapper(Path gameDirectory) {
         try {
             CodeSource source = DiscoveryStartLocator.class.getProtectionDomain().getCodeSource();
             if (source != null && source.getLocation() != null) {
@@ -73,7 +75,7 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
             // SecureJarHandler may provide a non-file code source. Fall back to the physical mods directory below.
         }
 
-        Path modsDirectory = context.gameDirectory().resolve("mods");
+        Path modsDirectory = gameDirectory.resolve("mods");
         if (!Files.isDirectory(modsDirectory)) {
             return Optional.empty();
         }
