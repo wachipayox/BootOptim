@@ -9,7 +9,7 @@
     "client.ModelBakeryProfilingMixin",
     "client.ModelBakeryConstructorProfilingMixin",
     "client.AtlasSetProfilingMixin",
-    "client.BlockGeometryBakingContextProfilingMixin"
+    "client.UnbakedGeometryHelperProfilingMixin"
   ],
   "injectors": {
     "defaultRequire": 1
