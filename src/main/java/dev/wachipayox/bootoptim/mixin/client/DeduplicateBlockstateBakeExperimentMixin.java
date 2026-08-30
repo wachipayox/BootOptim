@@ -52,6 +52,7 @@ abstract class DeduplicateBlockstateBakeExperimentMixin {
             return;
         }
 
+        long startedNanos = System.nanoTime();
         IdentityHashMap<UnbakedModel, BakedModel> bakedByIdentity = new IdentityHashMap<>();
         int safeEntries = 0;
         int uniqueSafeBakes = 0;
@@ -83,13 +84,15 @@ abstract class DeduplicateBlockstateBakeExperimentMixin {
             }
         }
 
+        double elapsedMs = (System.nanoTime() - startedNanos) / 1_000_000.0;
         BOOTOPTIM$LOGGER.info(
-                "BOOTOPTIM_MODEL_DEDUP total_entries={} safe_entries={} unique_safe_bakes={} reused_bakes={} reuse_percent={}",
+                "BOOTOPTIM_MODEL_DEDUP total_entries={} safe_entries={} unique_safe_bakes={} reused_bakes={} reuse_percent={} elapsed_ms={}",
                 models.size(),
                 safeEntries,
                 uniqueSafeBakes,
                 reusedBakes,
-                safeEntries == 0 ? "0.00" : String.format(java.util.Locale.ROOT, "%.2f", reusedBakes * 100.0 / safeEntries));
+                safeEntries == 0 ? "0.00" : String.format(java.util.Locale.ROOT, "%.2f", reusedBakes * 100.0 / safeEntries),
+                String.format(java.util.Locale.ROOT, "%.3f", elapsedMs));
     }
 
     private static boolean bootoptim$isSafeVanillaBlockstateModel(UnbakedModel model) {
