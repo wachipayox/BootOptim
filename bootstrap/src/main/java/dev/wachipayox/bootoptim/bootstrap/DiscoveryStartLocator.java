@@ -27,6 +27,8 @@ import net.neoforged.neoforgespi.locating.ModFileDiscoveryAttributes;
 public final class DiscoveryStartLocator implements IModFileCandidateLocator {
     private static final String JARJAR_PREFIX = "META-INF/jarjar/";
     private static final String JARJAR_SUFFIX = ".jar";
+    private static final String WRAPPER_MARKER =
+            "dev/wachipayox/bootoptim/bootstrap/DiscoveryStartLocator.class";
 
     @Override
     public int getPriority() {
@@ -66,7 +68,7 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
                 URI uri = source.getLocation().toURI();
                 if ("file".equalsIgnoreCase(uri.getScheme())) {
                     Path candidate = Path.of(uri).toAbsolutePath().normalize();
-                    if (Files.isRegularFile(candidate) && containsNestedMod(candidate)) {
+                    if (Files.isRegularFile(candidate) && isBootOptimWrapper(candidate)) {
                         return Optional.of(candidate);
                     }
                 }
@@ -84,7 +86,7 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
             return files
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
-                    .filter(DiscoveryStartLocator::containsNestedMod)
+                    .filter(DiscoveryStartLocator::isBootOptimWrapper)
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .findFirst();
         } catch (IOException ignored) {
@@ -92,10 +94,15 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
         }
     }
 
-    private static boolean containsNestedMod(Path wrapper) {
-        try (var zip = new ZipFile(wrapper.toFile())) {
-            return findNestedModEntry(zip) != null;
-        } catch (IOException ignored) {
+    /**
+     * Identifies the early-service wrapper without inspecting its JarJar payload. This deliberately avoids treating
+     * arbitrary mods with nested dependencies as BootOptim wrappers; validation of BootOptim's own nested payload is
+     * left to {@link #extractNestedMod(Path, Path)} once the correct wrapper has been selected.
+     */
+    static boolean isBootOptimWrapper(Path candidate) {
+        try (var zip = new ZipFile(candidate.toFile())) {
+            return zip.getEntry(WRAPPER_MARKER) != null;
+        } catch (IOException | RuntimeException ignored) {
             return false;
         }
     }
