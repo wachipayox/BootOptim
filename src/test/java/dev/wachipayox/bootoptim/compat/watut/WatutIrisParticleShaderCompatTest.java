@@ -3,19 +3,31 @@ package dev.wachipayox.bootoptim.compat.watut;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.mojang.blaze3d.vertex.VertexFormat;
+import dev.wachipayox.bootoptim.mixin.compat.watut.ShaderInstanceWatutIrisCompatMixin;
+import java.lang.reflect.Modifier;
+import net.minecraft.server.packs.resources.ResourceProvider;
 import org.junit.jupiter.api.Test;
 
 class WatutIrisParticleShaderCompatTest {
     @Test
-    void gatesToWatutParticleShaderWithIris() {
-        assertTrue(WatutIrisParticleShaderCompat.shouldPatch(
-                "particle", "com.corosus.watut.ShaderInstanceBlur", true, true));
-        assertFalse(WatutIrisParticleShaderCompat.shouldPatch(
-                "particle", "com.corosus.watut.ShaderInstanceBlur", true, false));
-        assertFalse(WatutIrisParticleShaderCompat.shouldPatch(
-                "position_tex_blur", "com.corosus.watut.ShaderInstanceBlur", true, true));
-        assertFalse(WatutIrisParticleShaderCompat.shouldPatch(
-                "particle", "net.minecraft.client.renderer.ShaderInstance", true, true));
+    void gatesToParticleShaderWithWatutAndIris() {
+        assertTrue(WatutIrisParticleShaderCompat.shouldPatch("particle", true, true));
+        assertFalse(WatutIrisParticleShaderCompat.shouldPatch("particle", true, false));
+        assertFalse(WatutIrisParticleShaderCompat.shouldPatch("particle", false, true));
+        assertFalse(WatutIrisParticleShaderCompat.shouldPatch("position_tex_blur", true, true));
+    }
+
+    @Test
+    void constructorHeadModifyVariableHandlerRemainsStatic() throws NoSuchMethodException {
+        var handler = ShaderInstanceWatutIrisCompatMixin.class.getDeclaredMethod(
+                "bootoptim$wrapWatutParticleResources",
+                ResourceProvider.class,
+                String.class,
+                VertexFormat.class);
+
+        assertTrue(Modifier.isStatic(handler.getModifiers()),
+                "Constructor HEAD @ModifyVariable handlers must be static before this()/super() invocation");
     }
 
     @Test
@@ -25,6 +37,14 @@ class WatutIrisParticleShaderCompatTest {
 
         assertTrue(patched.contains("fog_distance(Position, FogShape)"));
         assertFalse(patched.contains("fog_distance(ModelViewMat, Position, FogShape)"));
+    }
+
+    @Test
+    void leavesModernParticleShaderUntouched() {
+        String modern = "vertexDistance = fog_distance(Position, FogShape);";
+        String patched = WatutIrisParticleShaderCompat.patchSource("shaders/core/particle.vsh", modern);
+
+        assertTrue(patched.equals(modern));
     }
 
     @Test
