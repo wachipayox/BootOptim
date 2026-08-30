@@ -19,22 +19,15 @@ abstract class SimpleReloadInstanceProfilingMixin {
     @Unique
     private static final AtomicBoolean BOOTOPTIM$REPORTED = new AtomicBoolean();
 
+    @Unique
+    private static final Logger BOOTOPTIM$LOGGER = LogUtils.getLogger();
+
     @ModifyVariable(method = "create", at = @At("HEAD"), argsOnly = true)
     private static boolean bootoptim$enableProfiledReload(boolean profiled) {
         boolean enabled = profiled || StartupProfiler.isEnabled();
         if (enabled && !profiled && BOOTOPTIM$REPORTED.compareAndSet(false, true)) {
-            logger().info("BOOTOPTIM_RESOURCE_PROFILER status=enabled strategy=minecraft_profiled_reload_instance");
+            BOOTOPTIM$LOGGER.info("BOOTOPTIM_RESOURCE_PROFILER status=enabled strategy=minecraft_profiled_reload_instance");
         }
         return enabled;
-    }
-
-    @Unique
-    private static Logger logger() {
-        return LoggerHolder.LOGGER;
-    }
-
-    @Unique
-    private static final class LoggerHolder {
-        private static final Logger LOGGER = LogUtils.getLogger();
     }
 }
