@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 
 import com.mojang.datafixers.util.Unit;
 import dev.wachipayox.bootoptim.profiling.client.ResourceReloadCriticalPathProfiler;
+import dev.wachipayox.bootoptim.profiling.client.SimpleReloadStateFactoryBridge;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
@@ -10,6 +11,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -40,7 +42,7 @@ abstract class SimpleReloadInstanceCriticalPathMixin<S> {
                     value = "INVOKE",
                     target = "Lnet/minecraft/server/packs/resources/SimpleReloadInstance$StateFactory;create(Lnet/minecraft/server/packs/resources/PreparableReloadListener$PreparationBarrier;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/server/packs/resources/PreparableReloadListener;Ljava/util/concurrent/Executor;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;"))
     private CompletableFuture<S> bootoptim$profileListener(
-            SimpleReloadInstance.StateFactory<S> factory,
+            @Coerce Object factory,
             PreparableReloadListener.PreparationBarrier barrier,
             ResourceManager resourceManager,
             PreparableReloadListener listener,
@@ -51,11 +53,13 @@ abstract class SimpleReloadInstanceCriticalPathMixin<S> {
         }
         ResourceReloadCriticalPathProfiler.ReloadTrace reloadTrace = bootoptim$reloadTrace;
         if (reloadTrace == null) {
-            return factory.create(barrier, resourceManager, listener, prepareExecutor, applyExecutor);
+            return SimpleReloadStateFactoryBridge.create(
+                    factory, barrier, resourceManager, listener, prepareExecutor, applyExecutor);
         }
 
         ResourceReloadCriticalPathProfiler.ListenerTrace listenerTrace = reloadTrace.addListener(listener);
-        CompletableFuture<S> result = factory.create(
+        CompletableFuture<S> result = SimpleReloadStateFactoryBridge.create(
+                factory,
                 listenerTrace.wrapBarrier(barrier),
                 resourceManager,
                 listener,
@@ -66,19 +70,11 @@ abstract class SimpleReloadInstanceCriticalPathMixin<S> {
     }
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void bootoptim$observeReloadCompletion(
-            Executor prepareExecutor,
-            Executor applyExecutor,
-            ResourceManager resourceManager,
-            List<PreparableReloadListener> listeners,
-            SimpleReloadInstance.StateFactory<S> stateFactory,
-            CompletableFuture<Unit> initialStage,
-            CallbackInfo ci) {
+    private void bootoptim$observeReloadCompletion(CallbackInfo ci) {
         ResourceReloadCriticalPathProfiler.ReloadTrace reloadTrace = bootoptim$reloadTrace;
         if (reloadTrace == null) {
             return;
         }
-        reloadTrace.setExpectedListenerCount(listeners.size());
         reloadTrace.observeAllPreparations(allPreparations);
         reloadTrace.observeAllDone(allDone);
     }
