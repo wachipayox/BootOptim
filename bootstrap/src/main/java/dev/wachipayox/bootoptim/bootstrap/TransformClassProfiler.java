@@ -60,11 +60,9 @@ final class TransformClassProfiler {
             String context,
             long transformNanos,
             int inputLength,
-            int outputLength,
-            long profilerNanos) {
+            int outputLength) {
         CALLS.increment();
         TRANSFORM_NANOS.add(transformNanos);
-        PROFILER_NANOS.add(profilerNanos);
         INPUT_BYTES.add(inputLength);
         OUTPUT_BYTES.add(outputLength);
         if (context == null) {
@@ -85,6 +83,10 @@ final class TransformClassProfiler {
         if (calls % CHECKPOINT_INTERVAL == 0) {
             reportSummary("checkpoint");
         }
+    }
+
+    static void addBookkeepingNanos(long nanos) {
+        PROFILER_NANOS.add(nanos);
     }
 
     private static void updateMax(long nanos, String className) {
