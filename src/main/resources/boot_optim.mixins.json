@@ -16,7 +16,8 @@
     "client.ModelBakeryReloadSubphaseMixin",
     "client.ModelManagerReloadSubphaseMixin",
     "client.SimpleReloadInstanceResidualGateMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.UnbakedGeometryHelperGeneratedMaterialCacheExperimentMixin"
   ],
   "injectors": {
     "defaultRequire": 0
