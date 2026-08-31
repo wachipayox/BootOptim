@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
@@ -117,7 +116,6 @@ abstract class ItemModelGeneratorSpanIndexMixin {
         private final int anchorCapacity;
         private final Object[] byKey;
         private final int[] insertionIndexPlusOne;
-        private final CandidateIterator candidateIterator = new CandidateIterator();
         private int pendingKey = -1;
         private boolean pendingExpectedNew;
         private boolean unsafe;
@@ -142,21 +140,17 @@ abstract class ItemModelGeneratorSpanIndexMixin {
             }
 
             int ordinal = enumFacing.ordinal();
-            String name = enumFacing.name();
-            boolean horizontal;
-            if ("UP".equals(name) || "DOWN".equals(name)) {
-                horizontal = true;
-            } else if ("LEFT".equals(name) || "RIGHT".equals(name)) {
-                horizontal = false;
-            } else {
+            // Minecraft 1.21.1 declares SpanFacing as UP, DOWN, LEFT, RIGHT in exactly this order.
+            // isHorizontal() is true only for the first two values.
+            if (ordinal < 0 || ordinal >= 4) {
                 anomalies++;
                 unsafe = true;
                 fallbackLookups++;
                 return super.iterator();
             }
 
-            int anchor = horizontal ? y : x;
-            if (ordinal < 0 || ordinal >= 4 || anchor < 0 || anchor >= anchorCapacity) {
+            int anchor = ordinal < 2 ? y : x;
+            if (anchor < 0 || anchor >= anchorCapacity) {
                 anomalies++;
                 unsafe = true;
                 fallbackLookups++;
@@ -184,10 +178,9 @@ abstract class ItemModelGeneratorSpanIndexMixin {
                 return super.iterator();
             }
 
-            // Vanilla would compare all earlier entries plus this one; we retain the final comparison itself.
+            // Vanilla would compare all earlier entries plus this one; the singleton keeps the final stock key check.
             stockComparisonsSkipped += stockPosition;
-            candidateIterator.reset(existing);
-            return candidateIterator;
+            return Collections.singleton(existing).iterator();
         }
 
         @Override
@@ -230,31 +223,6 @@ abstract class ItemModelGeneratorSpanIndexMixin {
             BOOTOPTIM$CREATED_SPANS.add(createdSpans);
             BOOTOPTIM$FALLBACK_LOOKUPS.add(fallbackLookups);
             BOOTOPTIM$ANOMALIES.add(anomalies);
-        }
-    }
-
-    @Unique
-    private static final class CandidateIterator implements Iterator<Object> {
-        private Object candidate;
-        private boolean available;
-
-        private void reset(Object candidate) {
-            this.candidate = candidate;
-            this.available = true;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return available;
-        }
-
-        @Override
-        public Object next() {
-            if (!available) {
-                throw new NoSuchElementException();
-            }
-            available = false;
-            return candidate;
         }
     }
 }
