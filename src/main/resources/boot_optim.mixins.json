@@ -8,7 +8,9 @@
     "client.ModelManagerReloadSubphaseMixin",
     "client.AtlasSetReloadSubphaseMixin",
     "client.ModelBakeryReloadSubphaseMixin",
-    "client.ModelBakerImplDeepProfilingMixin"
+    "client.ModelBakerImplDeepProfilingMixin",
+    "client.BlockStateModelLoaderStructureProfilingMixin",
+    "client.SelectorPredicateStructureProfilingMixin"
   ],
   "injectors": {
     "defaultRequire": 1
