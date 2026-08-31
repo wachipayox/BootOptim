@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.profiling.client;
 
 import net.minecraft.client.renderer.block.model.BlockElement;
+import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.neoforged.neoforge.client.ClientHooks;
@@ -29,10 +30,12 @@ public final class GeneratedItemResidualProfiler {
     private static final ThreadLocal<Deque<Long>> PROCESS_STARTS = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<Deque<SpanFrame>> SPAN_STARTS = ThreadLocal.withInitial(ArrayDeque::new);
     private static final IdentityHashMap<SpriteContents, SpriteStats> SPRITES = new IdentityHashMap<>();
+    private static final IdentityHashMap<BlockElement, Boolean> GENERATED_ELEMENTS = new IdentityHashMap<>();
 
     private static volatile boolean active;
     private static long generateCalls;
     private static long generateNanos;
+    private static long generatedElements;
     private static long processCalls;
     private static long processNanos;
     private static long spanCalls;
@@ -48,7 +51,8 @@ public final class GeneratedItemResidualProfiler {
 
     public static synchronized void begin() {
         SPRITES.clear();
-        generateCalls = generateNanos = 0L;
+        GENERATED_ELEMENTS.clear();
+        generateCalls = generateNanos = generatedElements = 0L;
         processCalls = processNanos = 0L;
         spanCalls = spanNanos = firstSpanNanos = repeatSpanNanos = repeatSpanCalls = 0L;
         seamCalls = seamNanos = corruptFrames = 0L;
@@ -62,14 +66,23 @@ public final class GeneratedItemResidualProfiler {
         if (active) GENERATE_STARTS.get().push(System.nanoTime());
     }
 
-    public static void endGenerate() {
+    public static void endGenerate(BlockModel generatedModel) {
         if (!active) return;
         Long started = GENERATE_STARTS.get().poll();
         if (started == null) { corrupt(); return; }
         synchronized (GeneratedItemResidualProfiler.class) {
             generateCalls++;
             generateNanos += System.nanoTime() - started;
+            if (generatedModel != null) {
+                for (BlockElement element : generatedModel.getElements()) {
+                    if (GENERATED_ELEMENTS.put(element, Boolean.TRUE) == null) generatedElements++;
+                }
+            }
         }
+    }
+
+    public static synchronized boolean isGeneratedElement(BlockElement element) {
+        return active && GENERATED_ELEMENTS.containsKey(element);
     }
 
     public static void beginProcess() {
@@ -139,8 +152,8 @@ public final class GeneratedItemResidualProfiler {
     public static synchronized void finish() {
         if (!active) return;
         active = false;
-        LOGGER.info("BOOTOPTIM_GENERATED_ITEM_RESIDUAL generate_calls={} generate_ms={} process_calls={} process_ms={} spans_calls={} spans_ms={} unique_sprites={} repeat_span_calls={} first_span_ms={} repeat_span_ms={} repeat_share_percent={} seam_calls={} seam_ms={} corrupt_frames={}",
-                generateCalls, ms(generateNanos), processCalls, ms(processNanos), spanCalls, ms(spanNanos), SPRITES.size(), repeatSpanCalls,
+        LOGGER.info("BOOTOPTIM_GENERATED_ITEM_RESIDUAL generate_calls={} generate_ms={} generated_elements={} process_calls={} process_ms={} spans_calls={} spans_ms={} unique_sprites={} repeat_span_calls={} first_span_ms={} repeat_span_ms={} repeat_share_percent={} seam_calls={} seam_ms={} corrupt_frames={}",
+                generateCalls, ms(generateNanos), generatedElements, processCalls, ms(processNanos), spanCalls, ms(spanNanos), SPRITES.size(), repeatSpanCalls,
                 ms(firstSpanNanos), ms(repeatSpanNanos), percent(repeatSpanNanos, spanNanos), seamCalls, ms(seamNanos), corruptFrames);
 
         List<Map.Entry<SpriteContents, SpriteStats>> sorted = new ArrayList<>(SPRITES.entrySet());
@@ -159,6 +172,7 @@ public final class GeneratedItemResidualProfiler {
         PROCESS_STARTS.remove();
         SPAN_STARTS.remove();
         SPRITES.clear();
+        GENERATED_ELEMENTS.clear();
     }
 
     private static synchronized void corrupt() { corruptFrames++; }
