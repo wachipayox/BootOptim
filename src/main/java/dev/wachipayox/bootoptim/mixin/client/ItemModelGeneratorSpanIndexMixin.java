@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import com.google.common.collect.Lists;
+import dev.wachipayox.bootoptim.optimization.client.ReusableSingletonIterator;
 import net.minecraft.client.renderer.block.model.ItemModelGenerator;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import org.slf4j.Logger;
@@ -116,6 +117,7 @@ abstract class ItemModelGeneratorSpanIndexMixin {
         private final int anchorCapacity;
         private final Object[] byKey;
         private final int[] insertionIndexPlusOne;
+        private final ReusableSingletonIterator candidateIterator = new ReusableSingletonIterator();
         private int pendingKey = -1;
         private boolean pendingExpectedNew;
         private boolean unsafe;
@@ -178,9 +180,9 @@ abstract class ItemModelGeneratorSpanIndexMixin {
                 return super.iterator();
             }
 
-            // Vanilla would compare all earlier entries plus this one; the singleton keeps the final stock key check.
+            // Vanilla would compare all earlier entries plus this one; we retain the final stock key check.
             stockComparisonsSkipped += stockPosition;
-            return Collections.singleton(existing).iterator();
+            return candidateIterator.reset(existing);
         }
 
         @Override
