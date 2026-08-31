@@ -42,6 +42,12 @@ tasks.named('jar', Jar).configure {
     }
 }
 
+// The packaged bootstrap is the actual distributable artifact. Make a normal root `build` produce it so
+// developers do not accidentally pick the inner regular-mod jar from build/libs.
+rootProject.tasks.named('build').configure {
+    dependsOn tasks.named('jarJar')
+}
+
 tasks.named('test', Test).configure {
     dependsOn rootProject.tasks.named('jar')
     useJUnitPlatform()
