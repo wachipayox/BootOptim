@@ -66,6 +66,10 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
+        // Diagnostic branch only. This replaces exactly the Mixin launch-plugin map entry with a
+        // transparent delegate before initializeLaunch receives its ITransformerLoader. The wrapper
+        // records repeated side-load failures but does not cache or alter any callback result.
+        MixinClassInfoProbeInstaller.installIfRequested();
         return List.of();
     }
 
