@@ -10,7 +10,8 @@
     "client.ModelBakeryReloadSubphaseMixin",
     "client.ModelBakerImplDeepProfilingMixin",
     "client.BlockStateModelLoaderStructureProfilingMixin",
-    "client.SelectorPredicateStructureProfilingMixin"
+    "client.SelectorPredicateStructureProfilingMixin",
+    "client.BlockStateModelLoaderMethodProbeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
