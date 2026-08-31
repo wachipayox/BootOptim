@@ -66,6 +66,10 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
+        // This callback runs after transformation-service initialization and before Mixin's launch-plugin
+        // initializeLaunch callback receives its ITransformerLoader. Replace only the launch-plugin map entry
+        // with a transparent delegate so Mixin can receive a process-local memoizing side-load loader.
+        MixinSideLoadCacheInstaller.installIfRequested();
         return List.of();
     }
 
