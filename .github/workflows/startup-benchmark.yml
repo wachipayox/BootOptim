@@ -8,6 +8,7 @@ on:
     paths:
       - 'src/**'
       - 'bootstrap/**'
+      - 'tailagent/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
@@ -32,6 +33,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Build standalone tail agent
+        run: ./gradlew :tailagent:jar --no-daemon --console=plain
+
       - name: Install virtual display
         run: |
           sudo apt-get update
@@ -50,7 +54,10 @@ jobs:
         run: |
           set -uo pipefail
           : > startup-benchmark.log
-          xvfb-run -a ./gradlew runBenchmarkClient --no-daemon --console=plain > >(tee startup-benchmark.log) 2>&1 &
+          agent="$(find "$GITHUB_WORKSPACE/tailagent/build/libs" -maxdepth 1 -type f -name 'bootoptim-modlauncher-tail-agent-*.jar' | head -n 1)"
+          test -n "$agent"
+          echo "Using tail agent: $agent"
+          JAVA_TOOL_OPTIONS="-javaagent:$agent" xvfb-run -a ./gradlew runBenchmarkClient --no-daemon --console=plain > >(tee startup-benchmark.log) 2>&1 &
           launcher_pid=$!
 
           marker=''
@@ -91,6 +98,18 @@ jobs:
 
           early_marker="$(grep 'BOOTOPTIM_STARTUP phase=transformation_service_construct' startup-benchmark.log | tail -n 1 || true)"
           test -n "$early_marker"
+          grep -q 'BOOTOPTIM_MODLAUNCHER_TAIL instrument=success target=ClassTransformer' startup-benchmark.log
+          grep -q 'BOOTOPTIM_MODLAUNCHER_TAIL instrument=success target=MixinTransformationHandler' startup-benchmark.log
+
+          tail_summary=''
+          for _ in $(seq 1 40); do
+            tail_summary="$(grep 'BOOTOPTIM_MODLAUNCHER_TAIL summary=shutdown' startup-benchmark.log | tail -n 1 || true)"
+            if [ -n "$tail_summary" ]; then
+              break
+            fi
+            sleep 0.25
+          done
+          test -n "$tail_summary"
 
           config='run-benchmark/config/boot_optim.properties'
           report='run-benchmark/logs/bootoptim-startup.log'
@@ -102,6 +121,7 @@ jobs:
 
           echo "$early_marker"
           echo "$marker"
+          echo "$tail_summary"
           cat "$report"
           kill "$launcher_pid" 2>/dev/null || true
           pkill -P "$launcher_pid" 2>/dev/null || true
@@ -111,8 +131,9 @@ jobs:
             echo
             echo "\`$early_marker\`"
             echo "\`$marker\`"
+            echo "\`$tail_summary\`"
             echo
-            echo 'Startup diagnostics validated.'
+            echo 'Startup diagnostics and ModLauncher tail agent validated.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark diagnostics
