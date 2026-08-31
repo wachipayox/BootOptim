@@ -32,8 +32,7 @@ final class ProfilingTransformingClassLoader extends TransformingClassLoader {
                 context,
                 transformNanos,
                 bytes == null ? 0 : bytes.length,
-                transformed == null ? 0 : transformed.length,
-                0L);
+                transformed == null ? 0 : transformed.length);
         long profilerNanos = System.nanoTime() - profilerStart;
         TransformClassProfiler.addBookkeepingNanos(profilerNanos);
         return transformed;
