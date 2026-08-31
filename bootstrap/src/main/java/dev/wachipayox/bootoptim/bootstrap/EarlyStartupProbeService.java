@@ -38,7 +38,12 @@ public final class EarlyStartupProbeService implements ITransformationService {
         Path gameDirectory = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).orElse(fallback);
         boolean authoritative = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).isPresent();
 
+        // Resolve the authoritative startup paths first, then begin the campaign capture before FML
+        // discovery and the expensive transformation/model phases.
         var config = BootstrapStartupConfig.initialize(gameDirectory);
+        StartupFlightRecorder.start(config.gameDirectory());
+        CampaignSystemSampler.start();
+
         StartupDiagnostics.initialize();
         StartupDiagnostics.event(
                 "STARTUP_PATH",

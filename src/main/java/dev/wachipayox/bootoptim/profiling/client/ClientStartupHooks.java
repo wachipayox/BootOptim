@@ -27,7 +27,16 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        boolean firstMainMenu = StartupProfiler.markMainMenu();
+        if (!firstMainMenu) {
+            return;
+        }
+
+        // Stop the broad startup campaign recording at the same semantic boundary used by the
+        // lightweight report and CI. This remains a no-op unless profileStartup is enabled.
+        StartupFlightRecorderFinisher.finishAtMainMenu();
+
+        if (StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
     }
