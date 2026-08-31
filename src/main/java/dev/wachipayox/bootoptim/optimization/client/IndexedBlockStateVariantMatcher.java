@@ -34,9 +34,9 @@ public final class IndexedBlockStateVariantMatcher {
     private static final boolean ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.blockstateIndexedMatching", "true"));
 
-    // Temporary experiment default: prove exact output equality in CI. Set false before exact-pack timing.
+    // Enable only for equivalence runs; normal timing must not execute the stock predicate path again.
     private static final boolean VERIFY = Boolean.parseBoolean(
-            System.getProperty("boot_optim.blockstateIndexedMatchingVerify", "true"));
+            System.getProperty("boot_optim.blockstateIndexedMatchingVerify", "false"));
 
     private static final ThreadLocal<RunState> RUN = new ThreadLocal<>();
 
