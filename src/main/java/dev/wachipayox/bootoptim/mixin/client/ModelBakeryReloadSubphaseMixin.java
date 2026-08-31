@@ -4,6 +4,7 @@ import dev.wachipayox.bootoptim.profiling.client.GeneratedItemResidualProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ModelElementResidualProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ModelReloadSubphaseProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ResidualModelBakeProfiler;
+import dev.wachipayox.bootoptim.profiling.client.ShortScopeMaterialCacheExperiment;
 import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.client.resources.model.UnbakedModel;
@@ -42,6 +43,7 @@ abstract class ModelBakeryReloadSubphaseMixin {
         ResidualModelBakeProfiler.begin();
         GeneratedItemResidualProfiler.begin();
         ModelElementResidualProfiler.begin();
+        ShortScopeMaterialCacheExperiment.beginExperiment();
     }
 
     @Redirect(
@@ -58,6 +60,7 @@ abstract class ModelBakeryReloadSubphaseMixin {
         ResidualModelBakeProfiler.finish();
         GeneratedItemResidualProfiler.finish();
         ModelElementResidualProfiler.finish();
+        ShortScopeMaterialCacheExperiment.finishExperiment();
         long started = bootoptim$bakeStart;
         bootoptim$bakeStart = -1L;
         ModelReloadSubphaseProfiler.endSync("bake_models", started);
