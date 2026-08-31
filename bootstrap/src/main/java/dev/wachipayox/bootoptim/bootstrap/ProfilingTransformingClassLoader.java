@@ -22,19 +22,19 @@ final class ProfilingTransformingClassLoader extends TransformingClassLoader {
 
     @Override
     protected byte[] maybeTransformClassBytes(byte[] bytes, String name, String context) {
+        TransformClassProfiler.CallFrame frame = TransformClassProfiler.begin(name, context);
         long transformStart = System.nanoTime();
         byte[] transformed = super.maybeTransformClassBytes(bytes, name, context);
         long transformNanos = System.nanoTime() - transformStart;
 
         long profilerStart = System.nanoTime();
         TransformClassProfiler.record(
-                name,
-                context,
+                frame,
                 transformNanos,
                 bytes == null ? 0 : bytes.length,
                 transformed == null ? 0 : transformed.length);
         long profilerNanos = System.nanoTime() - profilerStart;
-        TransformClassProfiler.addBookkeepingNanos(profilerNanos);
+        TransformClassProfiler.finishBookkeeping(frame, profilerNanos);
         return transformed;
     }
 }
