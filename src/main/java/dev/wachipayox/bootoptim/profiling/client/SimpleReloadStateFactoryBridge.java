@@ -1,9 +1,9 @@
 package dev.wachipayox.bootoptim.profiling.client;
 
-import com.mojang.datafixers.util.Unit;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
+import net.minecraft.util.Unit;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
