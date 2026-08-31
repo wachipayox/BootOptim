@@ -93,14 +93,19 @@ abstract class ItemModelGeneratorSpanIndexMixin {
             at = @At(value = "INVOKE", target = "Ljava/util/List;iterator()Ljava/util/Iterator;"))
     @SuppressWarnings({"rawtypes", "unchecked"})
     private Iterator<?> bootoptim$findIndexedSpan(
-            List<?> spans,
+            List<?> iteratorReceiver,
+            List<?> spansArgument,
             @Coerce Object facing,
             int x,
             int y) {
-        if (BOOTOPTIM$ENABLED && spans instanceof IndexedSpanList indexed) {
+        if (iteratorReceiver != spansArgument) {
+            BOOTOPTIM$FALLBACK_LOOKUPS.increment();
+            return iteratorReceiver.iterator();
+        }
+        if (BOOTOPTIM$ENABLED && iteratorReceiver instanceof IndexedSpanList indexed) {
             return indexed.iteratorFor(facing, x, y);
         }
-        return spans.iterator();
+        return iteratorReceiver.iterator();
     }
 
     @Unique
