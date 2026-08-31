@@ -5,11 +5,12 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.DirectGeneratedItemBakerStockRouteMixin",
     "client.FancyMenuPanoramaPreloadMixin",
+    "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakeryGeneratedItemDirectReportMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin",
-    "client.UnbakedGeometryHelperGeneratedItemDirectMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
     "defaultRequire": 0
