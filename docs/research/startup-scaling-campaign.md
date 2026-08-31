@@ -8,11 +8,13 @@ This campaign build is designed for a scarce run on substantially slower hardwar
 
 A single run combines structured phase tracing with low-frequency JVM telemetry and Java Flight Recorder sampling. Absolute startup time from this build includes profiling overhead; compare the **same campaign build and settings** across machines whenever possible.
 
+The PR #65 artifact is self-profiling: if `boot_optim.profileStartup` is not supplied, the bootstrap sets it to `true` automatically. This avoids wasting a remote-machine run because of a forgotten JVM argument. Explicit `-Dboot_optim.profileStartup=false` remains an emergency disable switch for this diagnostic artifact.
+
 ## Instrumentation layers
 
 ### Early bootstrap / discovery
 
-Existing BootOptim startup probes remain active under `-Dboot_optim.profileStartup=true`:
+Existing BootOptim startup probes are active in the campaign:
 
 - transformation-service construction / initialize / onLoad milestones;
 - root mod discovery wall time;
@@ -71,7 +73,7 @@ This distinguishes single-thread CPU saturation, useful parallelism, low-CPU wai
 
 ### Java Flight Recorder
 
-A JFR starts from the bootstrap layer after authoritative game-directory resolution and stops automatically at the first title screen. The standard JFR `profile` configuration is augmented with thresholded/sampled events for:
+A JFR starts from the bootstrap layer after authoritative game-directory/config resolution and stops automatically at the first title screen. The standard JFR `profile` configuration is augmented with thresholded/sampled events for:
 
 - Java/native execution samples;
 - allocation samples;
@@ -103,7 +105,7 @@ The primary comparison is a scaling factor per phase, not only total startup tim
 
 1. Use the exact same campaign JAR and modpack on both PCs.
 2. Prefer a warm run: launch the pack once first if practical so the persistent BootOptim scan cache exists. Do not deliberately delete caches immediately before only one scarce slow-PC measurement.
-3. Add only `-Dboot_optim.profileStartup=true`. Do **not** use `boot_optim.benchmark.exitOnTitle` for the friend's manual run.
+3. No profiling JVM argument is required for PR #65; the campaign enables itself. Do not set `boot_optim.benchmark.exitOnTitle` for the friend's manual run.
 4. Start Minecraft and wait until the main menu appears. The JFR stops automatically at that point.
 5. Quit normally after the title screen is visible.
 6. Collect:
