@@ -4,6 +4,8 @@ This directory is the durable memory for startup-performance research. Its purpo
 
 Before starting a new optimization experiment, check this ledger and the linked PRs. A previously rejected direction may be reopened only when the new hypothesis changes a material premise (different critical path, different implementation, different version, or evidence that the old measurement no longer applies). "The phase is still slow" by itself is not enough to repeat an experiment that already showed poor wall-clock leverage.
 
+Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and inspect both open and closed PR history for the subsystem before changing code. A successful experiment can remain unmerged; the integration tree is the authority for what is actually present.
+
 ## Status vocabulary
 
 - **PROFILED** — diagnostic evidence only; no optimization conclusion yet.
@@ -26,7 +28,8 @@ Before starting a new optimization experiment, check this ledger and the linked 
 
 ## Research index
 
-- [Client model / ModelManager pipeline](model-pipeline.md)
+- [Client model / ModelManager pipeline](model-pipeline.md) — historical #13/#14/#35/#36/#37/#47 evidence and rejected shallow approaches.
+- [Deep ModelManager follow-up — 2026-08-31](model-pipeline-deep-2026-08-31.md) — 97.60% recursive bake-cache hit rate, exclusive bake-cost attribution, 10.86M blockstate variant tests, and the indexed-matching architectural hypothesis.
 
 ## Project rule
 
