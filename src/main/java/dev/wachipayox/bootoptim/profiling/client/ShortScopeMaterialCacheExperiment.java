@@ -5,39 +5,51 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
 
-/** Diagnostic counters for the BlockGeometryBakingContext-scoped material cache experiment. */
+/** Diagnostic counters for the selective BlockGeometryBakingContext material cache experiment. */
 public final class ShortScopeMaterialCacheExperiment {
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/ContextMaterialCache");
 
-    private static volatile boolean active;
-    private static long contexts;
+    // bakeModels begins, executes and finishes this experiment on the same resource-reload worker. Keeping this plain
+    // avoids adding a volatile read to each of the millions of diagnostic hot-path calls.
+    private static boolean active;
+    private static long cachedContexts;
     private static long materialCalls;
-    private static long materialHits;
-    private static long materialMisses;
+    private static long directLocalCalls;
+    private static long complexCalls;
+    private static long complexHits;
+    private static long complexMisses;
     private static long maxEntries;
 
     private ShortScopeMaterialCacheExperiment() {}
 
     public static synchronized void beginExperiment() {
-        contexts = materialCalls = materialHits = materialMisses = maxEntries = 0L;
+        cachedContexts = materialCalls = directLocalCalls = complexCalls = complexHits = complexMisses = maxEntries = 0L;
         active = true;
     }
 
-    public static void recordContext() {
-        if (active) contexts++;
+    public static void recordCachedContext() {
+        if (active) cachedContexts++;
     }
 
-    public static void recordHit(int entries) {
+    public static void recordDirectLocal() {
         if (!active) return;
         materialCalls++;
-        materialHits++;
+        directLocalCalls++;
+    }
+
+    public static void recordComplexHit(int entries) {
+        if (!active) return;
+        materialCalls++;
+        complexCalls++;
+        complexHits++;
         if (entries > maxEntries) maxEntries = entries;
     }
 
-    public static void recordMiss(int entries) {
+    public static void recordComplexMiss(int entries) {
         if (!active) return;
         materialCalls++;
-        materialMisses++;
+        complexCalls++;
+        complexMisses++;
         if (entries > maxEntries) maxEntries = entries;
     }
 
@@ -45,12 +57,15 @@ public final class ShortScopeMaterialCacheExperiment {
         if (!active) return;
         active = false;
         LOGGER.info(
-                "BOOTOPTIM_CONTEXT_MATERIAL_CACHE status=experimental cache_scope=block_geometry_context contexts={} material_calls={} material_hits={} material_misses={} hit_percent={} max_entries_per_context={}",
-                contexts,
+                "BOOTOPTIM_CONTEXT_MATERIAL_CACHE status=experimental mode=selective_complex_only cached_contexts={} material_calls={} direct_local_calls={} direct_local_percent={} complex_calls={} complex_hits={} complex_misses={} complex_hit_percent={} max_entries_per_context={}",
+                cachedContexts,
                 materialCalls,
-                materialHits,
-                materialMisses,
-                percent(materialHits, materialCalls),
+                directLocalCalls,
+                percent(directLocalCalls, materialCalls),
+                complexCalls,
+                complexHits,
+                complexMisses,
+                percent(complexHits, complexCalls),
                 maxEntries);
     }
 
