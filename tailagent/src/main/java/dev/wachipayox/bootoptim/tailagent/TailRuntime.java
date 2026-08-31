@@ -18,6 +18,7 @@ public final class TailRuntime {
     private static final int SIMPLE_REWRITE = 0x100;
 
     private static final ThreadLocal<Map<Key, Boolean>> MIXIN_RESULTS = ThreadLocal.withInitial(HashMap::new);
+    private static final ThreadLocal<ArrayDeque<Key>> MIXIN_CONTEXTS = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<ArrayDeque<TimingFrame>> ACCEPT_STACK = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<ArrayDeque<TimingFrame>> BYTES_STACK = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<Integer> SELECTED_ACTIVE_DEPTH = ThreadLocal.withInitial(() -> 0);
@@ -39,13 +40,28 @@ public final class TailRuntime {
     private TailRuntime() {
     }
 
+    /**
+     * Captures Mixin's target identity at method entry, while all original argument locals are
+     * verifier-live. Some return stack-map frames in Mixin 0.8.7 deliberately mark the now-dead
+     * {@code reason} argument as TOP, so return hooks must not reload it.
+     */
+    public static void beginMixinProcess(String className, String reason) {
+        MIXIN_CONTEXTS.get().addLast(new Key(className, reason));
+    }
+
     /** Called immediately before MixinTransformationHandler's original boolean return. */
-    public static boolean recordMixinResult(boolean transformed, String className, String reason) {
+    public static boolean recordMixinResult(boolean transformed) {
+        ArrayDeque<Key> contexts = MIXIN_CONTEXTS.get();
+        Key key = contexts.removeLast();
+        if (contexts.isEmpty()) {
+            MIXIN_CONTEXTS.remove();
+        }
+
         MIXIN_PROCESS_CALLS.increment();
         if (transformed) {
             MIXIN_REWRITES.increment();
         }
-        MIXIN_RESULTS.get().put(new Key(className, reason), transformed);
+        MIXIN_RESULTS.get().put(key, transformed);
         return transformed;
     }
 
