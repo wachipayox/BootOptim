@@ -110,18 +110,6 @@ final class ProfilingLaunchPluginService implements ILaunchPluginService {
     }
 
     @Override
-    public void initializeLaunch(ITransformerLoader transformerLoader) {
-        long started = System.nanoTime();
-        try {
-            delegate.initializeLaunch(transformerLoader);
-        } finally {
-            LaunchPluginProfiler.record(
-                    pluginName, "initialize_launch_legacy", null, null, null,
-                    System.nanoTime() - started, TransformClassProfiler.currentDepth());
-        }
-    }
-
-    @Override
     @SuppressWarnings("removal")
     public void initializeLaunch(ITransformerLoader transformerLoader, NamedPath[] specialPaths) {
         long started = System.nanoTime();
