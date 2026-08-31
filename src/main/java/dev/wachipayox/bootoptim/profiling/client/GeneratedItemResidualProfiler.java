@@ -74,6 +74,9 @@ public final class GeneratedItemResidualProfiler {
             generateCalls++;
             generateNanos += System.nanoTime() - started;
             if (generatedModel != null) {
+                if (generatedModel instanceof GeneratedMaterialCacheBridge bridge) {
+                    bridge.bootoptim$enableGeneratedMaterialCache();
+                }
                 for (BlockElement element : generatedModel.getElements()) {
                     if (GENERATED_ELEMENTS.put(element, Boolean.TRUE) == null) generatedElements++;
                 }
