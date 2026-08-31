@@ -166,7 +166,7 @@ public final class IndexedBlockStateVariantMatcher {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static Comparable<?> getValue(Property<?> property, String valueName) {
-        return ((Property) property).getValue(valueName).orElse(null);
+        return (Comparable<?>) ((Property) property).getValue(valueName).orElse(null);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
