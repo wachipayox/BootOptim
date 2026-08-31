@@ -78,11 +78,16 @@ final class ProfilingLaunchPluginService implements ILaunchPluginService {
     @Override
     public int processClassWithFlags(Phase phase, ClassNode classNode, Type classType, String reason) {
         long started = System.nanoTime();
-        try {
-            return delegate.processClassWithFlags(phase, classNode, classType, reason);
-        } finally {
-            record("process_flags", classType, reason, phase, started);
-        }
+        int result = delegate.processClassWithFlags(phase, classNode, classType, reason);
+        LaunchPluginProfiler.recordProcessFlags(
+                pluginName,
+                classType == null ? null : classType.getClassName(),
+                reason,
+                phase == null ? null : phase.name().toLowerCase(java.util.Locale.ROOT),
+                System.nanoTime() - started,
+                TransformClassProfiler.currentDepth(),
+                result);
+        return result;
     }
 
     @Override
