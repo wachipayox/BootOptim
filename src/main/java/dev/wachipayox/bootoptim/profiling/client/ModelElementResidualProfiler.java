@@ -14,11 +14,10 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Locale;
 
-/** Diagnostic-only split of element-model and generated-item quad baking. */
+/** Diagnostic-only split of vanilla-elements and generated-item quad baking. */
 public final class ModelElementResidualProfiler {
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/ModelElementsResidual");
     private static final ThreadLocal<Deque<Frame>> ELEMENTS = ThreadLocal.withInitial(ArrayDeque::new);
-    private static final ThreadLocal<Deque<Frame>> GENERATED = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<Deque<Long>> GENERATED_FACES = ThreadLocal.withInitial(ArrayDeque::new);
     private static volatile boolean active;
 
@@ -26,8 +25,6 @@ public final class ModelElementResidualProfiler {
     private static long elementsNanos;
     private static long elementsFaceCalls;
     private static long elementsFaceNanos;
-    private static long generatedCalls;
-    private static long generatedNanos;
     private static long generatedFaceCalls;
     private static long generatedFaceNanos;
     private static long corruptFrames;
@@ -36,10 +33,9 @@ public final class ModelElementResidualProfiler {
 
     public static synchronized void begin() {
         elementsCalls = elementsNanos = elementsFaceCalls = elementsFaceNanos = 0L;
-        generatedCalls = generatedNanos = generatedFaceCalls = generatedFaceNanos = 0L;
+        generatedFaceCalls = generatedFaceNanos = 0L;
         corruptFrames = 0L;
         ELEMENTS.remove();
-        GENERATED.remove();
         GENERATED_FACES.remove();
         active = true;
     }
@@ -58,34 +54,19 @@ public final class ModelElementResidualProfiler {
         }
     }
 
-    /** Surrounds the complete NeoForge generated-item path inside UnbakedGeometryHelper#bake. */
-    public static void beginGenerated() {
-        if (active) GENERATED.get().push(new Frame(System.nanoTime()));
-    }
-
-    public static void endGenerated() {
-        if (!active) return;
-        Frame frame = GENERATED.get().poll();
-        if (frame == null) { corrupt(); return; }
-        synchronized (ModelElementResidualProfiler.class) {
-            generatedCalls++;
-            generatedNanos += System.nanoTime() - frame.startedNanos;
+    public static void beginGeneratedFace(BlockElement element) {
+        if (active && GeneratedItemResidualProfiler.isGeneratedElement(element)) {
+            GENERATED_FACES.get().push(System.nanoTime());
+        } else {
+            GENERATED_FACES.get().push(-1L);
         }
     }
 
-    public static boolean inGeneratedBake() {
-        return active && !GENERATED.get().isEmpty();
-    }
-
-    /** Called from FaceBakery only while a generated-item UnbakedGeometryHelper bake is active. */
-    public static void beginGeneratedFace() {
-        if (inGeneratedBake()) GENERATED_FACES.get().push(System.nanoTime());
-    }
-
     public static void endGeneratedFace() {
-        if (!active || GENERATED_FACES.get().isEmpty()) return;
+        if (!active) return;
         Long started = GENERATED_FACES.get().poll();
         if (started == null) { corrupt(); return; }
+        if (started < 0L) return;
         synchronized (ModelElementResidualProfiler.class) {
             generatedFaceCalls++;
             generatedFaceNanos += System.nanoTime() - started;
@@ -113,22 +94,17 @@ public final class ModelElementResidualProfiler {
     public static synchronized void finish() {
         if (!active) return;
         active = false;
-        LOGGER.info("BOOTOPTIM_MODEL_ELEMENTS_RESIDUAL elements_calls={} elements_total_ms={} elements_face_calls={} elements_face_ms={} elements_non_face_ms={} elements_face_share_percent={} generated_bake_calls={} generated_bake_total_ms={} generated_face_calls={} generated_face_ms={} generated_non_face_ms={} generated_face_share_percent={} corrupt_frames={}",
+        LOGGER.info("BOOTOPTIM_MODEL_ELEMENTS_RESIDUAL elements_calls={} elements_total_ms={} elements_face_calls={} elements_face_ms={} elements_non_face_ms={} elements_face_share_percent={} generated_face_calls={} generated_face_ms={} corrupt_frames={}",
                 elementsCalls,
                 ms(elementsNanos),
                 elementsFaceCalls,
                 ms(elementsFaceNanos),
                 ms(Math.max(0L, elementsNanos - elementsFaceNanos)),
                 percent(elementsFaceNanos, elementsNanos),
-                generatedCalls,
-                ms(generatedNanos),
                 generatedFaceCalls,
                 ms(generatedFaceNanos),
-                ms(Math.max(0L, generatedNanos - generatedFaceNanos)),
-                percent(generatedFaceNanos, generatedNanos),
                 corruptFrames);
         ELEMENTS.remove();
-        GENERATED.remove();
         GENERATED_FACES.remove();
     }
 
