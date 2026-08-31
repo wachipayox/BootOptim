@@ -30,6 +30,43 @@ These timings overlap. They are not additive. The important new fact is that Mod
 
 The same reload also has a separate post-preparation bottleneck: the final anonymous Minecraft listener spends `12,486.835 ms` after receiving its apply turn, aligned in the log with FancyMenu's resource preloader. ModelManager and that tail are separate opportunities; improving one does not remove the other.
 
+## PR #55 — indexed blockstate variant matching
+
+**Status: VALIDATED for production promotion**
+
+PR: #55 `Experiment: isolate indexed blockstate variant matching`
+
+Deep structure profiling found that 1.21.1 `BlockStateModelLoader` was scanning every possible state for every variant:
+
+- `110,053` variant predicates
+- `10,856,307` candidate-state tests
+- `166,599` matches
+- about `4,405.969 ms` for `loadAllBlockStates` in the profiled exact-pack run
+
+The experiment preserves stock predicate parsing/validation and replaces only the subsequent `Stream.filter` candidate enumeration with per-`StateDefinition` property/value BitSet indexes.
+
+Exact-pack normal run:
+
+- definitions: `10,105`
+- indexed variants: `110,053`
+- fallbacks: `0`
+- candidate visits avoided: `10,689,708` (`98.47%`)
+- index build: `4.191 ms`
+- indexed matching: `63.834 ms`
+
+Exact-pack verification run (`-Dboot_optim.blockstateIndexedMatchingVerify=true`):
+
+- indexed variants: `110,053`
+- fallbacks: `0`
+- **verification mismatches: `0`**
+- index build: `2.614 ms`
+- indexed matching: `54.106 ms`
+- stock verification path: `601.381 ms`
+
+Verification compares the indexed result against the stock predicate for every variant using object identity and canonical order. This validates the matcher against the full reference pack, not only CI.
+
+The production promotion removes verification, timers, counters and startup logging while keeping the same reload-scoped index and fail-open stock fallback. See `blockstate-indexed-matching.md` for the durable design/measurement record.
+
 ## PR #13 — initial ModelManager profiling
 
 **Status: PROFILED / SUPERSEDED by more precise critical-path profiling**
@@ -118,7 +155,7 @@ Key lesson: **the repeated top-level identities are numerous but cheap**. Count-
 
 ## PR #37 — Decocraft quarter-turn geometry reuse
 
-**Status: LIMITED / REJECTED under the measured risk-benefit**
+**Status: LIMITED in the original experiment; later hardened and promoted via PR #54**
 
 PR: #37 `Experiment: reuse Decocraft baked geometry across quarter-turn variants`
 
@@ -134,7 +171,9 @@ Measured experiment:
 - repeated geometry CPU replaced: about `2.7 s`
 - estimated critical-path / end-to-end gain: only around `~1 s`
 
-Lesson: substantial CPU elimination can still have limited startup wall-clock value when that work overlaps another gate. This is useful evidence for model-pipeline accounting even though the mechanism is mod-specific.
+The original #37 risk/benefit judgment was conservative, but the implementation was later hardened, exact-pack smoke tested with `3,527` authoritative + `10,581` derived bakes, `0` fallbacks/rejected models, and promoted together with the validated FancyMenu preload optimization in PR #54.
+
+Lesson: substantial CPU elimination can still have limited startup wall-clock value when that work overlaps another gate. This is useful evidence for model-pipeline accounting even when the mechanism is mod-specific.
 
 **Do not generalize:** custom-geometry CPU totals are not automatically equal to startup savings.
 
@@ -167,12 +206,12 @@ The 2026-08-31 exact-pack run proves `ModelManager` is the real preparation gate
 
 ## What the next ModelManager investigation must answer
 
-The old experiments rule out two shallow approaches: generic top-level parallelization and exact-identity top-level dedup. The next work should go below that layer.
+The old experiments rule out two shallow approaches: generic top-level parallelization and exact-identity top-level dedup. The indexed blockstate matcher removes one confirmed constructor-side algorithmic scan, but substantial model work remains below/after that layer.
 
 Priority questions:
 
-1. **What explains the current `5.93 s` ModelBakery construction after excluding already-measured categories?** The older pack spent `3.894 s` in blockstate registration, while parent resolution (`0.611 s`) and item/dependency registration (`0.127 s`) were much smaller. Instrument only the residual/changed work and cache/graph behavior rather than recreating the same inclusive probes.
-2. **Where does the current `12.60 s` bake time go after internal cache hits are removed from the accounting?** Measure actual `ModelBakerImpl` cache misses / uncached bakes, recursive dependency work and exclusive custom/vanilla bake cost. The old top-level identity profiler already proved repeated wrapper calls are cheap.
+1. **What explains the remaining ModelBakery construction time after indexed blockstate matching?** Reprofile only after the production matcher is integrated; parent resolution (`0.611 s`) and item/dependency registration (`0.127 s`) were already small historically.
+2. **Where does the current bake time go after internal cache hits are removed from the accounting?** Measure actual `ModelBakerImpl` cache misses / uncached bakes, recursive dependency work and exclusive custom/vanilla bake cost. The old top-level identity profiler already proved repeated wrapper calls are cheap.
 3. **What is already cached internally?** `ModelBakery`/`ModelBakerImpl` already cache by model id + transformation + UV-lock. A new cache is justified only for a computation that profiling proves is both repeated and expensive after that cache and after other optimization mods' caches.
 4. **Can the graph be restructured rather than merely loop-parallelized?** Investigate dependency-aware scheduling, immutable intermediate sharing/canonicalization, and safe precomputation/persistence with resource-pack fingerprints.
 5. **What changed in newer Minecraft model-loading architecture?** Review upstream rewrites for ideas that can be backported while preserving NeoForge 1.21.1 custom loader and event semantics.
