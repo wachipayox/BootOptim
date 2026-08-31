@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.profiling.client.DeepModelBakeProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ModelReloadSubphaseProfiler;
+import dev.wachipayox.bootoptim.profiling.client.ModelStructureProfiler;
 import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.client.resources.model.UnbakedModel;
@@ -27,11 +28,13 @@ abstract class ModelBakeryReloadSubphaseMixin {
     private static void bootoptim$startConstructor(CallbackInfo ci) {
         if (ModelReloadSubphaseProfiler.enabled()) {
             bootoptim$constructorStart.set(ModelReloadSubphaseProfiler.start());
+            ModelStructureProfiler.beginConstructor();
         }
     }
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void bootoptim$endConstructor(CallbackInfo ci) {
+        ModelStructureProfiler.endConstructor();
         long started = bootoptim$constructorStart.get();
         bootoptim$constructorStart.remove();
         ModelReloadSubphaseProfiler.endSync("model_bakery_init", started);
@@ -41,6 +44,7 @@ abstract class ModelBakeryReloadSubphaseMixin {
     private void bootoptim$startBakeModels(CallbackInfo ci) {
         if (ModelReloadSubphaseProfiler.enabled()) {
             bootoptim$bakeStart = ModelReloadSubphaseProfiler.start();
+            ModelStructureProfiler.beginBake();
             DeepModelBakeProfiler.begin();
         }
     }
@@ -57,6 +61,7 @@ abstract class ModelBakeryReloadSubphaseMixin {
     @Inject(method = "bakeModels", at = @At("RETURN"))
     private void bootoptim$endBakeModels(CallbackInfo ci) {
         DeepModelBakeProfiler.finish();
+        ModelStructureProfiler.finishBake();
         long started = bootoptim$bakeStart;
         bootoptim$bakeStart = -1L;
         ModelReloadSubphaseProfiler.endSync("bake_models", started);
