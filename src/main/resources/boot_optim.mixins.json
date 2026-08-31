@@ -11,7 +11,7 @@
     "client.ModelBakerImplDeepProfilingMixin",
     "client.BlockStateModelLoaderStructureProfilingMixin",
     "client.SelectorPredicateStructureProfilingMixin",
-    "client.BlockStateModelLoaderMethodProbeMixin"
+    "client.BlockStateModelLoaderIndexedVariantMixin"
   ],
   "injectors": {
     "defaultRequire": 1
