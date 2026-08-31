@@ -1,11 +1,11 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
-import com.mojang.datafixers.util.Unit;
 import dev.wachipayox.bootoptim.profiling.client.ResourceReloadCriticalPathProfiler;
 import dev.wachipayox.bootoptim.profiling.client.SimpleReloadStateFactoryBridge;
 import net.minecraft.server.packs.resources.PreparableReloadListener;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimpleReloadInstance;
+import net.minecraft.util.Unit;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
