@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim.bootstrap;
 
+import cpw.mods.modlauncher.serviceapi.ILaunchPluginService;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -13,8 +14,12 @@ import java.util.concurrent.atomic.LongAdder;
 /** Diagnostic aggregation for individual ModLauncher launch-plugin callbacks. */
 final class LaunchPluginProfiler {
     private static final int TOP_OPERATIONS = 40;
+    private static final int TOP_RESULTS = 30;
+    private static final int TOP_RESULT_GROUPS = 40;
     private static final int TOP_INVOCATIONS = 60;
     private static final Map<String, Stats> BY_OPERATION = new ConcurrentHashMap<>();
+    private static final Map<String, Stats> BY_PROCESS_RESULT = new ConcurrentHashMap<>();
+    private static final Map<String, Stats> MIXIN_BY_RESULT_GROUP = new ConcurrentHashMap<>();
     private static final LongAdder CALLS = new LongAdder();
     private static final LongAdder CALLBACK_NANOS = new LongAdder();
     private static final LongAdder PROFILER_NANOS = new LongAdder();
@@ -40,6 +45,29 @@ final class LaunchPluginProfiler {
             String phase,
             long callbackNanos,
             int transformDepth) {
+        recordInternal(plugin, operation, className, reason, phase, callbackNanos, transformDepth, null);
+    }
+
+    static void recordProcessFlags(
+            String plugin,
+            String className,
+            String reason,
+            String phase,
+            long callbackNanos,
+            int transformDepth,
+            int resultFlags) {
+        recordInternal(plugin, "process_flags", className, reason, phase, callbackNanos, transformDepth, resultFlags);
+    }
+
+    private static void recordInternal(
+            String plugin,
+            String operation,
+            String className,
+            String reason,
+            String phase,
+            long callbackNanos,
+            int transformDepth,
+            Integer resultFlags) {
         long profilerStart = System.nanoTime();
         try {
             CALLS.increment();
@@ -47,6 +75,20 @@ final class LaunchPluginProfiler {
             String aggregateKey = plugin + ":" + operation + (phase == null ? "" : ":" + phase);
             BY_OPERATION.computeIfAbsent(aggregateKey, ignored -> new Stats())
                     .add(callbackNanos, transformDepth);
+
+            String result = null;
+            if (resultFlags != null) {
+                result = resultLabel(resultFlags);
+                String resultKey = plugin + ":" + (phase == null ? "<none>" : phase) + ":" + result;
+                BY_PROCESS_RESULT.computeIfAbsent(resultKey, ignored -> new Stats())
+                        .add(callbackNanos, transformDepth);
+                if ("mixin".equals(plugin) && className != null) {
+                    String groupKey = result + ":" + group(className);
+                    MIXIN_BY_RESULT_GROUP.computeIfAbsent(groupKey, ignored -> new Stats())
+                            .add(callbackNanos, transformDepth);
+                }
+            }
+
             if (className != null || callbackNanos >= 1_000_000L) {
                 offerSlow(new Invocation(
                         plugin,
@@ -54,12 +96,37 @@ final class LaunchPluginProfiler {
                         phase == null ? "<none>" : phase,
                         className == null ? "<lifecycle>" : className,
                         reason == null ? "<null>" : reason,
+                        result == null ? "<none>" : result,
                         callbackNanos,
                         transformDepth));
             }
         } finally {
             PROFILER_NANOS.add(System.nanoTime() - profilerStart);
         }
+    }
+
+    private static String resultLabel(int flags) {
+        if (flags == ILaunchPluginService.ComputeFlags.NO_REWRITE) {
+            return "no_rewrite";
+        }
+        if (flags == ILaunchPluginService.ComputeFlags.SIMPLE_REWRITE) {
+            return "simple_rewrite";
+        }
+        if (flags == ILaunchPluginService.ComputeFlags.COMPUTE_MAXS) {
+            return "compute_maxs";
+        }
+        if (flags == ILaunchPluginService.ComputeFlags.COMPUTE_FRAMES) {
+            return "compute_frames";
+        }
+        return String.format(Locale.ROOT, "rewrite_0x%x", flags);
+    }
+
+    private static String group(String className) {
+        String[] parts = className.split("\\.");
+        if (parts.length <= 3) {
+            return className;
+        }
+        return parts[0] + "." + parts[1] + "." + parts[2];
     }
 
     private static void offerSlow(Invocation invocation) {
@@ -89,28 +156,9 @@ final class LaunchPluginProfiler {
                 CALLBACK_NANOS.sum() / 1_000_000.0,
                 PROFILER_NANOS.sum() / 1_000_000.0));
 
-        List<Map.Entry<String, Stats>> operations = new ArrayList<>(BY_OPERATION.entrySet());
-        operations.sort(Comparator.comparingLong((Map.Entry<String, Stats> entry) -> entry.getValue().nanos())
-                .reversed());
-        int operationCount = Math.min(TOP_OPERATIONS, operations.size());
-        for (int i = 0; i < operationCount; i++) {
-            Map.Entry<String, Stats> entry = operations.get(i);
-            Stats stats = entry.getValue();
-            long calls = stats.calls();
-            emit("BOOTOPTIM_LAUNCH_PLUGIN_PROFILE_TOP", String.format(
-                    Locale.ROOT,
-                    "dimension=operation rank=%d key=%s calls=%d transform_depth0_calls=%d nested_transform_calls=%d total_ms=%.3f depth0_ms=%.3f nested_depth_ms=%.3f avg_us=%.3f max_us=%.3f",
-                    i + 1,
-                    entry.getKey(),
-                    calls,
-                    stats.depthZeroCalls(),
-                    stats.nestedDepthCalls(),
-                    stats.nanos() / 1_000_000.0,
-                    stats.depthZeroNanos() / 1_000_000.0,
-                    stats.nestedDepthNanos() / 1_000_000.0,
-                    calls == 0 ? 0.0 : stats.nanos() / 1_000.0 / calls,
-                    stats.maxNanos() / 1_000.0));
-        }
+        reportStats("operation", BY_OPERATION, TOP_OPERATIONS);
+        reportStats("process_result", BY_PROCESS_RESULT, TOP_RESULTS);
+        reportStats("mixin_result_group", MIXIN_BY_RESULT_GROUP, TOP_RESULT_GROUPS);
 
         List<Invocation> invocations;
         synchronized (TOP_LOCK) {
@@ -121,15 +169,42 @@ final class LaunchPluginProfiler {
             Invocation invocation = invocations.get(i);
             emit("BOOTOPTIM_LAUNCH_PLUGIN_PROFILE_TOP", String.format(
                     Locale.ROOT,
-                    "dimension=invocation rank=%d plugin=%s operation=%s phase=%s class=%s reason=%s transform_depth=%d total_ms=%.3f",
+                    "dimension=invocation rank=%d plugin=%s operation=%s phase=%s class=%s reason=%s result=%s transform_depth=%d total_ms=%.3f",
                     i + 1,
                     invocation.plugin,
                     invocation.operation,
                     invocation.phase,
                     invocation.className,
                     invocation.reason,
+                    invocation.result,
                     invocation.transformDepth,
                     invocation.nanos / 1_000_000.0));
+        }
+    }
+
+    private static void reportStats(String dimension, Map<String, Stats> source, int limit) {
+        List<Map.Entry<String, Stats>> entries = new ArrayList<>(source.entrySet());
+        entries.sort(Comparator.comparingLong((Map.Entry<String, Stats> entry) -> entry.getValue().nanos())
+                .reversed());
+        int count = Math.min(limit, entries.size());
+        for (int i = 0; i < count; i++) {
+            Map.Entry<String, Stats> entry = entries.get(i);
+            Stats stats = entry.getValue();
+            long calls = stats.calls();
+            emit("BOOTOPTIM_LAUNCH_PLUGIN_PROFILE_TOP", String.format(
+                    Locale.ROOT,
+                    "dimension=%s rank=%d key=%s calls=%d transform_depth0_calls=%d nested_transform_calls=%d total_ms=%.3f depth0_ms=%.3f nested_depth_ms=%.3f avg_us=%.3f max_us=%.3f",
+                    dimension,
+                    i + 1,
+                    entry.getKey(),
+                    calls,
+                    stats.depthZeroCalls(),
+                    stats.nestedDepthCalls(),
+                    stats.nanos() / 1_000_000.0,
+                    stats.depthZeroNanos() / 1_000_000.0,
+                    stats.nestedDepthNanos() / 1_000_000.0,
+                    calls == 0 ? 0.0 : stats.nanos() / 1_000.0 / calls,
+                    stats.maxNanos() / 1_000.0));
         }
     }
 
@@ -175,6 +250,7 @@ final class LaunchPluginProfiler {
             String phase,
             String className,
             String reason,
+            String result,
             long nanos,
             int transformDepth) {
     }
