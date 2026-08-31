@@ -9,13 +9,14 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import sun.misc.Unsafe;
 
-/** Installs the observe-only Mixin side-load probe without replacing the GAME classloader. */
+/** Installs direct ClassInfo-cache instrumentation plus the secondary side-load cross-check probe. */
 final class MixinClassInfoProbeInstaller {
     private static final String ENABLE_PROPERTY = "boot_optim.profileMixinClassInfo";
     private static final String EXPECTED_MODLAUNCHER = "11.0.5";
     private static final String EXPECTED_MIXIN = "0.8.7";
     private static final String MIXIN_PLUGIN_NAME = "mixin";
     private static final String MIXIN_PLUGIN_CLASS = "org.spongepowered.asm.launch.MixinLaunchPlugin";
+    private static final String CLASS_INFO_CLASS = "org.spongepowered.asm.mixin.transformer.ClassInfo";
     private static final AtomicBoolean ATTEMPTED = new AtomicBoolean();
     private static volatile boolean installed;
 
@@ -63,7 +64,8 @@ final class MixinClassInfoProbeInstaller {
                 StartupDiagnostics.optimization("mixin_classinfo_probe", false, "mixin_launch_plugin_absent");
                 return false;
             }
-            if (mixin instanceof ProfilingMixinLaunchPluginService) {
+            if (mixin instanceof ProfilingMixinLaunchPluginService profiling) {
+                installDirectClassInfoProbe(unsafe, profiling.delegate());
                 installed = true;
                 return true;
             }
@@ -74,6 +76,11 @@ final class MixinClassInfoProbeInstaller {
                 return false;
             }
 
+            // Force ClassInfo initialization here, after Mixin's service exists but before its launch-plugin
+            // initializeLaunch callback and before global mixin prepare. This lets the map observe the very
+            // first forName access rather than inferring it from downstream ITransformerLoader traffic.
+            installDirectClassInfoProbe(unsafe, mixin);
+
             ProfilingMixinLaunchPluginService replacement = new ProfilingMixinLaunchPluginService(mixin);
             plugins.put(MIXIN_PLUGIN_NAME, replacement);
             if (plugins.get(MIXIN_PLUGIN_NAME) != replacement) {
@@ -82,10 +89,11 @@ final class MixinClassInfoProbeInstaller {
             }
 
             installed = true;
-            StartupDiagnostics.optimization("mixin_classinfo_probe", true, "observe_only_sideload_failure_profiling");
+            StartupDiagnostics.optimization(
+                    "mixin_classinfo_probe", true, "direct_cache_map_plus_observe_only_sideload_crosscheck");
             StartupDiagnostics.event(
                     "MIXIN_CLASSINFO_PROBE_INSTALLER",
-                    "status=active modlauncher=" + modLauncherEvidence + " mixin=" + mixinEvidence);
+                    "status=active direct=true modlauncher=" + modLauncherEvidence + " mixin=" + mixinEvidence);
             return true;
         } catch (Throwable t) {
             installed = false;
@@ -93,6 +101,29 @@ final class MixinClassInfoProbeInstaller {
             StartupDiagnostics.failure("mixin_classinfo_probe_installer", t);
             System.out.println("BOOTOPTIM_MIXIN_CLASSINFO_PROBE installer=failed type=" + t.getClass().getName());
             return false;
+        }
+    }
+
+    private static void installDirectClassInfoProbe(Unsafe unsafe, ILaunchPluginService mixin)
+            throws ReflectiveOperationException {
+        ClassLoader loader = mixin.getClass().getClassLoader();
+        Class<?> classInfo = Class.forName(CLASS_INFO_CLASS, true, loader);
+        Field cacheField = classInfo.getDeclaredField("cache");
+        Object base = unsafe.staticFieldBase(cacheField);
+        long offset = unsafe.staticFieldOffset(cacheField);
+        Object current = unsafe.getObject(base, offset);
+        if (current instanceof MixinClassInfoDirectCacheProbe) {
+            return;
+        }
+        if (!(current instanceof Map<?, ?> original)) {
+            throw new IllegalStateException("Unexpected ClassInfo.cache type: "
+                    + (current == null ? "null" : current.getClass().getName()));
+        }
+
+        MixinClassInfoDirectCacheProbe replacement = new MixinClassInfoDirectCacheProbe(original);
+        unsafe.putObject(base, offset, replacement);
+        if (unsafe.getObject(base, offset) != replacement) {
+            throw new IllegalStateException("ClassInfo.cache replacement did not stick");
         }
     }
 
