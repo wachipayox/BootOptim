@@ -1,0 +1,18 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "dev.wachipayox.bootoptim.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "client.SimpleReloadInstanceCriticalPathMixin",
+    "client.ModelManagerReloadSubphaseMixin",
+    "client.AtlasSetReloadSubphaseMixin",
+    "client.ModelBakeryReloadSubphaseMixin",
+    "client.ModelBakerImplDeepProfilingMixin",
+    "client.BlockStateModelLoaderStructureProfilingMixin",
+    "client.SelectorPredicateStructureProfilingMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
