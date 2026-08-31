@@ -38,6 +38,10 @@ final class MixinClassInfoDirectCacheProbe extends HashMap<String, Object> {
     private final LongAdder negativeRetries = new LongAdder();
     private final LongAdder negativeRetryRawNanos = new LongAdder();
     private final LongAdder negativeRetryNanos = new LongAdder();
+    private final LongAdder negativeStillNegativeRetries = new LongAdder();
+    private final LongAdder negativeStillNegativeNanos = new LongAdder();
+    private final LongAdder negativeRecoveries = new LongAdder();
+    private final LongAdder negativeRecoveryNanos = new LongAdder();
     private final LongAdder classificationProbeNanos = new LongAdder();
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -90,16 +94,17 @@ final class MixinClassInfoDirectCacheProbe extends HashMap<String, Object> {
 
     @Override
     public Object put(String key, Object value) {
+        finishRetryIfPresent(key, value);
+
         if (value == null) {
             negativeKeys.add(key);
             byClass.computeIfAbsent(key, ignored -> new ClassStats()).becameNegative = true;
         }
 
-        finishRetryIfPresent(key);
         return super.put(key, value);
     }
 
-    private void finishRetryIfPresent(String key) {
+    private void finishRetryIfPresent(String key, Object resolvedValue) {
         ArrayDeque<RetryAttempt> attempts = activeRetries.get();
         if (attempts.isEmpty()) {
             return;
@@ -127,6 +132,20 @@ final class MixinClassInfoDirectCacheProbe extends HashMap<String, Object> {
         ClassStats stats = byClass.computeIfAbsent(key, ignored -> new ClassStats());
         stats.negativeRetryRawNanos.add(raw);
         stats.negativeRetryNanos.add(adjusted);
+
+        if (resolvedValue == null) {
+            negativeStillNegativeRetries.increment();
+            negativeStillNegativeNanos.add(adjusted);
+            stats.stillNegativeRetries.increment();
+            stats.stillNegativeNanos.add(adjusted);
+        } else {
+            // Compatibility guard: the stock broken cache can recover if a previously missing class
+            // becomes resolvable later. A sticky negative-cache backport would change that behaviour.
+            negativeRecoveries.increment();
+            negativeRecoveryNanos.add(adjusted);
+            stats.recoveries.increment();
+            stats.recoveryNanos.add(adjusted);
+        }
 
         if (attempts.isEmpty()) {
             activeRetries.remove();
@@ -159,7 +178,7 @@ final class MixinClassInfoDirectCacheProbe extends HashMap<String, Object> {
         long retries = negativeRetries.sum();
         emit(String.format(
                 Locale.ROOT,
-                "summary=%s for_name_calls=%d positive_cache_hits=%d first_absent_resolutions=%d negative_cached_gets=%d negative_unique=%d negative_retries=%d negative_retry_ms=%.3f negative_retry_raw_ms=%.3f classification_probe_ms=%.3f",
+                "summary=%s for_name_calls=%d positive_cache_hits=%d first_absent_resolutions=%d negative_cached_gets=%d negative_unique=%d negative_retries=%d negative_retry_ms=%.3f negative_retry_raw_ms=%.3f negative_still_negative_retries=%d negative_still_negative_retry_ms=%.3f negative_recoveries=%d negative_recovery_ms=%.3f classification_probe_ms=%.3f",
                 reason,
                 forNameCalls.sum(),
                 positiveHits.sum(),
@@ -169,6 +188,10 @@ final class MixinClassInfoDirectCacheProbe extends HashMap<String, Object> {
                 retries,
                 negativeRetryNanos.sum() / 1_000_000.0,
                 negativeRetryRawNanos.sum() / 1_000_000.0,
+                negativeStillNegativeRetries.sum(),
+                negativeStillNegativeNanos.sum() / 1_000_000.0,
+                negativeRecoveries.sum(),
+                negativeRecoveryNanos.sum() / 1_000_000.0,
                 classificationProbeNanos.sum() / 1_000_000.0));
 
         ArrayList<Map.Entry<String, ClassStats>> retried = new ArrayList<>(byClass.entrySet());
@@ -204,13 +227,17 @@ final class MixinClassInfoDirectCacheProbe extends HashMap<String, Object> {
             ClassStats stats = entry.getValue();
             emit(String.format(
                     Locale.ROOT,
-                    "dimension=%s rank=%d class=%s retries=%d retry_ms=%.3f retry_raw_ms=%.3f for_name_calls=%d positive_hits=%d first_absent=%d negative=%s",
+                    "dimension=%s rank=%d class=%s retries=%d retry_ms=%.3f retry_raw_ms=%.3f still_negative_retries=%d still_negative_ms=%.3f recoveries=%d recovery_ms=%.3f for_name_calls=%d positive_hits=%d first_absent=%d negative=%s",
                     dimension,
                     index + 1,
                     entry.getKey(),
                     stats.negativeRetries.sum(),
                     stats.negativeRetryNanos.sum() / 1_000_000.0,
                     stats.negativeRetryRawNanos.sum() / 1_000_000.0,
+                    stats.stillNegativeRetries.sum(),
+                    stats.stillNegativeNanos.sum() / 1_000_000.0,
+                    stats.recoveries.sum(),
+                    stats.recoveryNanos.sum() / 1_000_000.0,
                     stats.forNameCalls.sum(),
                     stats.positiveHits.sum(),
                     stats.firstAbsentResolutions.sum(),
@@ -249,6 +276,10 @@ final class MixinClassInfoDirectCacheProbe extends HashMap<String, Object> {
         private final LongAdder negativeRetries = new LongAdder();
         private final LongAdder negativeRetryRawNanos = new LongAdder();
         private final LongAdder negativeRetryNanos = new LongAdder();
+        private final LongAdder stillNegativeRetries = new LongAdder();
+        private final LongAdder stillNegativeNanos = new LongAdder();
+        private final LongAdder recoveries = new LongAdder();
+        private final LongAdder recoveryNanos = new LongAdder();
         private volatile boolean becameNegative;
     }
 }
