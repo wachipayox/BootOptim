@@ -22,7 +22,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build with Gradle
-        run: ./gradlew build :bootstrap:jarJar
+        run: ./gradlew build
 
       - name: Validate packaged bootstrap
         shell: bash
