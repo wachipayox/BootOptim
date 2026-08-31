@@ -1,7 +1,10 @@
 package dev.wachipayox.bootoptim.tailagent;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
+import java.lang.invoke.MethodHandles;
 import java.security.ProtectionDomain;
 import java.util.List;
 import java.util.Map;
@@ -21,13 +24,17 @@ import org.objectweb.asm.tree.VarInsnNode;
 final class TailClassFileTransformer implements ClassFileTransformer {
     private static final String CLASS_TRANSFORMER = "cpw/mods/modlauncher/ClassTransformer";
     private static final String MIXIN_HANDLER = "org/spongepowered/asm/service/modlauncher/MixinTransformationHandler";
-    private static final String HOOK = "dev/wachipayox/bootoptim/tailagent/TailRuntime";
+    private static final String MIXIN_ANCHOR = "org.spongepowered.asm.service.modlauncher.MixinServiceModLauncher";
+    private static final String HELPER_PACKAGE = "org.spongepowered.asm.service.modlauncher";
+    private static final String HELPER_BINARY = HELPER_PACKAGE + ".BootOptimTailRuntime";
+    private static final String HELPER_INTERNAL = HELPER_BINARY.replace('.', '/');
     private static final String CLASS_TRANSFORM_DESC = "([BLjava/lang/String;Ljava/lang/String;)[B";
     private static final String MIXIN_PROCESS_DESC =
             "(Lcpw/mods/modlauncher/serviceapi/ILaunchPluginService$Phase;"
                     + "Lorg/objectweb/asm/tree/ClassNode;Lorg/objectweb/asm/Type;Ljava/lang/String;)Z";
 
     private final Instrumentation instrumentation;
+    private volatile Class<?> helperClass;
 
     TailClassFileTransformer(Instrumentation instrumentation) {
         this.instrumentation = instrumentation;
@@ -56,7 +63,12 @@ final class TailClassFileTransformer implements ClassFileTransformer {
         }
 
         try {
-            addAgentReadEdge(module);
+            if (MIXIN_HANDLER.equals(className)) {
+                ensureHelperDefined(module, loader);
+            } else {
+                grantModLauncherHelperAccess(module);
+            }
+
             byte[] patched = CLASS_TRANSFORMER.equals(className)
                     ? patchClassTransformer(classfileBuffer)
                     : patchMixinHandler(classfileBuffer);
@@ -71,17 +83,87 @@ final class TailClassFileTransformer implements ClassFileTransformer {
         }
     }
 
-    private void addAgentReadEdge(Module target) {
-        if (target == null || !target.isNamed() || target.canRead(TailRuntime.class.getModule())) {
+    /**
+     * Define the runtime helper inside Mixin's own module and loader. Calling a helper in the
+     * javaagent loader from ModLauncher's ModuleClassLoader is not reliable under SecureJarHandler.
+     */
+    private void ensureHelperDefined(Module mixinModule, ClassLoader loader) throws Throwable {
+        if (helperClass != null) {
             return;
         }
+        synchronized (this) {
+            if (helperClass != null) {
+                return;
+            }
+
+            Class<?> anchor = Class.forName(MIXIN_ANCHOR, false, loader);
+            if (anchor.getModule() != mixinModule) {
+                throw new IllegalStateException("Mixin anchor resolved from unexpected module");
+            }
+
+            Module agentModule = TailClassFileTransformer.class.getModule();
+            if (mixinModule.isNamed()) {
+                instrumentation.redefineModule(
+                        mixinModule,
+                        Set.of(),
+                        Map.of(),
+                        Map.of(HELPER_PACKAGE, Set.of(agentModule)),
+                        Set.of(),
+                        Map.<Class<?>, List<Class<?>>>of());
+            }
+
+            byte[] helperBytes = helperBytes();
+            MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(anchor, MethodHandles.lookup());
+            Class<?> defined;
+            try {
+                defined = lookup.defineClass(helperBytes);
+            } catch (LinkageError alreadyDefined) {
+                defined = Class.forName(HELPER_BINARY, false, loader);
+            }
+            if (!HELPER_BINARY.equals(defined.getName()) || defined.getModule() != mixinModule) {
+                throw new IllegalStateException("Tail helper was not defined in Mixin module");
+            }
+            helperClass = defined;
+            emit("helper=defined module=" + moduleName(mixinModule) + " loader=" + loaderName(defined.getClassLoader()));
+        }
+    }
+
+    /** Make only the helper package readable/exported to ModLauncher's module. */
+    private void grantModLauncherHelperAccess(Module modLauncherModule) {
+        Class<?> helper = helperClass;
+        if (helper == null) {
+            throw new IllegalStateException("Mixin tail helper was not defined before ClassTransformer");
+        }
+        Module mixinModule = helper.getModule();
+        if (!modLauncherModule.isNamed() || !mixinModule.isNamed()) {
+            return;
+        }
+
         instrumentation.redefineModule(
-                target,
-                Set.of(TailRuntime.class.getModule()),
+                modLauncherModule,
+                Set.of(mixinModule),
                 Map.of(),
                 Map.of(),
                 Set.of(),
                 Map.<Class<?>, List<Class<?>>>of());
+        instrumentation.redefineModule(
+                mixinModule,
+                Set.of(),
+                Map.of(HELPER_PACKAGE, Set.of(modLauncherModule)),
+                Map.of(),
+                Set.of(),
+                Map.<Class<?>, List<Class<?>>>of());
+    }
+
+    private static byte[] helperBytes() throws IOException {
+        String resource = HELPER_INTERNAL + ".class";
+        ClassLoader agentLoader = TailClassFileTransformer.class.getClassLoader();
+        try (InputStream stream = agentLoader.getResourceAsStream(resource)) {
+            if (stream == null) {
+                throw new IOException("Missing helper resource " + resource);
+            }
+            return stream.readAllBytes();
+        }
     }
 
     private static byte[] patchMixinHandler(byte[] input) {
@@ -111,7 +193,7 @@ final class TailClassFileTransformer implements ClassFileTransformer {
         entry.add(new VarInsnNode(Opcodes.ALOAD, 4));
         entry.add(new MethodInsnNode(
                 Opcodes.INVOKESTATIC,
-                HOOK,
+                HELPER_INTERNAL,
                 "beginMixinProcess",
                 "(Ljava/lang/String;Ljava/lang/String;)V",
                 false));
@@ -121,11 +203,9 @@ final class TailClassFileTransformer implements ClassFileTransformer {
         for (AbstractInsnNode insn = target.instructions.getFirst(); insn != null; ) {
             AbstractInsnNode next = insn.getNext();
             if (insn.getOpcode() == Opcodes.IRETURN) {
-                // Existing boolean return value remains on the stack. The hook consumes and returns
-                // the same boolean while pairing it with the entry context held in a ThreadLocal stack.
                 target.instructions.insertBefore(insn, new MethodInsnNode(
                         Opcodes.INVOKESTATIC,
-                        HOOK,
+                        HELPER_INTERNAL,
                         "recordMixinResult",
                         "(Z)Z",
                         false));
@@ -162,7 +242,7 @@ final class TailClassFileTransformer implements ClassFileTransformer {
         entry.add(new VarInsnNode(Opcodes.ALOAD, 3));
         entry.add(new MethodInsnNode(
                 Opcodes.INVOKESTATIC,
-                HOOK,
+                HELPER_INTERNAL,
                 "beginClassTransform",
                 "(Ljava/lang/String;ILjava/lang/String;)V",
                 false));
@@ -195,12 +275,10 @@ final class TailClassFileTransformer implements ClassFileTransformer {
         }
         int flagsLocal = flagsVar.var;
 
-        // Capture flags exactly where the original code is about to load them for writer construction,
-        // before their local-variable lifetime can end.
         InsnList captureFlags = new InsnList();
         captureFlags.add(new VarInsnNode(Opcodes.ILOAD, flagsLocal));
         captureFlags.add(new MethodInsnNode(
-                Opcodes.INVOKESTATIC, HOOK, "setClassTransformFlags", "(I)V", false));
+                Opcodes.INVOKESTATIC, HELPER_INTERNAL, "setClassTransformFlags", "(I)V", false));
         target.instructions.insertBefore(flagsLoad, captureFlags);
 
         int acceptCalls = 0;
@@ -219,9 +297,9 @@ final class TailClassFileTransformer implements ClassFileTransformer {
                     throw new IllegalStateException("Unable to locate ClassNode.accept operand loads");
                 }
                 target.instructions.insertBefore(classNodeLoad, new MethodInsnNode(
-                        Opcodes.INVOKESTATIC, HOOK, "beginAccept", "()V", false));
+                        Opcodes.INVOKESTATIC, HELPER_INTERNAL, "beginAccept", "()V", false));
                 target.instructions.insert(call, new MethodInsnNode(
-                        Opcodes.INVOKESTATIC, HOOK, "endAccept", "()V", false));
+                        Opcodes.INVOKESTATIC, HELPER_INTERNAL, "endAccept", "()V", false));
                 acceptCalls++;
             } else if (insn instanceof MethodInsnNode call
                     && call.getOpcode() == Opcodes.INVOKEVIRTUAL
@@ -233,19 +311,17 @@ final class TailClassFileTransformer implements ClassFileTransformer {
                     throw new IllegalStateException("Unable to locate ClassWriter.toByteArray operand load");
                 }
                 target.instructions.insertBefore(writerLoad, new MethodInsnNode(
-                        Opcodes.INVOKESTATIC, HOOK, "beginToByteArray", "()V", false));
+                        Opcodes.INVOKESTATIC, HELPER_INTERNAL, "beginToByteArray", "()V", false));
                 InsnList after = new InsnList();
-                // Preserve the exact byte[] result on the stack while passing only its cheap length to the hook.
                 after.add(new InsnNode(Opcodes.DUP));
                 after.add(new InsnNode(Opcodes.ARRAYLENGTH));
                 after.add(new MethodInsnNode(
-                        Opcodes.INVOKESTATIC, HOOK, "endToByteArray", "(I)V", false));
+                        Opcodes.INVOKESTATIC, HELPER_INTERNAL, "endToByteArray", "(I)V", false));
                 target.instructions.insert(call, after);
                 toByteArrayCalls++;
             } else if (insn.getOpcode() == Opcodes.ARETURN) {
-                // Static void call leaves the original byte[] return value untouched on the operand stack.
                 target.instructions.insertBefore(insn, new MethodInsnNode(
-                        Opcodes.INVOKESTATIC, HOOK, "endClassTransform", "()V", false));
+                        Opcodes.INVOKESTATIC, HELPER_INTERNAL, "endClassTransform", "()V", false));
                 returns++;
             }
             insn = next;
@@ -271,8 +347,6 @@ final class TailClassFileTransformer implements ClassFileTransformer {
     }
 
     private static byte[] write(ClassNode node) {
-        // We add no branches and preserve the existing frame nodes. Recompute max stack only so the
-        // injected straight-line calls do not trigger hierarchy lookups while patching bootstrap classes.
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         node.accept(writer);
         return writer.toByteArray();
@@ -293,6 +367,14 @@ final class TailClassFileTransformer implements ClassFileTransformer {
 
     private static boolean supportedMixin(String source) {
         return source != null && source.contains("sponge-mixin") && source.contains("0.8.7");
+    }
+
+    private static String moduleName(Module module) {
+        return module == null ? "null" : String.valueOf(module.getName());
+    }
+
+    private static String loaderName(ClassLoader loader) {
+        return loader == null ? "bootstrap" : loader.getClass().getName();
     }
 
     private static String codeSource(ProtectionDomain protectionDomain) {
