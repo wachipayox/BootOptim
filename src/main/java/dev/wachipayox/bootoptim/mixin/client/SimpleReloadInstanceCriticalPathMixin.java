@@ -33,6 +33,10 @@ abstract class SimpleReloadInstanceCriticalPathMixin<S> {
     @Shadow
     protected CompletableFuture<List<S>> allDone;
 
+    @Shadow
+    @Final
+    private int listenerCount;
+
     @Unique
     private ResourceReloadCriticalPathProfiler.ReloadTrace bootoptim$reloadTrace;
 
@@ -75,6 +79,7 @@ abstract class SimpleReloadInstanceCriticalPathMixin<S> {
         if (reloadTrace == null) {
             return;
         }
+        reloadTrace.setExpectedListenerCount(listenerCount);
         reloadTrace.observeAllPreparations(allPreparations);
         reloadTrace.observeAllDone(allDone);
     }
