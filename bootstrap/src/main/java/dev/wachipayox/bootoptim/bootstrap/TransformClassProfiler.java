@@ -52,7 +52,7 @@ final class TransformClassProfiler {
                     () -> report("shutdown"),
                     "BootOptim Transform Profile Reporter"));
         }
-        System.out.println("BOOTOPTIM_TRANSFORM_PROFILE status=enabled mode=observe_only cache=false");
+        emit("BOOTOPTIM_TRANSFORM_PROFILE", "status=enabled mode=observe_only cache=false");
     }
 
     static void record(
@@ -128,9 +128,9 @@ final class TransformClassProfiler {
         long calls = CALLS.sum();
         long transformNanos = TRANSFORM_NANOS.sum();
         long profilerNanos = PROFILER_NANOS.sum();
-        System.out.printf(
+        String payload = String.format(
                 Locale.ROOT,
-                "BOOTOPTIM_TRANSFORM_PROFILE summary=%s calls=%d transform_ms=%.3f profiler_overhead_ms=%.3f null_context_calls=%d nonnull_context_calls=%d input_mib=%.3f output_mib=%.3f p50_us=%.3f p90_us=%.3f p95_us=%.3f p99_us=%.3f max_us=%.3f max_class=%s%n",
+                "summary=%s calls=%d transform_ms=%.3f profiler_overhead_ms=%.3f null_context_calls=%d nonnull_context_calls=%d input_mib=%.3f output_mib=%.3f p50_us=%.3f p90_us=%.3f p95_us=%.3f p99_us=%.3f max_us=%.3f max_class=%s",
                 reason,
                 calls,
                 transformNanos / 1_000_000.0,
@@ -145,6 +145,7 @@ final class TransformClassProfiler {
                 percentileMicros(calls, 0.99),
                 MAX_NANOS.get() / 1_000.0,
                 maxClass);
+        emit("BOOTOPTIM_TRANSFORM_PROFILE", payload);
     }
 
     private static double percentileMicros(long totalCalls, double percentile) {
@@ -176,9 +177,9 @@ final class TransformClassProfiler {
             long nanos = stats.totalNanos();
             double share = totalTransformNanos == 0L ? 0.0 : nanos * 100.0 / totalTransformNanos;
             double avgMicros = calls == 0L ? 0.0 : nanos / 1_000.0 / calls;
-            System.out.printf(
+            String payload = String.format(
                     Locale.ROOT,
-                    "BOOTOPTIM_TRANSFORM_PROFILE_TOP dimension=%s rank=%d key=%s calls=%d total_ms=%.3f share_percent=%.2f avg_us=%.3f max_us=%.3f input_kib=%.3f output_kib=%.3f%n",
+                    "dimension=%s rank=%d key=%s calls=%d total_ms=%.3f share_percent=%.2f avg_us=%.3f max_us=%.3f input_kib=%.3f output_kib=%.3f",
                     dimension,
                     i + 1,
                     entry.getKey(),
@@ -189,7 +190,13 @@ final class TransformClassProfiler {
                     stats.maxNanos() / 1_000.0,
                     stats.inputBytes() / 1024.0,
                     stats.outputBytes() / 1024.0);
+            emit("BOOTOPTIM_TRANSFORM_PROFILE_TOP", payload);
         }
+    }
+
+    private static void emit(String category, String payload) {
+        System.out.println(category + " " + payload);
+        StartupDiagnostics.event(category, payload);
     }
 
     private static final class Stats {
