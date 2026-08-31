@@ -7,7 +7,8 @@
     "client.SimpleReloadInstanceCriticalPathMixin",
     "client.ModelManagerReloadSubphaseMixin",
     "client.AtlasSetReloadSubphaseMixin",
-    "client.ModelBakeryReloadSubphaseMixin"
+    "client.ModelBakeryReloadSubphaseMixin",
+    "client.ModelBakerImplDeepProfilingMixin"
   ],
   "injectors": {
     "defaultRequire": 1
