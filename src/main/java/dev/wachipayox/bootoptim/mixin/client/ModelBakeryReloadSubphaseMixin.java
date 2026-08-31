@@ -12,21 +12,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ModelBakery.class)
 abstract class ModelBakeryReloadSubphaseMixin {
     @Unique
-    private long bootoptim$constructorStart = -1L;
+    private static final ThreadLocal<Long> bootoptim$constructorStart = ThreadLocal.withInitial(() -> -1L);
     @Unique
     private long bootoptim$bakeStart = -1L;
 
     @Inject(method = "<init>", at = @At("HEAD"))
-    private void bootoptim$startConstructor(CallbackInfo ci) {
+    private static void bootoptim$startConstructor(CallbackInfo ci) {
         if (ModelReloadSubphaseProfiler.enabled()) {
-            bootoptim$constructorStart = ModelReloadSubphaseProfiler.start();
+            bootoptim$constructorStart.set(ModelReloadSubphaseProfiler.start());
         }
     }
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void bootoptim$endConstructor(CallbackInfo ci) {
-        long started = bootoptim$constructorStart;
-        bootoptim$constructorStart = -1L;
+        long started = bootoptim$constructorStart.get();
+        bootoptim$constructorStart.remove();
         ModelReloadSubphaseProfiler.endSync("model_bakery_init", started);
     }
 
