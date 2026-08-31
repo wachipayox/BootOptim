@@ -32,7 +32,7 @@ abstract class ItemModelGeneratorResidualProfilingMixin {
             Function<Material, TextureAtlasSprite> spriteGetter,
             BlockModel model,
             CallbackInfoReturnable<BlockModel> cir) {
-        GeneratedItemResidualProfiler.endGenerate();
+        GeneratedItemResidualProfiler.endGenerate(cir.getReturnValue());
     }
 
     @Inject(method = "processFrames", at = @At("HEAD"))
