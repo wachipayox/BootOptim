@@ -30,8 +30,8 @@ abstract class BlockStateModelLoaderMethodProbeMixin {
         bootoptim$reported = true;
 
         Arrays.stream(BlockStateModelLoader.class.getDeclaredMethods())
-                .filter(method -> method.getName().contains("loadBlockStateDefinitions"))
-                .sorted(Comparator.comparing(Method::getName))
+                .filter(method -> method.getName().contains("loadBlockStateDefinitions") || method.getName().equals("predicate"))
+                .sorted(Comparator.comparing(Method::getName).thenComparing(Method::toGenericString))
                 .forEach(method -> BOOTOPTIM$LOGGER.info(
                         "BOOTOPTIM_BLOCKSTATE_METHOD name={} static={} synthetic={} params={} return={}",
                         method.getName(),
