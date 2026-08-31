@@ -4,9 +4,17 @@
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "client.AtlasSetReloadSubphaseMixin",
+    "client.BlockModelGeneratedResidualProfilingMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.ElementsModelResidualProfilingMixin",
     "client.FancyMenuPanoramaPreloadMixin",
+    "client.ItemModelGeneratorResidualProfilingMixin",
+    "client.ModelBakerImplResidualProfilingMixin",
     "client.ModelBakeryDecocraftReuseMixin",
+    "client.ModelBakeryReloadSubphaseMixin",
+    "client.ModelManagerReloadSubphaseMixin",
+    "client.SimpleReloadInstanceResidualGateMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
