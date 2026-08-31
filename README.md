@@ -2,6 +2,8 @@
 
 BootOptim is a NeoForge 1.21.1 performance mod focused specifically on reducing the time from process launch to the Minecraft main menu, with compatible server-side startup improvements where they are worthwhile.
 
+> **AI / automation agents:** read [`AGENTS.md`](AGENTS.md) before doing any repository work. It defines mandatory history/research/branch checks intended to prevent duplicated experiments and lost validated optimizations.
+
 ## Goals
 
 - Measure startup phases before optimizing them.
@@ -10,6 +12,13 @@ BootOptim is a NeoForge 1.21.1 performance mod focused specifically on reducing 
 - Scale sensibly across both high-core-count and resource-constrained systems instead of assuming that more parallelism is always faster.
 - Avoid duplicating dedicated optimization mods unless BootOptim can demonstrably replace them with a better implementation.
 - When a multipurpose mod contains an overlapping optimization, prefer disabling only the overlapping feature while keeping the rest of that mod active.
+
+## Durable project memory
+
+- [`docs/research/`](docs/research/README.md) records profiling, rejected/limited paths, architectural findings and reopening criteria.
+- `docs/optimizations/` records optimizations the project intends to ship/retain and their safety invariants when that production catalog is present.
+
+Do not infer production state from an old experiment PR alone: verify `agent/integration-current` and the relevant promotion/production documentation.
 
 ## Startup diagnostics
 
