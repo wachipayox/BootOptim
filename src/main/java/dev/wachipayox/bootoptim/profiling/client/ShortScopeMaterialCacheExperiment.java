@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.profiling.client;
 
 import net.minecraft.client.resources.model.Material;
+import net.neoforged.neoforge.client.model.geometry.BlockGeometryBakingContext;
 import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +14,9 @@ import java.util.Locale;
  *
  * <p>Scopes are reused per thread and use a tiny linear cache because real vanilla models normally expose only a
  * handful of texture keys. This avoids allocating a HashMap for every model and keeps the experiment overhead small
- * enough that exact-pack wall-time comparison is meaningful.</p>
+ * enough that exact-pack wall-time comparison is meaningful. Caching is restricted to NeoForge's stock
+ * BlockGeometryBakingContext, whose getMaterial implementation delegates directly to its immutable-for-bake
+ * BlockModel owner; arbitrary modded IGeometryBakingContext implementations keep stock per-call semantics.</p>
  */
 public final class ShortScopeMaterialCacheExperiment {
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/ShortScopeMaterialCache");
@@ -66,7 +69,7 @@ public final class ShortScopeMaterialCacheExperiment {
     }
 
     public static Material resolve(IGeometryBakingContext context, String name) {
-        if (!active) return context.getMaterial(name);
+        if (!active || !(context instanceof BlockGeometryBakingContext)) return context.getMaterial(name);
         Frame frame = STATE.get().peek();
         if (frame == null) return context.getMaterial(name);
 
