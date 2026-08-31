@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
@@ -74,6 +75,9 @@ abstract class ItemModelGeneratorSpanIndexMixin {
             BOOTOPTIM$GET_SPANS_CALLS.increment();
             BOOTOPTIM$GET_SPANS_NS.add(System.nanoTime() - start);
         }
+        if (cir.getReturnValue() instanceof IndexedSpanList indexed) {
+            indexed.commitMetrics();
+        }
     }
 
     @Redirect(
@@ -85,7 +89,7 @@ abstract class ItemModelGeneratorSpanIndexMixin {
         if (!BOOTOPTIM$ENABLED) {
             return Lists.newArrayList();
         }
-        return new IndexedSpanList(Math.max(sprite.width(), sprite.height()));
+        return new IndexedSpanList(sprite.width(), sprite.height());
     }
 
     @Redirect(
@@ -110,26 +114,30 @@ abstract class ItemModelGeneratorSpanIndexMixin {
 
     @Unique
     private static final class IndexedSpanList extends ArrayList<Object> {
-        private final Object[][] byKey;
-        private final int[][] insertionIndex;
-        private int pendingFacing = -1;
-        private int pendingAnchor = -1;
+        private final int anchorCapacity;
+        private final Object[] byKey;
+        private final int[] insertionIndexPlusOne;
+        private final CandidateIterator candidateIterator = new CandidateIterator();
+        private int pendingKey = -1;
         private boolean pendingExpectedNew;
         private boolean unsafe;
+        private long indexedLookups;
+        private long stockComparisonsSkipped;
+        private long createdSpans;
+        private long fallbackLookups;
+        private long anomalies;
 
-        private IndexedSpanList(int maxAnchor) {
-            super(Math.max(8, maxAnchor * 2));
-            this.byKey = new Object[4][Math.max(1, maxAnchor)];
-            this.insertionIndex = new int[4][Math.max(1, maxAnchor)];
-            for (int i = 0; i < insertionIndex.length; i++) {
-                java.util.Arrays.fill(insertionIndex[i], -1);
-            }
+        private IndexedSpanList(int width, int height) {
+            super(Math.max(8, 2 * (width + height)));
+            this.anchorCapacity = Math.max(1, Math.max(width, height));
+            this.byKey = new Object[4 * anchorCapacity];
+            this.insertionIndexPlusOne = new int[4 * anchorCapacity];
         }
 
         private Iterator<?> iteratorFor(Object facing, int x, int y) {
             clearPending();
             if (unsafe || !(facing instanceof Enum<?> enumFacing)) {
-                BOOTOPTIM$FALLBACK_LOOKUPS.increment();
+                fallbackLookups++;
                 return super.iterator();
             }
 
@@ -141,50 +149,50 @@ abstract class ItemModelGeneratorSpanIndexMixin {
             } else if ("LEFT".equals(name) || "RIGHT".equals(name)) {
                 horizontal = false;
             } else {
-                BOOTOPTIM$ANOMALIES.increment();
+                anomalies++;
                 unsafe = true;
-                BOOTOPTIM$FALLBACK_LOOKUPS.increment();
+                fallbackLookups++;
                 return super.iterator();
             }
 
             int anchor = horizontal ? y : x;
-            if (ordinal < 0 || ordinal >= byKey.length || anchor < 0 || anchor >= byKey[ordinal].length) {
-                BOOTOPTIM$ANOMALIES.increment();
+            if (ordinal < 0 || ordinal >= 4 || anchor < 0 || anchor >= anchorCapacity) {
+                anomalies++;
                 unsafe = true;
-                BOOTOPTIM$FALLBACK_LOOKUPS.increment();
+                fallbackLookups++;
                 return super.iterator();
             }
 
-            BOOTOPTIM$INDEXED_LOOKUPS.increment();
-            Object existing = byKey[ordinal][anchor];
-            pendingFacing = ordinal;
-            pendingAnchor = anchor;
+            indexedLookups++;
+            int key = ordinal * anchorCapacity + anchor;
+            Object existing = byKey[key];
+            pendingKey = key;
             pendingExpectedNew = existing == null;
 
             if (existing == null) {
                 // Stock would inspect every current span and find no matching key.
-                BOOTOPTIM$STOCK_COMPARISONS_SKIPPED.add(size());
+                stockComparisonsSkipped += size();
                 return Collections.emptyIterator();
             }
 
-            int stockPosition = insertionIndex[ordinal][anchor];
+            int stockPosition = insertionIndexPlusOne[key] - 1;
             if (stockPosition < 0 || stockPosition >= size() || get(stockPosition) != existing) {
-                BOOTOPTIM$ANOMALIES.increment();
+                anomalies++;
                 unsafe = true;
                 clearPending();
-                BOOTOPTIM$FALLBACK_LOOKUPS.increment();
+                fallbackLookups++;
                 return super.iterator();
             }
 
             // Vanilla would compare all earlier entries plus this one; we retain the final comparison itself.
-            BOOTOPTIM$STOCK_COMPARISONS_SKIPPED.add(stockPosition);
-            return Collections.singleton(existing).iterator();
+            stockComparisonsSkipped += stockPosition;
+            candidateIterator.reset(existing);
+            return candidateIterator;
         }
 
         @Override
         public boolean add(Object span) {
-            int facing = pendingFacing;
-            int anchor = pendingAnchor;
+            int key = pendingKey;
             boolean expectedNew = pendingExpectedNew;
             clearPending();
 
@@ -197,25 +205,56 @@ abstract class ItemModelGeneratorSpanIndexMixin {
                 return true;
             }
 
-            if (!expectedNew || facing < 0 || facing >= byKey.length || anchor < 0 || anchor >= byKey[facing].length
-                    || byKey[facing][anchor] != null) {
+            if (!expectedNew || key < 0 || key >= byKey.length || byKey[key] != null) {
                 // A vanilla add without the preceding "no existing key" lookup means our structural assumption no
                 // longer holds. Keep the list correct and make every later search use the stock iterator.
-                BOOTOPTIM$ANOMALIES.increment();
+                anomalies++;
                 unsafe = true;
                 return true;
             }
 
-            byKey[facing][anchor] = span;
-            insertionIndex[facing][anchor] = size() - 1;
-            BOOTOPTIM$CREATED_SPANS.increment();
+            byKey[key] = span;
+            insertionIndexPlusOne[key] = size();
+            createdSpans++;
             return true;
         }
 
         private void clearPending() {
-            pendingFacing = -1;
-            pendingAnchor = -1;
+            pendingKey = -1;
             pendingExpectedNew = false;
+        }
+
+        private void commitMetrics() {
+            BOOTOPTIM$INDEXED_LOOKUPS.add(indexedLookups);
+            BOOTOPTIM$STOCK_COMPARISONS_SKIPPED.add(stockComparisonsSkipped);
+            BOOTOPTIM$CREATED_SPANS.add(createdSpans);
+            BOOTOPTIM$FALLBACK_LOOKUPS.add(fallbackLookups);
+            BOOTOPTIM$ANOMALIES.add(anomalies);
+        }
+    }
+
+    @Unique
+    private static final class CandidateIterator implements Iterator<Object> {
+        private Object candidate;
+        private boolean available;
+
+        private void reset(Object candidate) {
+            this.candidate = candidate;
+            this.available = true;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return available;
+        }
+
+        @Override
+        public Object next() {
+            if (!available) {
+                throw new NoSuchElementException();
+            }
+            available = false;
+            return candidate;
         }
     }
 }
