@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.optimization.client.DirectGeneratedItemBaker;
+import java.util.concurrent.atomic.LongAdder;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.BlockElementFace;
 import net.minecraft.client.renderer.block.model.BlockElementRotation;
@@ -10,7 +11,10 @@ import net.minecraft.client.resources.model.ModelState;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import org.joml.Vector3f;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
@@ -27,8 +31,20 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  */
 @Mixin(DirectGeneratedItemBaker.class)
 abstract class DirectGeneratedItemBakerTrimmableToolsCompatMixin {
-    private static final String TRIMMABLE_TOOLS_NAMESPACE = "trimmable_tools";
-    private static final float SIDE_EXPANSION = 0.01F;
+    @Unique
+    private static final String BOOTOPTIM$TRIMMABLE_TOOLS_NAMESPACE = "trimmable_tools";
+    @Unique
+    private static final float BOOTOPTIM$SIDE_EXPANSION = 0.01F;
+    @Unique
+    private static final Logger BOOTOPTIM$LOGGER = LoggerFactory.getLogger("BootOptim/GeneratedItemCompat");
+    @Unique
+    private static final LongAdder BOOTOPTIM$TRIMMABLE_TOOLS_SIDE_QUADS = new LongAdder();
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> BOOTOPTIM$LOGGER.info(
+                "BOOTOPTIM_GENERATED_ITEM_COMPAT summary=shutdown trimmable_tools_side_quads={}",
+                BOOTOPTIM$TRIMMABLE_TOOLS_SIDE_QUADS.sum()), "BootOptim-generated-item-compat-report"));
+    }
 
     @Redirect(
             method = "bakeLayer",
@@ -36,7 +52,7 @@ abstract class DirectGeneratedItemBakerTrimmableToolsCompatMixin {
                     value = "INVOKE",
                     target = "Lnet/minecraft/client/renderer/block/model/FaceBakery;bakeQuad(Lorg/joml/Vector3f;Lorg/joml/Vector3f;Lnet/minecraft/client/renderer/block/model/BlockElementFace;Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;Lnet/minecraft/core/Direction;Lnet/minecraft/client/resources/model/ModelState;Lnet/minecraft/client/renderer/block/model/BlockElementRotation;Z)Lnet/minecraft/client/renderer/block/model/BakedQuad;",
                     ordinal = 1),
-            require = 0)
+            require = 1)
     private static BakedQuad bootoptim$preserveTrimmableToolsSideExpansion(
             FaceBakery bakery,
             Vector3f from,
@@ -47,9 +63,10 @@ abstract class DirectGeneratedItemBakerTrimmableToolsCompatMixin {
             ModelState state,
             BlockElementRotation rotation,
             boolean shade) {
-        if (TRIMMABLE_TOOLS_NAMESPACE.equals(sprite.contents().name().getNamespace())) {
+        if (BOOTOPTIM$TRIMMABLE_TOOLS_NAMESPACE.equals(sprite.contents().name().getNamespace())) {
+            BOOTOPTIM$TRIMMABLE_TOOLS_SIDE_QUADS.increment();
             float expand = -sprite.uvShrinkRatio();
-            float transformedDelta = (1.0F - expand) * SIDE_EXPANSION;
+            float transformedDelta = (1.0F - expand) * BOOTOPTIM$SIDE_EXPANSION;
 
             switch (direction) {
                 case UP -> {
