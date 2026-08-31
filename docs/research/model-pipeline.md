@@ -48,7 +48,18 @@ This was the first dedicated split of the client model reload. It already instru
 - item-model/dependency loading
 - parent resolution
 
-Lesson: do not re-create these probes from scratch. Reuse or refine them only when a more exclusive attribution is required.
+Recovered exact-pack measurements from that research round:
+
+- `ModelManager.reload`: `18.050 s`
+- `ModelBakery.bakeModels`: `8.857 s`
+- blockstate registration/processing inside ModelBakery: `3.894 s`
+- block model JSON: `2.083 s`
+- atlas preparation: `1.321 s`
+- blockstates JSON: `0.752 s`
+- parent resolution: `0.611 s` across `327,029` models
+- item model/dependency registration: `0.127 s` across `12,283` items
+
+Lesson: do not re-create these probes from scratch. In particular, parent resolution and item registration were already measured and were not multi-second targets in that run. A new constructor investigation must focus on work not explained by those old categories or prove that their cost distribution has materially changed.
 
 ## PR #14 — parallel eager top-level model baking
 
@@ -91,6 +102,12 @@ Measured distribution:
 - reused bakes: `202,350`
 - apparent reuse: `64.57%`
 
+The earlier distribution profiler also showed why the count was misleading in its timed sample:
+
+- repeated-identity calls: `20,723 / 28,024`, but only `133.239 ms` (`23.60%` of measured call time)
+- first/unique calls: `7,301 / 28,024`, consuming `431.342 ms` (`76.40%`)
+- runtime-class totals in that sample included `BlockModel 196.571 ms / 1,336 calls`, `MultiVariant 165.109 ms / 14,974`, and `MultiPart 202.901 ms / 11,714`
+
 Despite eliminating 202k top-level bake calls, bake wall time moved only from about `8.857 s` to `8.444 s`: roughly `0.413 s` / `4.7%`. End-to-end startup did not improve.
 
 Key lesson: **the repeated top-level identities are numerous but cheap**. Count-based dedup badly overstates their contribution to wall time. The expensive part is elsewhere: unique graph expansion/bakes, custom geometry, dependency resolution, or other work inside the pipeline.
@@ -101,7 +118,7 @@ Key lesson: **the repeated top-level identities are numerous but cheap**. Count-
 
 ## PR #37 — Decocraft quarter-turn geometry reuse
 
-**Status: LIMITED**
+**Status: LIMITED / REJECTED under the measured risk-benefit**
 
 PR: #37 `Experiment: reuse Decocraft baked geometry across quarter-turn variants`
 
@@ -129,6 +146,8 @@ PR: #35 `Profile real-pack resource reload listeners`
 
 Minecraft's `ProfiledReloadInstance` exposed large per-listener preparation/apply durations, but some listener totals exceeded the entire reload wall time because the numbers include overlapping/waiting work. That made it unsuitable for deciding the critical path directly.
 
+PR #35 also already contained diagnostic distribution profilers for top-level model baking and NeoForge custom geometry. Those tools led directly to #36 and #37. Do not resurrect them unchanged merely to rediscover identity reuse or Decocraft's quarter-turn pattern.
+
 Lesson: never sum listener durations and never call the largest inclusive listener timing the startup gate without barrier evidence.
 
 ## PR #47 — barrier/turn critical-path profiler
@@ -152,9 +171,9 @@ The old experiments rule out two shallow approaches: generic top-level paralleli
 
 Priority questions:
 
-1. **Where does the `5.93 s` ModelBakery construction time go exclusively?** Split blockstate graph registration, item/dependency graph discovery, recursive `getModel`/dependency loading, and parent resolution. Record counts, cache hits/misses, and graph depth rather than only inclusive timers.
-2. **Where does the `12.60 s` bake time go exclusively?** Attribute wall/CPU time to actual runtime model/geometry types and namespaces, and distinguish first/unique expensive work from cheap repeated wrapper/top-level calls.
-3. **What is already cached internally?** A new cache is justified only for a computation that profiling proves is both repeated and expensive after vanilla/NeoForge/other optimization mods' existing caches.
+1. **What explains the current `5.93 s` ModelBakery construction after excluding already-measured categories?** The older pack spent `3.894 s` in blockstate registration, while parent resolution (`0.611 s`) and item/dependency registration (`0.127 s`) were much smaller. Instrument only the residual/changed work and cache/graph behavior rather than recreating the same inclusive probes.
+2. **Where does the current `12.60 s` bake time go after internal cache hits are removed from the accounting?** Measure actual `ModelBakerImpl` cache misses / uncached bakes, recursive dependency work and exclusive custom/vanilla bake cost. The old top-level identity profiler already proved repeated wrapper calls are cheap.
+3. **What is already cached internally?** `ModelBakery`/`ModelBakerImpl` already cache by model id + transformation + UV-lock. A new cache is justified only for a computation that profiling proves is both repeated and expensive after that cache and after other optimization mods' caches.
 4. **Can the graph be restructured rather than merely loop-parallelized?** Investigate dependency-aware scheduling, immutable intermediate sharing/canonicalization, and safe precomputation/persistence with resource-pack fingerprints.
 5. **What changed in newer Minecraft model-loading architecture?** Review upstream rewrites for ideas that can be backported while preserving NeoForge 1.21.1 custom loader and event semantics.
 
