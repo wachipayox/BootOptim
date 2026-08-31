@@ -4,7 +4,6 @@ import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.client.resources.model.UnbakedModel;
-import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +33,7 @@ public final class DeepModelBakeProfiler {
     private static final Map<String, Stats> BY_CATEGORY = new HashMap<>();
     private static final Map<String, Stats> BY_NAMESPACE = new HashMap<>();
 
-    private static boolean active;
+    private static volatile boolean active;
     private static long cacheLookups;
     private static long cacheHits;
     private static long cacheMisses;
@@ -52,7 +51,6 @@ public final class DeepModelBakeProfiler {
     }
 
     public static synchronized void begin() {
-        active = true;
         BY_CATEGORY.clear();
         BY_NAMESPACE.clear();
         cacheLookups = 0L;
@@ -69,12 +67,13 @@ public final class DeepModelBakeProfiler {
         maxDepth = 0;
         STACK.remove();
         TOP_LEVEL.remove();
+        active = true;
     }
 
     public static void profileTopLevelLoop(
             Map<ModelResourceLocation, UnbakedModel> models,
             BiConsumer<ModelResourceLocation, UnbakedModel> bakeAction) {
-        if (!isActive()) {
+        if (!active) {
             models.forEach(bakeAction);
             return;
         }
@@ -104,7 +103,7 @@ public final class DeepModelBakeProfiler {
 
     /** Records the real 1.21.1 recursive baked-cache lookup, not top-level object identity. */
     public static void cacheLookup(boolean hit) {
-        if (!isActive()) {
+        if (!active) {
             return;
         }
         synchronized (DeepModelBakeProfiler.class) {
@@ -118,7 +117,7 @@ public final class DeepModelBakeProfiler {
     }
 
     public static void beginUncached(UnbakedModel model) {
-        if (!isActive()) {
+        if (!active) {
             return;
         }
 
@@ -142,7 +141,7 @@ public final class DeepModelBakeProfiler {
     }
 
     public static void endUncached(UnbakedModel model) {
-        if (!isActive()) {
+        if (!active) {
             return;
         }
 
@@ -210,12 +209,6 @@ public final class DeepModelBakeProfiler {
 
         logTop("category", BY_CATEGORY, 25);
         logTop("namespace", BY_NAMESPACE, 25);
-    }
-
-    private static boolean isActive() {
-        synchronized (DeepModelBakeProfiler.class) {
-            return active;
-        }
     }
 
     private static String category(UnbakedModel model) {
