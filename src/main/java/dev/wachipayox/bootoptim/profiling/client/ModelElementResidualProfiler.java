@@ -19,6 +19,7 @@ public final class ModelElementResidualProfiler {
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/ModelElementsResidual");
     private static final ThreadLocal<Deque<Frame>> ELEMENTS = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<Deque<Frame>> GENERATED = ThreadLocal.withInitial(ArrayDeque::new);
+    private static final ThreadLocal<Deque<Long>> GENERATED_FACES = ThreadLocal.withInitial(ArrayDeque::new);
     private static volatile boolean active;
 
     private static long elementsCalls;
@@ -39,6 +40,7 @@ public final class ModelElementResidualProfiler {
         corruptFrames = 0L;
         ELEMENTS.remove();
         GENERATED.remove();
+        GENERATED_FACES.remove();
         active = true;
     }
 
@@ -56,6 +58,7 @@ public final class ModelElementResidualProfiler {
         }
     }
 
+    /** Surrounds the complete NeoForge generated-item path inside UnbakedGeometryHelper#bake. */
     public static void beginGenerated() {
         if (active) GENERATED.get().push(new Frame(System.nanoTime()));
     }
@@ -67,6 +70,25 @@ public final class ModelElementResidualProfiler {
         synchronized (ModelElementResidualProfiler.class) {
             generatedCalls++;
             generatedNanos += System.nanoTime() - frame.startedNanos;
+        }
+    }
+
+    public static boolean inGeneratedBake() {
+        return active && !GENERATED.get().isEmpty();
+    }
+
+    /** Called from FaceBakery only while a generated-item UnbakedGeometryHelper bake is active. */
+    public static void beginGeneratedFace() {
+        if (inGeneratedBake()) GENERATED_FACES.get().push(System.nanoTime());
+    }
+
+    public static void endGeneratedFace() {
+        if (!active || GENERATED_FACES.get().isEmpty()) return;
+        Long started = GENERATED_FACES.get().poll();
+        if (started == null) { corrupt(); return; }
+        synchronized (ModelElementResidualProfiler.class) {
+            generatedFaceCalls++;
+            generatedFaceNanos += System.nanoTime() - started;
         }
     }
 
@@ -84,24 +106,6 @@ public final class ModelElementResidualProfiler {
             synchronized (ModelElementResidualProfiler.class) {
                 elementsFaceCalls++;
                 elementsFaceNanos += System.nanoTime() - started;
-            }
-        }
-    }
-
-    public static BakedQuad profileGeneratedFace(
-            BlockElement element,
-            BlockElementFace face,
-            TextureAtlasSprite sprite,
-            Direction direction,
-            ModelState state) {
-        if (!active) return BlockModel.bakeFace(element, face, sprite, direction, state);
-        long started = System.nanoTime();
-        try {
-            return BlockModel.bakeFace(element, face, sprite, direction, state);
-        } finally {
-            synchronized (ModelElementResidualProfiler.class) {
-                generatedFaceCalls++;
-                generatedFaceNanos += System.nanoTime() - started;
             }
         }
     }
@@ -125,6 +129,7 @@ public final class ModelElementResidualProfiler {
                 corruptFrames);
         ELEMENTS.remove();
         GENERATED.remove();
+        GENERATED_FACES.remove();
     }
 
     private static synchronized void corrupt() { corruptFrames++; }
