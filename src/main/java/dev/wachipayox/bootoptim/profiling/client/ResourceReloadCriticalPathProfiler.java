@@ -15,6 +15,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
@@ -45,6 +46,8 @@ public final class ResourceReloadCriticalPathProfiler {
         private final CopyOnWriteArrayList<ListenerTrace> listeners = new CopyOnWriteArrayList<>();
         private final AtomicLong allPreparationsNanos = new AtomicLong(-1L);
         private final AtomicLong allDoneNanos = new AtomicLong(-1L);
+        private final AtomicReference<Throwable> allDoneFailure = new AtomicReference<>();
+        private final AtomicBoolean allDoneObserved = new AtomicBoolean();
         private final AtomicBoolean emitted = new AtomicBoolean();
         private volatile int expectedListenerCount = -1;
 
@@ -85,16 +88,38 @@ public final class ResourceReloadCriticalPathProfiler {
         }
 
         public void observeAllDone(CompletableFuture<?> future) {
-            future.whenComplete((ignored, failure) -> finish(failure));
+            future.whenComplete((ignored, failure) -> {
+                allDoneNanos.compareAndSet(-1L, System.nanoTime());
+                if (failure != null) {
+                    allDoneFailure.compareAndSet(null, failure);
+                }
+                allDoneObserved.set(true);
+                tryFinish();
+            });
         }
 
-        private void finish(Throwable failure) {
-            long now = System.nanoTime();
-            allDoneNanos.compareAndSet(-1L, now);
+        /**
+         * The stock allDone future can complete from inside the final apply task, before that
+         * executor wrapper's finally block and before sibling completion callbacks have run.
+         * Waiting only for observation callbacks and already-submitted wrapper tasks to quiesce
+         * keeps the recorded allDone timestamp exact while preventing a truncated final listener.
+         */
+        private void tryFinish() {
+            if (!allDoneObserved.get() || emitted.get()) {
+                return;
+            }
+            for (ListenerTrace listener : listeners) {
+                if (!listener.isObservationComplete()) {
+                    return;
+                }
+            }
             if (!emitted.compareAndSet(false, true)) {
                 return;
             }
+            emit(allDoneFailure.get());
+        }
 
+        private void emit(Throwable failure) {
             long allPrep = allPreparationsNanos.get();
             long allDone = allDoneNanos.get();
             LOGGER.info(
@@ -155,8 +180,8 @@ public final class ResourceReloadCriticalPathProfiler {
         private final AtomicLong preparationDoneNanos = new AtomicLong(-1L);
         private final AtomicLong turnReadyNanos = new AtomicLong(-1L);
         private final AtomicLong listenerDoneNanos = new AtomicLong(-1L);
-        private final ExecutorStats prepareStats = new ExecutorStats();
-        private final ExecutorStats applyStats = new ExecutorStats();
+        private final ExecutorStats prepareStats;
+        private final ExecutorStats applyStats;
         private final AtomicBoolean listenerFailed = new AtomicBoolean();
 
         private ListenerTrace(ReloadTrace reload, int index, String name, String className) {
@@ -164,6 +189,8 @@ public final class ResourceReloadCriticalPathProfiler {
             this.index = index;
             this.name = name;
             this.className = className;
+            this.prepareStats = new ExecutorStats(reload::tryFinish);
+            this.applyStats = new ExecutorStats(reload::tryFinish);
         }
 
         private int index() {
@@ -202,7 +229,12 @@ public final class ResourceReloadCriticalPathProfiler {
                 if (failure != null) {
                     listenerFailed.set(true);
                 }
+                reload.tryFinish();
             });
+        }
+
+        private boolean isObservationComplete() {
+            return listenerDoneNanos.get() >= 0L && prepareStats.isIdle() && applyStats.isIdle();
         }
 
         private long globalWaitNanos(long allPreparations) {
@@ -271,27 +303,43 @@ public final class ResourceReloadCriticalPathProfiler {
         private final AtomicLong maxQueueNanos = new AtomicLong();
         private final AtomicLong firstStartNanos = new AtomicLong(-1L);
         private final AtomicLong lastEndNanos = new AtomicLong(-1L);
+        private final Runnable onTaskFinished;
+
+        private ExecutorStats(Runnable onTaskFinished) {
+            this.onTaskFinished = onTaskFinished;
+        }
 
         private Executor wrap(Executor original) {
             return command -> {
                 long enqueued = System.nanoTime();
                 submitted.incrementAndGet();
-                original.execute(() -> {
-                    long started = System.nanoTime();
-                    firstStartNanos.compareAndSet(-1L, started);
-                    long queued = Math.max(0L, started - enqueued);
-                    queueNanos.add(queued);
-                    maxQueueNanos.accumulateAndGet(queued, Math::max);
-                    try {
-                        command.run();
-                    } finally {
-                        long ended = System.nanoTime();
-                        runNanos.add(Math.max(0L, ended - started));
-                        lastEndNanos.set(ended);
-                        completed.incrementAndGet();
-                    }
-                });
+                try {
+                    original.execute(() -> {
+                        long started = System.nanoTime();
+                        firstStartNanos.compareAndSet(-1L, started);
+                        long queued = Math.max(0L, started - enqueued);
+                        queueNanos.add(queued);
+                        maxQueueNanos.accumulateAndGet(queued, Math::max);
+                        try {
+                            command.run();
+                        } finally {
+                            long ended = System.nanoTime();
+                            runNanos.add(Math.max(0L, ended - started));
+                            lastEndNanos.set(ended);
+                            completed.incrementAndGet();
+                            onTaskFinished.run();
+                        }
+                    });
+                } catch (RuntimeException | Error throwable) {
+                    submitted.decrementAndGet();
+                    onTaskFinished.run();
+                    throw throwable;
+                }
             };
+        }
+
+        private boolean isIdle() {
+            return submitted.get() == completed.get();
         }
     }
 
