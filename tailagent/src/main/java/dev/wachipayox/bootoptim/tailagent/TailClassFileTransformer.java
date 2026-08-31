@@ -97,28 +97,39 @@ final class TailClassFileTransformer implements ClassFileTransformer {
             throw new IllegalStateException("Exact Mixin processClass method not found");
         }
 
+        // Capture className/reason at method entry. In the stock 0.8.7 stack-map table these
+        // arguments become TOP at some later return frames once their original lifetime is over,
+        // so reloading them at IRETURN is verifier-invalid even though the Java source parameters exist.
+        AbstractInsnNode first = target.instructions.getFirst();
+        InsnList entry = new InsnList();
+        entry.add(new VarInsnNode(Opcodes.ALOAD, 3));
+        entry.add(new MethodInsnNode(
+                Opcodes.INVOKEVIRTUAL,
+                "org/objectweb/asm/Type",
+                "getClassName",
+                "()Ljava/lang/String;",
+                false));
+        entry.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        entry.add(new MethodInsnNode(
+                Opcodes.INVOKESTATIC,
+                HOOK,
+                "beginMixinProcess",
+                "(Ljava/lang/String;Ljava/lang/String;)V",
+                false));
+        target.instructions.insertBefore(first, entry);
+
         int patchedReturns = 0;
         for (AbstractInsnNode insn = target.instructions.getFirst(); insn != null; ) {
             AbstractInsnNode next = insn.getNext();
             if (insn.getOpcode() == Opcodes.IRETURN) {
-                InsnList before = new InsnList();
-                // Existing boolean return value stays on the stack. Resolve the class name using the
-                // target module's own ASM Type, then let the hook observe and return the same boolean.
-                before.add(new VarInsnNode(Opcodes.ALOAD, 3));
-                before.add(new MethodInsnNode(
-                        Opcodes.INVOKEVIRTUAL,
-                        "org/objectweb/asm/Type",
-                        "getClassName",
-                        "()Ljava/lang/String;",
-                        false));
-                before.add(new VarInsnNode(Opcodes.ALOAD, 4));
-                before.add(new MethodInsnNode(
+                // Existing boolean return value remains on the stack. The hook consumes and returns
+                // the same boolean while pairing it with the entry context held in a ThreadLocal stack.
+                target.instructions.insertBefore(insn, new MethodInsnNode(
                         Opcodes.INVOKESTATIC,
                         HOOK,
                         "recordMixinResult",
-                        "(ZLjava/lang/String;Ljava/lang/String;)Z",
+                        "(Z)Z",
                         false));
-                target.instructions.insertBefore(insn, before);
                 patchedReturns++;
             }
             insn = next;
