@@ -1,9 +1,7 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
-import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import dev.wachipayox.bootoptim.profiling.client.BlockGeometryMaterialCacheBridge;
 import dev.wachipayox.bootoptim.profiling.client.ModelElementResidualProfiler;
-import dev.wachipayox.bootoptim.profiling.client.ShortScopeMaterialCacheExperiment;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.BlockElement;
 import net.minecraft.client.renderer.block.model.BlockElementFace;
@@ -27,22 +25,6 @@ import java.util.function.Function;
 /** Diagnostic-only timing of NeoForge's vanilla-elements geometry path. */
 @Mixin(ElementsModel.class)
 abstract class ElementsModelResidualProfilingMixin {
-    @WrapMethod(method = "addQuads")
-    private void bootoptim$shortScopeMaterialCache(
-            IGeometryBakingContext context,
-            IModelBuilder<?> modelBuilder,
-            ModelBaker baker,
-            Function<Material, TextureAtlasSprite> spriteGetter,
-            ModelState modelState,
-            Operation<Void> original) {
-        ShortScopeMaterialCacheExperiment.beginElements();
-        try {
-            original.call(context, modelBuilder, baker, spriteGetter, modelState);
-        } finally {
-            ShortScopeMaterialCacheExperiment.endScope();
-        }
-    }
-
     @Inject(method = "addQuads", at = @At("HEAD"))
     private void bootoptim$beginElements(
             IGeometryBakingContext context,
@@ -71,7 +53,10 @@ abstract class ElementsModelResidualProfilingMixin {
                     value = "INVOKE",
                     target = "Lnet/neoforged/neoforge/client/model/geometry/IGeometryBakingContext;getMaterial(Ljava/lang/String;)Lnet/minecraft/client/resources/model/Material;"))
     private Material bootoptim$cacheElementMaterial(IGeometryBakingContext context, String name) {
-        return ShortScopeMaterialCacheExperiment.resolve(context, name);
+        if (context instanceof BlockGeometryMaterialCacheBridge cache) {
+            return cache.bootoptim$getCachedMaterial(name);
+        }
+        return context.getMaterial(name);
     }
 
     @Redirect(
