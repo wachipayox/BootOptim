@@ -19,6 +19,7 @@ public final class TailRuntime {
 
     private static final ThreadLocal<Map<Key, Boolean>> MIXIN_RESULTS = ThreadLocal.withInitial(HashMap::new);
     private static final ThreadLocal<ArrayDeque<Key>> MIXIN_CONTEXTS = ThreadLocal.withInitial(ArrayDeque::new);
+    private static final ThreadLocal<ArrayDeque<TransformContext>> TRANSFORM_CONTEXTS = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<ArrayDeque<TimingFrame>> ACCEPT_STACK = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<ArrayDeque<TimingFrame>> BYTES_STACK = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<Integer> SELECTED_ACTIVE_DEPTH = ThreadLocal.withInitial(() -> 0);
@@ -40,11 +41,7 @@ public final class TailRuntime {
     private TailRuntime() {
     }
 
-    /**
-     * Captures Mixin's target identity at method entry, while all original argument locals are
-     * verifier-live. Some return stack-map frames in Mixin 0.8.7 deliberately mark the now-dead
-     * {@code reason} argument as TOP, so return hooks must not reload it.
-     */
+    /** Captures Mixin target identity at method entry while all original argument locals are verifier-live. */
     public static void beginMixinProcess(String className, String reason) {
         MIXIN_CONTEXTS.get().addLast(new Key(className, reason));
     }
@@ -65,9 +62,29 @@ public final class TailRuntime {
         return transformed;
     }
 
+    /** Captures ClassTransformer arguments at method entry, before later stack-map frames can drop them. */
+    public static void beginClassTransform(String className, int inputBytes, String reason) {
+        TRANSFORM_CONTEXTS.get().addLast(new TransformContext(className, reason, inputBytes));
+    }
+
+    /** Captures final merged flags at their original load site immediately before writer construction. */
+    public static void setClassTransformFlags(int flags) {
+        currentTransform().flags = flags;
+    }
+
+    /** Pops the per-transform context immediately before every original ARETURN. */
+    public static void endClassTransform() {
+        ArrayDeque<TransformContext> contexts = TRANSFORM_CONTEXTS.get();
+        contexts.removeLast();
+        if (contexts.isEmpty()) {
+            TRANSFORM_CONTEXTS.remove();
+        }
+    }
+
     /** Called immediately before the original ClassNode.accept(ClassWriter). */
-    public static void beginAccept(String className, int flags, int inputBytes, String reason) {
-        boolean selected = Boolean.TRUE.equals(MIXIN_RESULTS.get().get(new Key(className, reason)));
+    public static void beginAccept() {
+        TransformContext context = currentTransform();
+        boolean selected = Boolean.TRUE.equals(MIXIN_RESULTS.get().get(context.key()));
         int activeDepth = SELECTED_ACTIVE_DEPTH.get();
         boolean aggregate = selected && activeDepth == 0;
         if (selected) {
@@ -76,8 +93,7 @@ public final class TailRuntime {
                 NESTED_SELECTED_SKIPPED.increment();
             }
         }
-        ACCEPT_STACK.get().addLast(new TimingFrame(
-                className, flags, inputBytes, reason, selected, aggregate, System.nanoTime()));
+        ACCEPT_STACK.get().addLast(new TimingFrame(context, selected, aggregate, System.nanoTime()));
     }
 
     /** Called immediately after the original ClassNode.accept(ClassWriter). */
@@ -89,21 +105,22 @@ public final class TailRuntime {
             SELECTED_ACTIVE_DEPTH.set(Math.max(0, SELECTED_ACTIVE_DEPTH.get() - 1));
         }
         if (frame.aggregate) {
+            TransformContext context = frame.context;
             ACCEPT_CALLS.increment();
             ACCEPT_NANOS.add(elapsed);
-            INPUT_BYTES.add(frame.inputBytes);
+            INPUT_BYTES.add(context.inputBytes);
             MAX_ACCEPT_NANOS.accumulateAndGet(elapsed, Math::max);
 
-            ClassStats stats = BY_CLASS.computeIfAbsent(frame.className, ignored -> new ClassStats());
+            ClassStats stats = BY_CLASS.computeIfAbsent(context.className, ignored -> new ClassStats());
             stats.acceptCalls.increment();
             stats.acceptNanos.add(elapsed);
-            stats.inputBytes.add(frame.inputBytes);
-            stats.lastFlags = frame.flags;
+            stats.inputBytes.add(context.inputBytes);
+            stats.lastFlags = context.flags;
 
-            FlagStats flags = BY_FLAGS.computeIfAbsent(frame.flags, ignored -> new FlagStats());
+            FlagStats flags = BY_FLAGS.computeIfAbsent(context.flags, ignored -> new FlagStats());
             flags.acceptCalls.increment();
             flags.acceptNanos.add(elapsed);
-            flags.inputBytes.add(frame.inputBytes);
+            flags.inputBytes.add(context.inputBytes);
         }
         if (stack.isEmpty()) {
             ACCEPT_STACK.remove();
@@ -111,8 +128,9 @@ public final class TailRuntime {
     }
 
     /** Called immediately before the original ClassWriter.toByteArray(). */
-    public static void beginToByteArray(String className, int flags, int inputBytes, String reason) {
-        boolean selected = Boolean.TRUE.equals(MIXIN_RESULTS.get().get(new Key(className, reason)));
+    public static void beginToByteArray() {
+        TransformContext context = currentTransform();
+        boolean selected = Boolean.TRUE.equals(MIXIN_RESULTS.get().get(context.key()));
         int activeDepth = SELECTED_ACTIVE_DEPTH.get();
         boolean aggregate = selected && activeDepth == 0;
         if (selected) {
@@ -121,8 +139,7 @@ public final class TailRuntime {
                 NESTED_SELECTED_SKIPPED.increment();
             }
         }
-        BYTES_STACK.get().addLast(new TimingFrame(
-                className, flags, inputBytes, reason, selected, aggregate, System.nanoTime()));
+        BYTES_STACK.get().addLast(new TimingFrame(context, selected, aggregate, System.nanoTime()));
     }
 
     /** Called immediately after the original ClassWriter.toByteArray(), with the produced array length. */
@@ -134,19 +151,20 @@ public final class TailRuntime {
             SELECTED_ACTIVE_DEPTH.set(Math.max(0, SELECTED_ACTIVE_DEPTH.get() - 1));
         }
         if (frame.aggregate) {
+            TransformContext context = frame.context;
             TO_BYTES_CALLS.increment();
             TO_BYTES_NANOS.add(elapsed);
             OUTPUT_BYTES.add(outputBytes);
             MAX_TO_BYTES_NANOS.accumulateAndGet(elapsed, Math::max);
 
-            ClassStats stats = BY_CLASS.computeIfAbsent(frame.className, ignored -> new ClassStats());
+            ClassStats stats = BY_CLASS.computeIfAbsent(context.className, ignored -> new ClassStats());
             stats.toBytesCalls.increment();
             stats.toBytesNanos.add(elapsed);
             stats.outputBytes.add(outputBytes);
             stats.lastOutputBytes = outputBytes;
-            stats.lastFlags = frame.flags;
+            stats.lastFlags = context.flags;
 
-            FlagStats flags = BY_FLAGS.computeIfAbsent(frame.flags, ignored -> new FlagStats());
+            FlagStats flags = BY_FLAGS.computeIfAbsent(context.flags, ignored -> new FlagStats());
             flags.toBytesCalls.increment();
             flags.toBytesNanos.add(elapsed);
             flags.outputBytes.add(outputBytes);
@@ -154,6 +172,14 @@ public final class TailRuntime {
         if (stack.isEmpty()) {
             BYTES_STACK.remove();
         }
+    }
+
+    private static TransformContext currentTransform() {
+        TransformContext context = TRANSFORM_CONTEXTS.get().peekLast();
+        if (context == null) {
+            throw new IllegalStateException("No active ClassTransformer context");
+        }
+        return context;
     }
 
     public static void report(String reason) {
@@ -249,11 +275,25 @@ public final class TailRuntime {
     private record Key(String className, String reason) {
     }
 
+    private static final class TransformContext {
+        private final String className;
+        private final String reason;
+        private final int inputBytes;
+        private int flags;
+
+        private TransformContext(String className, String reason, int inputBytes) {
+            this.className = className;
+            this.reason = reason;
+            this.inputBytes = inputBytes;
+        }
+
+        private Key key() {
+            return new Key(className, reason);
+        }
+    }
+
     private record TimingFrame(
-            String className,
-            int flags,
-            int inputBytes,
-            String reason,
+            TransformContext context,
             boolean selected,
             boolean aggregate,
             long startedNanos) {
