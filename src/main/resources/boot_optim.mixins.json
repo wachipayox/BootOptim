@@ -6,7 +6,8 @@
   "client": [
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.BlockStateModelLoaderIndexedVariantMixin"
   ],
   "injectors": {
     "defaultRequire": 0
