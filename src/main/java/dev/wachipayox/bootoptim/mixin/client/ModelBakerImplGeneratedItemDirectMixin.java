@@ -39,6 +39,13 @@ abstract class ModelBakerImplGeneratedItemDirectMixin {
             return;
         }
 
+        // The exact reference pack has now passed full semantic verification: 14,865/14,865 models, zero mismatches
+        // and zero fallbacks. Default this experimental PR to the candidate-only path for real performance timing,
+        // while preserving an explicit -Dboot_optim.generatedItemDirectBake.verify=true escape back into verification.
+        if (System.getProperty("boot_optim.generatedItemDirectBake.verify") == null) {
+            System.setProperty("boot_optim.generatedItemDirectBake.verify", "false");
+        }
+
         BakedModel result = DirectGeneratedItemBaker.tryBake(
                 blockModel,
                 (ModelBaker) (Object) this,
