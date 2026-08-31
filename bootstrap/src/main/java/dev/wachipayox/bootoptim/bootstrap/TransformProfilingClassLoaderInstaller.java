@@ -8,11 +8,14 @@ import cpw.mods.modlauncher.ModuleLayerHandler;
 import cpw.mods.modlauncher.TransformStore;
 import cpw.mods.modlauncher.TransformingClassLoader;
 import cpw.mods.modlauncher.api.IModuleLayerManager;
+import cpw.mods.modlauncher.serviceapi.ILaunchPluginService;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.objectweb.asm.ClassWriter;
@@ -70,11 +73,14 @@ final class TransformProfilingClassLoaderInstaller {
             Unsafe unsafe = unsafe();
             TransformStore store = (TransformStore) readField(unsafe, launcher, Launcher.class, "transformStore");
             ModuleLayerHandler layerHandler = (ModuleLayerHandler) readField(unsafe, launcher, Launcher.class, "moduleLayerHandler");
+            LaunchPluginHandler launchPlugins =
+                    (LaunchPluginHandler) readField(unsafe, launcher, Launcher.class, "launchPlugins");
             Class<?> handlerClass = Class.forName(HANDLER_NAME, false, Launcher.class.getClassLoader());
 
             verifyExpectedStructure(handlerClass);
             transformStore = store;
             TransformClassProfiler.initialize();
+            installPluginProfilers(unsafe, launchPlugins);
 
             MethodHandles.Lookup trusted = trustedLookup(unsafe).in(handlerClass);
             Class<?> bridgeClass;
@@ -101,7 +107,7 @@ final class TransformProfilingClassLoaderInstaller {
             writeField(unsafe, launcher, Launcher.class, "transformationServicesHandler", replacement);
 
             StartupDiagnostics.optimization("transform_class_profiler", true, "diagnostic_modlauncher_factory_hook");
-            StartupDiagnostics.event("TRANSFORM_PROFILE", "installer=active modlauncher=" + versionEvidence + " cache=false");
+            StartupDiagnostics.event("TRANSFORM_PROFILE", "installer=active modlauncher=" + versionEvidence + " cache=false nesting=true plugin_timing=true");
             return true;
         } catch (Throwable t) {
             transformStore = null;
@@ -110,6 +116,19 @@ final class TransformProfilingClassLoaderInstaller {
             System.out.println("BOOTOPTIM_TRANSFORM_PROFILE installer=failed type=" + t.getClass().getName());
             return false;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void installPluginProfilers(Unsafe unsafe, LaunchPluginHandler launchPlugins)
+            throws ReflectiveOperationException {
+        Map<String, ILaunchPluginService> plugins = (Map<String, ILaunchPluginService>)
+                readField(unsafe, launchPlugins, LaunchPluginHandler.class, "plugins");
+        ArrayList<String> names = new ArrayList<>(plugins.keySet());
+        names.sort(String::compareTo);
+        plugins.replaceAll((name, plugin) -> plugin instanceof ProfilingLaunchPluginService
+                ? plugin
+                : new ProfilingLaunchPluginService(plugin));
+        LaunchPluginProfiler.installed(names);
     }
 
     private static String identifySupportedModLauncher() {
@@ -140,6 +159,8 @@ final class TransformProfilingClassLoaderInstaller {
         }
         Launcher.class.getDeclaredField("transformStore");
         Launcher.class.getDeclaredField("moduleLayerHandler");
+        Launcher.class.getDeclaredField("launchPlugins");
+        LaunchPluginHandler.class.getDeclaredField("plugins");
 
         handlerClass.getDeclaredConstructor(TransformStore.class, ModuleLayerHandler.class);
         Method build = handlerClass.getDeclaredMethod(
