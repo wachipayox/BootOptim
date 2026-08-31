@@ -49,6 +49,24 @@ Then add the produced jar as a temporary JVM agent:
 -javaagent:/absolute/path/to/bootoptim-modlauncher-tail-agent-<version>.jar
 ```
 
+### Windows launcher note
+
+Some Minecraft launchers split a free-form JVM-arguments field before invoking `java`. A `-javaagent:` path containing spaces can therefore be broken into multiple JVM arguments before Java starts, which produces a pre-logging launch failure.
+
+For the real-pack diagnostic, use a temporary path with **no spaces** to remove launcher-specific quoting from the experiment. For example, copy the built jar to:
+
+```text
+C:\bootoptim-tail-agent.jar
+```
+
+and add exactly:
+
+```text
+-javaagent:C:\bootoptim-tail-agent.jar
+```
+
+Do not add a backslash before the colon in `-javaagent:`. Quoted paths may work with some launchers, but a no-space path is the required reference procedure because it is launcher-agnostic.
+
 Keep the normal BootOptim experimental bootstrap/mod jar in the pack as usual. The javaagent is separate and should only be used for this profiling experiment.
 
 Do not use this agent with other ModLauncher/Mixin versions; it fails closed when the code source does not match the supported runtime.
