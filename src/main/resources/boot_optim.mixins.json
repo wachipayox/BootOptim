@@ -5,9 +5,9 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "client.AtlasSetReloadSubphaseMixin",
+    "client.BlockModelBakeFaceResidualProfilingMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
     "client.ElementsModelResidualProfilingMixin",
-    "client.FaceBakeryGeneratedResidualProfilingMixin",
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ItemModelGeneratorResidualProfilingMixin",
     "client.ModelBakerImplResidualProfilingMixin",
@@ -15,8 +15,7 @@
     "client.ModelBakeryReloadSubphaseMixin",
     "client.ModelManagerReloadSubphaseMixin",
     "client.SimpleReloadInstanceResidualGateMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin",
-    "client.UnbakedGeometryHelperResidualProfilingMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
     "defaultRequire": 0
