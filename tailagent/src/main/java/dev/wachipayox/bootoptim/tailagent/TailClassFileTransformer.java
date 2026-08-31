@@ -98,8 +98,7 @@ final class TailClassFileTransformer implements ClassFileTransformer {
         }
 
         // Capture className/reason at method entry. In the stock 0.8.7 stack-map table these
-        // arguments become TOP at some later return frames once their original lifetime is over,
-        // so reloading them at IRETURN is verifier-invalid even though the Java source parameters exist.
+        // arguments become TOP at some later return frames once their original lifetime is over.
         AbstractInsnNode first = target.instructions.getFirst();
         InsnList entry = new InsnList();
         entry.add(new VarInsnNode(Opcodes.ALOAD, 3));
@@ -153,6 +152,22 @@ final class TailClassFileTransformer implements ClassFileTransformer {
             throw new IllegalStateException("Exact ClassTransformer.transform method not found");
         }
 
+        // Capture stable method arguments at entry. Later writer-tail stack-map frames are free to
+        // mark dead arguments as TOP, so timing hooks below intentionally load no original arguments.
+        AbstractInsnNode first = target.instructions.getFirst();
+        InsnList entry = new InsnList();
+        entry.add(new VarInsnNode(Opcodes.ALOAD, 2));
+        entry.add(new VarInsnNode(Opcodes.ALOAD, 1));
+        entry.add(new InsnNode(Opcodes.ARRAYLENGTH));
+        entry.add(new VarInsnNode(Opcodes.ALOAD, 3));
+        entry.add(new MethodInsnNode(
+                Opcodes.INVOKESTATIC,
+                HOOK,
+                "beginClassTransform",
+                "(Ljava/lang/String;ILjava/lang/String;)V",
+                false));
+        target.instructions.insertBefore(first, entry);
+
         MethodInsnNode writerFactory = null;
         for (AbstractInsnNode insn : target.instructions) {
             if (insn instanceof MethodInsnNode call
@@ -180,8 +195,17 @@ final class TailClassFileTransformer implements ClassFileTransformer {
         }
         int flagsLocal = flagsVar.var;
 
+        // Capture flags exactly where the original code is about to load them for writer construction,
+        // before their local-variable lifetime can end.
+        InsnList captureFlags = new InsnList();
+        captureFlags.add(new VarInsnNode(Opcodes.ILOAD, flagsLocal));
+        captureFlags.add(new MethodInsnNode(
+                Opcodes.INVOKESTATIC, HOOK, "setClassTransformFlags", "(I)V", false));
+        target.instructions.insertBefore(flagsLoad, captureFlags);
+
         int acceptCalls = 0;
         int toByteArrayCalls = 0;
+        int returns = 0;
         for (AbstractInsnNode insn = target.instructions.getFirst(); insn != null; ) {
             AbstractInsnNode next = insn.getNext();
             if (insn instanceof MethodInsnNode call
@@ -194,7 +218,8 @@ final class TailClassFileTransformer implements ClassFileTransformer {
                 if (writerLoad == null || classNodeLoad == null) {
                     throw new IllegalStateException("Unable to locate ClassNode.accept operand loads");
                 }
-                target.instructions.insertBefore(classNodeLoad, beginHook("beginAccept", flagsLocal));
+                target.instructions.insertBefore(classNodeLoad, new MethodInsnNode(
+                        Opcodes.INVOKESTATIC, HOOK, "beginAccept", "()V", false));
                 target.instructions.insert(call, new MethodInsnNode(
                         Opcodes.INVOKESTATIC, HOOK, "endAccept", "()V", false));
                 acceptCalls++;
@@ -207,7 +232,8 @@ final class TailClassFileTransformer implements ClassFileTransformer {
                 if (writerLoad == null) {
                     throw new IllegalStateException("Unable to locate ClassWriter.toByteArray operand load");
                 }
-                target.instructions.insertBefore(writerLoad, beginHook("beginToByteArray", flagsLocal));
+                target.instructions.insertBefore(writerLoad, new MethodInsnNode(
+                        Opcodes.INVOKESTATIC, HOOK, "beginToByteArray", "()V", false));
                 InsnList after = new InsnList();
                 // Preserve the exact byte[] result on the stack while passing only its cheap length to the hook.
                 after.add(new InsnNode(Opcodes.DUP));
@@ -216,6 +242,11 @@ final class TailClassFileTransformer implements ClassFileTransformer {
                         Opcodes.INVOKESTATIC, HOOK, "endToByteArray", "(I)V", false));
                 target.instructions.insert(call, after);
                 toByteArrayCalls++;
+            } else if (insn.getOpcode() == Opcodes.ARETURN) {
+                // Static void call leaves the original byte[] return value untouched on the operand stack.
+                target.instructions.insertBefore(insn, new MethodInsnNode(
+                        Opcodes.INVOKESTATIC, HOOK, "endClassTransform", "()V", false));
+                returns++;
             }
             insn = next;
         }
@@ -226,24 +257,10 @@ final class TailClassFileTransformer implements ClassFileTransformer {
         if (toByteArrayCalls < 1) {
             throw new IllegalStateException("No ClassWriter.toByteArray calls found");
         }
+        if (returns == 0) {
+            throw new IllegalStateException("No ARETURN instructions found in ClassTransformer.transform");
+        }
         return write(node);
-    }
-
-    private static InsnList beginHook(String name, int flagsLocal) {
-        InsnList hook = new InsnList();
-        // transform(byte[] inputClass, String className, String reason): locals 1,2,3 are stable arguments.
-        hook.add(new VarInsnNode(Opcodes.ALOAD, 2));
-        hook.add(new VarInsnNode(Opcodes.ILOAD, flagsLocal));
-        hook.add(new VarInsnNode(Opcodes.ALOAD, 1));
-        hook.add(new InsnNode(Opcodes.ARRAYLENGTH));
-        hook.add(new VarInsnNode(Opcodes.ALOAD, 3));
-        hook.add(new MethodInsnNode(
-                Opcodes.INVOKESTATIC,
-                HOOK,
-                name,
-                "(Ljava/lang/String;IILjava/lang/String;)V",
-                false));
-        return hook;
     }
 
     private static ClassNode read(byte[] input) {
@@ -255,7 +272,7 @@ final class TailClassFileTransformer implements ClassFileTransformer {
 
     private static byte[] write(ClassNode node) {
         // We add no branches and preserve the existing frame nodes. Recompute max stack only so the
-        // injected straight-line calls do not trigger ClassWriter hierarchy lookups while patching ModLauncher.
+        // injected straight-line calls do not trigger hierarchy lookups while patching bootstrap classes.
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         node.accept(writer);
         return writer.toByteArray();
