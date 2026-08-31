@@ -10,8 +10,8 @@ public final class ModLauncherTailAgent {
     public static void premain(String agentArgs, Instrumentation instrumentation) {
         System.out.println("BOOTOPTIM_MODLAUNCHER_TAIL agent=status_started");
         instrumentation.addTransformer(new TailClassFileTransformer(instrumentation), false);
-        Runtime.getRuntime().addShutdownHook(new Thread(
-                () -> TailRuntime.report("shutdown"),
-                "BootOptim ModLauncher Tail Reporter"));
+        // The shutdown reporter is registered by the helper after it is defined directly inside
+        // Mixin's module/classloader. Keeping runtime state there avoids cross-loader calls from
+        // instrumented ModLauncher classes back into the javaagent loader.
     }
 }
