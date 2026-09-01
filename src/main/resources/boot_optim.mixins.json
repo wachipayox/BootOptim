@@ -11,6 +11,7 @@
     "client.UnbakedGeometryHelperDecocraftReuseMixin",
     "client.ModelBakeryCompiledPlanProfilingMixin",
     "client.ElementsModelCompiledPlanProfilingMixin",
+    "client.ElementsModelCompiledPlanReuseProfilingMixin",
     "client.FaceBakeryCompiledPlanProfilingMixin",
     "client.ClientHooksCompiledPlanProfilingMixin",
     "client.BlockElementFaceCompiledPlanProfilingMixin"
