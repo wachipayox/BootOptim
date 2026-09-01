@@ -19,23 +19,25 @@ import java.util.function.Predicate;
 
 /**
  * Diagnostic-only namespace attribution for ResourceManager work executed inside a profiled resource context.
- * No calls outside the ModelManager/atlas contexts are timed.
+ * No calls outside the ModelManager/atlas contexts are timed or allocate timer state.
  */
 @Mixin(FallbackResourceManager.class)
 abstract class FallbackResourceManagerResourceDecompositionMixin {
     @Shadow @Final private String namespace;
 
-    @Unique private static final ThreadLocal<Long> bootoptim$listStart = ThreadLocal.withInitial(() -> -1L);
-    @Unique private static final ThreadLocal<Long> bootoptim$stackListStart = ThreadLocal.withInitial(() -> -1L);
-    @Unique private static final ThreadLocal<Long> bootoptim$getStart = ThreadLocal.withInitial(() -> -1L);
-    @Unique private static final ThreadLocal<Long> bootoptim$getStackStart = ThreadLocal.withInitial(() -> -1L);
+    @Unique private static final ThreadLocal<Long> bootoptim$listStart = new ThreadLocal<>();
+    @Unique private static final ThreadLocal<Long> bootoptim$stackListStart = new ThreadLocal<>();
+    @Unique private static final ThreadLocal<Long> bootoptim$getStart = new ThreadLocal<>();
+    @Unique private static final ThreadLocal<Long> bootoptim$getStackStart = new ThreadLocal<>();
 
     @Inject(method = "listResources", at = @At("HEAD"), require = 0)
     private void bootoptim$startListResources(
             String path,
             Predicate<ResourceLocation> filter,
             CallbackInfoReturnable<Map<ResourceLocation, Resource>> cir) {
-        bootoptim$listStart.set(ResourcePipelineProfiler.currentContext() == null ? -1L : ResourcePipelineProfiler.start());
+        if (ResourcePipelineProfiler.currentContext() != null) {
+            bootoptim$listStart.set(ResourcePipelineProfiler.start());
+        }
     }
 
     @Inject(method = "listResources", at = @At("RETURN"), require = 0)
@@ -43,7 +45,8 @@ abstract class FallbackResourceManagerResourceDecompositionMixin {
             String path,
             Predicate<ResourceLocation> filter,
             CallbackInfoReturnable<Map<ResourceLocation, Resource>> cir) {
-        long started = bootoptim$listStart.get();
+        Long started = bootoptim$listStart.get();
+        if (started == null) return;
         bootoptim$listStart.remove();
         Map<?, ?> result = cir.getReturnValue();
         ResourcePipelineProfiler.recordNamespace(
@@ -58,7 +61,9 @@ abstract class FallbackResourceManagerResourceDecompositionMixin {
             String path,
             Predicate<ResourceLocation> filter,
             CallbackInfoReturnable<Map<ResourceLocation, List<Resource>>> cir) {
-        bootoptim$stackListStart.set(ResourcePipelineProfiler.currentContext() == null ? -1L : ResourcePipelineProfiler.start());
+        if (ResourcePipelineProfiler.currentContext() != null) {
+            bootoptim$stackListStart.set(ResourcePipelineProfiler.start());
+        }
     }
 
     @Inject(method = "listResourceStacks", at = @At("RETURN"), require = 0)
@@ -66,7 +71,8 @@ abstract class FallbackResourceManagerResourceDecompositionMixin {
             String path,
             Predicate<ResourceLocation> filter,
             CallbackInfoReturnable<Map<ResourceLocation, List<Resource>>> cir) {
-        long started = bootoptim$stackListStart.get();
+        Long started = bootoptim$stackListStart.get();
+        if (started == null) return;
         bootoptim$stackListStart.remove();
         Map<?, ?> result = cir.getReturnValue();
         ResourcePipelineProfiler.recordNamespace(
@@ -80,14 +86,17 @@ abstract class FallbackResourceManagerResourceDecompositionMixin {
     private void bootoptim$startGetResource(
             ResourceLocation id,
             CallbackInfoReturnable<Optional<Resource>> cir) {
-        bootoptim$getStart.set(ResourcePipelineProfiler.currentContext() == null ? -1L : ResourcePipelineProfiler.start());
+        if (ResourcePipelineProfiler.currentContext() != null) {
+            bootoptim$getStart.set(ResourcePipelineProfiler.start());
+        }
     }
 
     @Inject(method = "getResource", at = @At("RETURN"), require = 0)
     private void bootoptim$endGetResource(
             ResourceLocation id,
             CallbackInfoReturnable<Optional<Resource>> cir) {
-        long started = bootoptim$getStart.get();
+        Long started = bootoptim$getStart.get();
+        if (started == null) return;
         bootoptim$getStart.remove();
         Optional<?> result = cir.getReturnValue();
         ResourcePipelineProfiler.recordNamespace(
@@ -101,14 +110,17 @@ abstract class FallbackResourceManagerResourceDecompositionMixin {
     private void bootoptim$startGetResourceStack(
             ResourceLocation id,
             CallbackInfoReturnable<List<Resource>> cir) {
-        bootoptim$getStackStart.set(ResourcePipelineProfiler.currentContext() == null ? -1L : ResourcePipelineProfiler.start());
+        if (ResourcePipelineProfiler.currentContext() != null) {
+            bootoptim$getStackStart.set(ResourcePipelineProfiler.start());
+        }
     }
 
     @Inject(method = "getResourceStack", at = @At("RETURN"), require = 0)
     private void bootoptim$endGetResourceStack(
             ResourceLocation id,
             CallbackInfoReturnable<List<Resource>> cir) {
-        long started = bootoptim$getStackStart.get();
+        Long started = bootoptim$getStackStart.get();
+        if (started == null) return;
         bootoptim$getStackStart.remove();
         List<?> result = cir.getReturnValue();
         ResourcePipelineProfiler.recordNamespace(
