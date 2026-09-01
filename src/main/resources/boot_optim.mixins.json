@@ -8,6 +8,9 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
+    "client.NativeImageAtlasDecodeMixin",
+    "client.ResourceAtlasDecodeMixin",
+    "client.SpriteLoaderAtlasDecodeMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
