@@ -27,8 +27,13 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
-            Minecraft.getInstance().stop();
+        if (StartupProfiler.markMainMenu()) {
+            // The startup marker above is the time-to-menu boundary. Dumping the diagnostic aggregation
+            // after it keeps profiler formatting/registry resolution out of the measured startup wall.
+            VoxelShapeStartupProfiler.finishAndDump();
+            if (StartupProfiler.shouldExitOnTitle()) {
+                Minecraft.getInstance().stop();
+            }
         }
     }
 }
