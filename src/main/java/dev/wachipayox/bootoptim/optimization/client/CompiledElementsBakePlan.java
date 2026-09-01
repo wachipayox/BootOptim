@@ -140,8 +140,7 @@ public final class CompiledElementsBakePlan {
     }
 
     /**
-     * Bakes the planned traversal into {@code modelBuilder}. Returns false before writing any quad when
-     * structural assumptions no longer hold, allowing the caller to fail open to stock.
+     * Safe candidate path. Returns false before writing any quad when structural assumptions no longer hold.
      */
     public boolean bake(
             IGeometryBakingContext context,
@@ -152,7 +151,21 @@ public final class CompiledElementsBakePlan {
         if (!validateLiveStructure()) {
             return false;
         }
+        bakeTrusted(context, modelBuilder, baker, spriteGetter, modelState);
+        return true;
+    }
 
+    /**
+     * Verification-only performance ceiling. This assumes the element/face structure is immutable after plan
+     * compilation and intentionally skips the live identity pass. The stock verifier remains authoritative and
+     * will report any semantic disagreement. This method is not the production candidate.
+     */
+    public void bakeTrusted(
+            IGeometryBakingContext context,
+            IModelBuilder<?> modelBuilder,
+            ModelBaker baker,
+            Function<Material, TextureAtlasSprite> spriteGetter,
+            ModelState modelState) {
         Transformation rootTransform = context.getRootTransform();
         if (!rootTransform.isIdentity()) {
             modelState = UnbakedGeometryHelper.composeRootTransformIntoModelState(modelState, rootTransform);
@@ -172,7 +185,6 @@ public final class CompiledElementsBakePlan {
                 modelBuilder.addCulledFace(modelState.getRotation().rotateTransform(cull), quad);
             }
         }
-        return true;
     }
 
     private boolean validateLiveStructure() {
