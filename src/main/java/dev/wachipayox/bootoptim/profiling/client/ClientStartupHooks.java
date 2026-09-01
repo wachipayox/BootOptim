@@ -27,7 +27,11 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        boolean firstMainMenu = StartupProfiler.markMainMenu();
+        if (firstMainMenu) {
+            AtlasDecodeProfiler.dump();
+        }
+        if (firstMainMenu && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
     }
