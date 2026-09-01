@@ -174,6 +174,7 @@ public final class VoxelShapeStartupProfiler {
             phaseStats.joinSamples.increment();
             phaseStats.joinSampleTaskNanos.add(elapsed);
             if (cpuElapsed >= 0L) {
+                phaseStats.joinCpuSamples.increment();
                 phaseStats.joinSampleCpuNanos.add(cpuElapsed);
             }
 
@@ -337,29 +338,32 @@ public final class VoxelShapeStartupProfiler {
             long calls = stats.joinCalls.sum();
             long taskNanos = stats.joinTaskNanos.sum();
             long sampleCalls = stats.joinSamples.sum();
+            long cpuSamples = stats.joinCpuSamples.sum();
+            long sampleTaskNanos = stats.joinSampleTaskNanos.sum();
             long sampleCpuNanos = stats.joinSampleCpuNanos.sum();
             long wallMs = stats.wallMs.sum();
-            double cpuEstimateMs = sampleCalls == 0L || sampleCpuNanos == 0L
+            double sampleCpuToTaskRatio = cpuSamples == 0L || sampleTaskNanos == 0L
                     ? -1.0D
-                    : millis(sampleCpuNanos) * JOIN_SAMPLE_INTERVAL;
+                    : (double) sampleCpuNanos / (double) sampleTaskNanos;
             double wallCeilingMs = Math.min(millis(taskNanos), wallMs);
 
             System.out.printf(
                     Locale.ROOT,
                     "BOOTOPTIM_VOXEL_SHAPES kind=phase phase=%s wall_ms=%d join_calls_exact=%d "
-                            + "join_task_sum_ms=%.3f join_task_max_ms=%.3f join_samples=%d "
-                            + "join_sample_task_sum_ms=%.3f join_sample_cpu_ms=%.3f join_cpu_estimate_ms=%.3f "
+                            + "join_task_sum_ms=%.3f join_task_max_ms=%.3f join_samples=%d join_cpu_samples=%d "
+                            + "join_sample_task_sum_ms=%.3f join_sample_cpu_ms=%.3f join_sample_cpu_to_task_ratio=%.4f "
                             + "bitset_ctor_calls_exact=%d critical_wall_ceiling_ms=%.3f "
-                            + "task_sum_is_not_wall=true cpu_is_sampled_estimate=true%n",
+                            + "task_sum_is_not_wall=true cpu_metric=sample_only_no_total_estimate%n",
                     phase.token,
                     wallMs,
                     calls,
                     millis(taskNanos),
                     millis(stats.joinMaxNanos.get()),
                     sampleCalls,
-                    millis(stats.joinSampleTaskNanos.sum()),
+                    cpuSamples,
+                    millis(sampleTaskNanos),
                     millis(sampleCpuNanos),
-                    cpuEstimateMs,
+                    sampleCpuToTaskRatio,
                     stats.bitSetConstructors.sum(),
                     wallCeilingMs);
         }
@@ -424,15 +428,15 @@ public final class VoxelShapeStartupProfiler {
             SiteStats stats = entry.getValue();
             long samples = stats.samples.sum();
             int interval = key.operation.equals("join") ? JOIN_SAMPLE_INTERVAL : BITSET_SAMPLE_INTERVAL;
-            long estimatedCalls = samples * (long) interval;
             String namespaceHint = namespaces.hint(key.callerClass);
 
             System.out.printf(
                     Locale.ROOT,
                     "BOOTOPTIM_VOXEL_SHAPES kind=site rank=%d operation=%s phase=%s caller=%s method=%s "
-                            + "line=%d namespace_hint=%s tuple=%s samples=%d estimated_calls=%d "
+                            + "line=%d namespace_hint=%s tuple=%s samples=%d "
                             + "sample_task_sum_ms=%.3f sample_cpu_ms=%.3f sample_max_ms=%.3f "
-                            + "result_same_first=%d result_same_second=%d sampling=first_plus_1_in_%d%n",
+                            + "result_same_first=%d result_same_second=%d sampling=first_plus_1_in_%d "
+                            + "call_count=sample_only_no_extrapolation%n",
                     siteRank,
                     key.operation,
                     key.phase.token,
@@ -442,7 +446,6 @@ public final class VoxelShapeStartupProfiler {
                     token(namespaceHint),
                     token(key.tuple),
                     samples,
-                    estimatedCalls,
                     millis(stats.sampleTaskNanos.sum()),
                     millis(stats.sampleCpuNanos.sum()),
                     millis(stats.maxTaskNanos.get()),
@@ -453,7 +456,8 @@ public final class VoxelShapeStartupProfiler {
 
         System.out.println(
                 "BOOTOPTIM_VOXEL_SHAPES event=interpretation exact=phase_counts+source_tuple_counts "
-                        + "sampled=call_sites+cpu result_hash=identity_only structural_hash=omitted "
+                        + "sampled=call_sites+cpu site_call_count=no_extrapolation cpu_total=no_extrapolation "
+                        + "result_hash=identity_only structural_hash=omitted "
                         + "reason=no_cheap_stable_structural_hash wall_claim=ceiling_not_recoverable");
     }
 
@@ -681,6 +685,7 @@ public final class VoxelShapeStartupProfiler {
         private final LongAdder joinTaskNanos = new LongAdder();
         private final LongAccumulator joinMaxNanos = new LongAccumulator(Long::max, 0L);
         private final LongAdder joinSamples = new LongAdder();
+        private final LongAdder joinCpuSamples = new LongAdder();
         private final LongAdder joinSampleTaskNanos = new LongAdder();
         private final LongAdder joinSampleCpuNanos = new LongAdder();
         private final LongAdder bitSetConstructors = new LongAdder();

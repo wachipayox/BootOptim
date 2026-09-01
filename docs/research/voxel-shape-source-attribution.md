@@ -132,7 +132,11 @@ The profiler intentionally reports several different quantities instead of colla
 
 ### Sampled CPU
 
-`join_sample_cpu_ms` is the CPU time of sampled calls on the executing threads, when thread CPU time is enabled. `join_cpu_estimate_ms` multiplies the sample by the configured interval and is explicitly an estimate. It is useful for distinguishing CPU-heavy joins from wall-heavy/waiting scopes, not for claiming a precise saved duration.
+`join_sample_cpu_ms` is the CPU time of the same sampled calls represented by `join_sample_task_sum_ms`, when thread CPU time is enabled. `join_sample_cpu_to_task_ratio` compares those two sampled quantities only.
+
+There is deliberately **no total CPU extrapolation**. The sampler includes the first call on each thread plus periodic 1-in-N calls, so multiplying sampled CPU or sampled site counts by N is not an unbiased estimator and can amplify a rare long call. Startup CI exposed exactly that failure mode in the first implementation: a naive extrapolation produced ~`4.99 s` of estimated CPU from samples while exact join task-sum was only ~`270.9 ms`. That field was removed rather than relabeled.
+
+Similarly, call-site rows report sampled counts only; they do not multiply sample counts into an estimated total. Exact repetition claims come from phase totals and source-specific tuple counters.
 
 ### Phase wall
 
@@ -174,7 +178,9 @@ Startup CI must reach the semantic main-menu marker with no BootOptim mixin fail
 - at least one exact source row from wall / cross-collision / per-state table builders
 - the interpretation marker that labels exact vs sampled metrics
 
-**Exact-pack run instructions are intentionally not recorded here yet.** They should be supplied only after the CI gate above proves this artifact can produce the required attribution on the vanilla benchmark.
+The first Startup CI execution passed this attribution gate and demonstrated the shape of the output on the small vanilla benchmark. It observed `90,282` exact joins, `83,887` exact bitset constructions, zero site/source overflows, and a strongly concentrated vanilla `WallBlock.makeShapes` source. Those values are **CI evidence only**, not exact-pack evidence and not a production optimization result.
+
+Exact-pack instructions remain withheld until the corrected metric semantics above also pass Build + Startup CI on the final diagnostic head.
 
 ## Decision rules after exact-pack evidence
 
