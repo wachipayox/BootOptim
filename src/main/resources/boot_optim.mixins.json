@@ -14,7 +14,11 @@
     "client.AtlasSetReloadSubphaseMixin",
     "client.ModelBakeryCampaignSubphaseMixin",
     "client.ElementsModelCampaignProfilingMixin",
-    "client.DirectGeneratedItemBakerCampaignProfilingMixin"
+    "client.DirectGeneratedItemBakerCampaignProfilingMixin",
+    "client.ModelManagerResourceDecompositionMixin",
+    "client.SpriteSourceListResourceDecompositionMixin",
+    "client.SpriteLoaderResourceDecompositionMixin",
+    "client.FallbackResourceManagerResourceDecompositionMixin"
   ],
   "injectors": {
     "defaultRequire": 0
