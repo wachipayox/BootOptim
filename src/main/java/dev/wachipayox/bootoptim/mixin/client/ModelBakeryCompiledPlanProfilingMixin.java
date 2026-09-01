@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.profiling.client.CompiledElementsFlightRecorder;
 import dev.wachipayox.bootoptim.profiling.client.CompiledElementsProfiler;
+import dev.wachipayox.bootoptim.profiling.client.CompiledElementsReuseProfiler;
 import net.minecraft.client.resources.model.ModelBakery;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,12 +15,14 @@ abstract class ModelBakeryCompiledPlanProfilingMixin {
     @Inject(method = "bakeModels", at = @At("HEAD"), require = 0)
     private void bootoptim$beginCompiledElementsProfile(CallbackInfo ci) {
         CompiledElementsFlightRecorder.start();
+        CompiledElementsReuseProfiler.begin();
         CompiledElementsProfiler.begin();
     }
 
     @Inject(method = "bakeModels", at = @At("RETURN"), require = 0)
     private void bootoptim$finishCompiledElementsProfile(CallbackInfo ci) {
         CompiledElementsProfiler.finish();
+        CompiledElementsReuseProfiler.finish();
         CompiledElementsFlightRecorder.finish();
     }
 }
