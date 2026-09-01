@@ -10,7 +10,7 @@ The transformation path must be treated as separate layers:
 2. Mixin apply work inside `MixinTransformationHandler.processClassWithFlags`.
 3. ModLauncher ASM writing after Mixin returns, including `ClassNode.accept(TransformerClassWriter)` and `ClassWriter.toByteArray()`.
 
-Earlier timing of Mixin's callback did **not** include layer 3. PR #48 exists specifically to measure that external writer tail.
+Earlier timing of Mixin's callback did **not** include layer 3. PR #48 measured that external writer tail and closed it as a standalone target.
 
 ## PR #41 / #42 — Mixin callback profiling
 
@@ -83,8 +83,18 @@ Do not reopen based only on the existence of the upstream bug.
 
 ## PR #48 — ModLauncher ASM write tail
 
-**Status: ACTIVE DIAGNOSTIC**
+**Status: REJECTED as a standalone startup target; diagnostic completed**
 
-PR #48 instruments the exact post-Mixin calls to `ClassNode.accept(ClassWriter)` and `ClassWriter.toByteArray()` using a standalone javaagent. It groups rewritten classes by final flags and reports total/tops for accept, serialization, bytes and classes.
+PR #48 instrumented the exact post-Mixin calls to `ClassNode.accept(ClassWriter)` and `ClassWriter.toByteArray()` using a standalone version-gated javaagent. The exact-pack Windows / Java 25 warm run resolved the uncertainty:
 
-This experiment is intentionally separate from #46 so ClassInfo probe overhead cannot contaminate fine writer timings. A real-pack measurement is still required.
+- Mixin rewrite / selected classes: `1,199`
+- `ClassNode.accept`: **`734.650 ms`** across 1,199 calls
+- `ClassWriter.toByteArray`: **`26.084 ms`** across 1,199 calls
+- total external ASM writer tail: **`760.734 ms`**
+- startup to main menu in that run: `70.611 s`
+
+`ClassNode.accept` accounts for about 96.6% of this external writer tail; byte serialization is negligible. The result proves that the previously measured Mixin rewrite time was **not** hiding another multi-second post-Mixin frame-writing/serialization tail.
+
+Conclusion: ~`760.734 ms` is real work but below BootOptim's leverage threshold as an isolated target. PR #48 was closed without merge. Do not reclassify this path as active diagnostic or optimize `ClassWriter.toByteArray()` as though a large hidden tail remained.
+
+A materially different future architecture, such as persistent reuse of already transformed classes, may incidentally avoid some of this work, but #48 itself remains a rejected standalone target and does not justify invasive ModLauncher/ASM patching.

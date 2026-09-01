@@ -1,0 +1,16 @@
+Source: JMC text export `13-gc-pauses.txt` supplied 2026-09-01.
+Preservation: GC pause summary values used by BootOptim research; not the complete raw file.
+
+Metric       Value
+Total Pause  11.6 s
+Number       131
+Minimum      0.0231 ms
+Median       72.1 ms
+Average      88.5 ms
+P90          219 ms
+P95          245 ms
+P99          669 ms
+P99.9        573 ms
+Maximum      573 ms
+
+Important export anomaly: the reported P99 (`669 ms`) is greater than the reported Maximum (`573 ms`). Treat this as a JMC/export percentile inconsistency. BootOptim decisions should use total pause time and the raw per-GC rows rather than the inconsistent P99 value.

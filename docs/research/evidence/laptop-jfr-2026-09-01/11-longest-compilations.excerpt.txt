@@ -1,0 +1,28 @@
+Source: JMC text export `11-longest-compilations.txt` supplied 2026-09-01.
+Preservation: leading/important rows used by BootOptim research; not the complete raw file.
+
+Duration Method
+7,51 s  net.minecraft.world.level.block.WallBlock.makeShapes(float, float, float, float, float, float)
+2,33 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+2,02 s  org.spongepowered.asm.util.Locals.getLocalsAt(ClassNode, MethodNode, AbstractInsnNode, Locals$Settings)
+2,00 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+1,94 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int) [compilation failed]
+1,84 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+1,76 s  org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.apply(SortedSet)
+1,57 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+1,43 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+1,41 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+1,39 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+1,34 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+1,34 s  org.spongepowered.asm.mixin.transformer.ClassInfo.<init>(ClassNode)
+1,29 s  org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.applyMixin(...)
+1,27 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+1,27 s  org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.applyMixin(...)
+1,21 s  org.objectweb.asm.ClassReader.readCode(MethodVisitor, Context, int)
+1,21 s  org.spongepowered.asm.mixin.transformer.MixinApplicatorStandard.applyMixin(...)
+1,16 s  net.minecraft.client.resources.model.BlockStateModelLoader.lambda$loadBlockStateDefinitions$8(...)
+1,04 s  net.minecraft.client.renderer.block.model.MultiVariant.bake(...)
+992 ms  com.electronwill.nightconfig.toml.TableWriter.writeWithHeader(...)
+990 ms  it.unimi.dsi.fastutil.objects.ObjectOpenCustomHashSet.addOrGet(Object)
+979 ms  cpw.mods.cl.ModuleClassLoader.loadClass(String, boolean)
+929 ms  cpw.mods.niofs.union.UnionFileSystem.newDirStream(...)
