@@ -27,9 +27,11 @@ import java.util.concurrent.Executor;
 abstract class ModelManagerResourceDecompositionMixin {
     @Unique private static final ThreadLocal<Long> bootoptim$modelEnumStart = ThreadLocal.withInitial(() -> -1L);
     @Unique private static final ThreadLocal<Long> bootoptim$modelScheduleStart = ThreadLocal.withInitial(() -> -1L);
+    @Unique private static final ThreadLocal<Long> bootoptim$modelCollectStart = ThreadLocal.withInitial(() -> -1L);
     @Unique private static final ThreadLocal<Long> bootoptim$modelTaskStart = ThreadLocal.withInitial(() -> -1L);
     @Unique private static final ThreadLocal<Long> bootoptim$stateEnumStart = ThreadLocal.withInitial(() -> -1L);
     @Unique private static final ThreadLocal<Long> bootoptim$stateScheduleStart = ThreadLocal.withInitial(() -> -1L);
+    @Unique private static final ThreadLocal<Long> bootoptim$stateCollectStart = ThreadLocal.withInitial(() -> -1L);
     @Unique private static final ThreadLocal<Long> bootoptim$stateTaskStart = ThreadLocal.withInitial(() -> -1L);
     @Unique private static final ThreadLocal<ResourceLocation> bootoptim$currentStateId = new ThreadLocal<>();
     @Unique private static final ThreadLocal<Resource> bootoptim$currentStateResource = new ThreadLocal<>();
@@ -104,14 +106,14 @@ abstract class ModelManagerResourceDecompositionMixin {
     @Inject(method = "lambda$loadBlockModels$9", at = @At("HEAD"), require = 0)
     private static void bootoptim$startModelCollect(List<?> values, CallbackInfoReturnable<?> cir) {
         if (ResourcePipelineProfiler.enabled()) {
-            bootoptim$modelScheduleStart.set(ResourcePipelineProfiler.start());
+            bootoptim$modelCollectStart.set(ResourcePipelineProfiler.start());
         }
     }
 
     @Inject(method = "lambda$loadBlockModels$9", at = @At("RETURN"), require = 0)
     private static void bootoptim$endModelCollect(List<?> values, CallbackInfoReturnable<?> cir) {
-        long started = bootoptim$modelScheduleStart.get();
-        bootoptim$modelScheduleStart.remove();
+        long started = bootoptim$modelCollectStart.get();
+        bootoptim$modelCollectStart.remove();
         ResourcePipelineProfiler.recordWallScope("block_models.collect_map", started, values == null ? -1L : values.size());
     }
 
@@ -211,14 +213,14 @@ abstract class ModelManagerResourceDecompositionMixin {
     @Inject(method = "lambda$loadBlockStates$13", at = @At("HEAD"), require = 0)
     private static void bootoptim$startStateCollect(List<?> values, CallbackInfoReturnable<?> cir) {
         if (ResourcePipelineProfiler.enabled()) {
-            bootoptim$stateScheduleStart.set(ResourcePipelineProfiler.start());
+            bootoptim$stateCollectStart.set(ResourcePipelineProfiler.start());
         }
     }
 
     @Inject(method = "lambda$loadBlockStates$13", at = @At("RETURN"), require = 0)
     private static void bootoptim$endStateCollect(List<?> values, CallbackInfoReturnable<?> cir) {
-        long started = bootoptim$stateScheduleStart.get();
-        bootoptim$stateScheduleStart.remove();
+        long started = bootoptim$stateCollectStart.get();
+        bootoptim$stateCollectStart.remove();
         ResourcePipelineProfiler.recordWallScope("block_states.collect_map", started, values == null ? -1L : values.size());
     }
 }
