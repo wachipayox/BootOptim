@@ -36,7 +36,9 @@ public final class ResourcePipelineProfiler {
     private static final ConcurrentHashMap<StatKey, Stat> PACKS = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<StatKey, Stat> NAMESPACES = new ConcurrentHashMap<>();
     private static final Map<Object, String> ATLAS_LIST_IDS = Collections.synchronizedMap(new WeakHashMap<>());
-    private static final ThreadLocal<ArrayDeque<String>> CONTEXT = ThreadLocal.withInitial(ArrayDeque::new);
+    // Do not use withInitial here. FallbackResourceManager probes call currentContext() very often;
+    // an absent context must stay allocation-free for unrelated resource traffic.
+    private static final ThreadLocal<ArrayDeque<String>> CONTEXT = new ThreadLocal<>();
     private static final PriorityQueue<SlowResource> SLOW_RESOURCES =
             new PriorityQueue<>(Comparator.comparingLong(SlowResource::elapsedNanos));
     private static final Object SLOW_LOCK = new Object();
@@ -111,7 +113,12 @@ public final class ResourcePipelineProfiler {
         if (!enabled()) {
             return;
         }
-        CONTEXT.get().push(context);
+        ArrayDeque<String> stack = CONTEXT.get();
+        if (stack == null) {
+            stack = new ArrayDeque<>();
+            CONTEXT.set(stack);
+        }
+        stack.push(context);
     }
 
     public static void exitContext() {
@@ -119,6 +126,9 @@ public final class ResourcePipelineProfiler {
             return;
         }
         ArrayDeque<String> stack = CONTEXT.get();
+        if (stack == null) {
+            return;
+        }
         if (!stack.isEmpty()) {
             stack.pop();
         }
@@ -132,7 +142,7 @@ public final class ResourcePipelineProfiler {
             return null;
         }
         ArrayDeque<String> stack = CONTEXT.get();
-        return stack.isEmpty() ? null : stack.peek();
+        return stack == null || stack.isEmpty() ? null : stack.peek();
     }
 
     public static void registerAtlasList(Object list, ResourceLocation atlasInfo) {
