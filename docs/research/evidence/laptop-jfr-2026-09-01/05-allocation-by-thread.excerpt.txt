@@ -1,0 +1,21 @@
+Source: JMC text export `05-allocation-by-thread.txt` supplied 2026-09-01.
+Preservation: top rows used by BootOptim research; not the complete raw file.
+
+Thread                         Allocation Pressure
+Worker-ResourceReload-1        24,43%
+modloading-sync-worker         20,38%
+Render thread                  17,26%
+main                           14,78%
+pool-7-thread-1                 4,82%
+Worker-ResourceReload-2         4,19%
+modloading-worker-0             2,58%
+Worker-ResourceReload-0         2,19%
+background-scan-handler-1       1,58%
+modloading-worker-0             1,40%
+modloading-worker-0             1,29%
+ForkJoinPool.commonPool-worker-1 1,17%
+modloading-worker-0             1,08%
+ForkJoinPool.commonPool-worker-2 1,06%
+ForkJoinPool.commonPool-worker-3 1,04%
+Datafixer Bootstrap             0,14%
+VeilShaderCompilerThread#0      0,11%
