@@ -29,12 +29,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Experimental flattened traversal for repeated vanilla/NeoForge ElementsModel geometry.
- *
- * <p>Verification is on by default. In verification mode the candidate writes only to a recording builder,
- * then the real transformed ElementsModel body executes unchanged and remains authoritative.</p>
- */
+/** Experimental flattened traversal for repeated vanilla/NeoForge ElementsModel geometry. */
 @Mixin(ElementsModel.class)
 public abstract class ElementsModelLivePlanMixin {
     @Unique
@@ -48,6 +43,10 @@ public abstract class ElementsModelLivePlanMixin {
     private static final boolean BOOTOPTIM_VERIFY = Boolean.parseBoolean(
             System.getProperty("boot_optim.compiledElementsLivePlan.verify", "true"));
 
+    @Unique
+    private static final boolean BOOTOPTIM_VERIFY_TRUSTED_CEILING = Boolean.parseBoolean(
+            System.getProperty("boot_optim.compiledElementsLivePlan.verifyTrustedCeiling", "true"));
+
     @Unique private static final LongAdder BOOTOPTIM_STOCK_FIRST_CALLS = new LongAdder();
     @Unique private static final LongAdder BOOTOPTIM_CANDIDATE_CALLS = new LongAdder();
     @Unique private static final LongAdder BOOTOPTIM_CANDIDATE_FACES = new LongAdder();
@@ -60,9 +59,10 @@ public abstract class ElementsModelLivePlanMixin {
 
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> BOOTOPTIM_LOGGER.info(
-                "BOOTOPTIM_COMPILED_ELEMENTS_LIVE_PLAN summary=shutdown enabled={} verify={} first_stock_calls={} candidate_calls={} candidate_faces={} candidate_ms={} stock_verify_ms={} verify_matches={} verify_mismatches={} fallbacks={}",
+                "BOOTOPTIM_COMPILED_ELEMENTS_LIVE_PLAN summary=shutdown enabled={} verify={} trusted_ceiling={} first_stock_calls={} candidate_calls={} candidate_faces={} candidate_ms={} stock_verify_ms={} verify_matches={} verify_mismatches={} fallbacks={}",
                 BOOTOPTIM_ENABLED,
                 BOOTOPTIM_VERIFY,
+                BOOTOPTIM_VERIFY_TRUSTED_CEILING,
                 BOOTOPTIM_STOCK_FIRST_CALLS.sum(),
                 BOOTOPTIM_CANDIDATE_CALLS.sum(),
                 BOOTOPTIM_CANDIDATE_FACES.sum(),
@@ -100,7 +100,13 @@ public abstract class ElementsModelLivePlanMixin {
         if (BOOTOPTIM_VERIFY) {
             CompiledElementsBakePlan.RecordingBuilder candidateBuilder = new CompiledElementsBakePlan.RecordingBuilder();
             long candidateStart = System.nanoTime();
-            boolean candidateValid = plan.bake(context, candidateBuilder, baker, spriteGetter, modelState);
+            boolean candidateValid;
+            if (BOOTOPTIM_VERIFY_TRUSTED_CEILING) {
+                plan.bakeTrusted(context, candidateBuilder, baker, spriteGetter, modelState);
+                candidateValid = true;
+            } else {
+                candidateValid = plan.bake(context, candidateBuilder, baker, spriteGetter, modelState);
+            }
             BOOTOPTIM_CANDIDATE_NS.add(System.nanoTime() - candidateStart);
             if (!candidateValid) {
                 BOOTOPTIM_FALLBACKS.increment();
@@ -117,6 +123,8 @@ public abstract class ElementsModelLivePlanMixin {
             return; // Stock transformed body remains authoritative.
         }
 
+        // Performance mode always uses the structurally validated candidate. The trusted path above exists only
+        // to establish the maximum possible ceiling before deciding whether this architecture is worth pursuing.
         long candidateStart = System.nanoTime();
         boolean candidateValid = plan.bake(context, modelBuilder, baker, spriteGetter, modelState);
         BOOTOPTIM_CANDIDATE_NS.add(System.nanoTime() - candidateStart);
