@@ -109,6 +109,15 @@ jobs:
           grep -q 'BOOTOPTIM_MODEL_RELOAD phase=bake_models' startup-benchmark.log
           grep -q 'BOOTOPTIM_CAMPAIGN_MODEL_RESIDUAL' startup-benchmark.log
 
+          # Resource/model decomposition v2: make sure the exact 1.21.1 hooks are producing data,
+          # not merely applying with require=0 and silently missing their targets.
+          grep -q 'BOOTOPTIM_RESOURCE_PIPELINE event=summary' startup-benchmark.log
+          grep -q 'BOOTOPTIM_RESOURCE_CONFIG mod=modernfix' startup-benchmark.log
+          grep -q 'kind=phase group=wall_scope_sum detail=block_models.enumeration' startup-benchmark.log
+          grep -q 'kind=phase group=wall_scope_sum detail=block_states.enumeration' startup-benchmark.log
+          grep -q 'detail=atlas.stitch\[' startup-benchmark.log
+          grep -q 'detail=atlas.sprite_load_inclusive' startup-benchmark.log
+
           jfr_file="$(find run-benchmark/.bootoptim/profiles -maxdepth 1 -type f -name 'startup-scaling-*.jfr' | sort | tail -n 1)"
           test -n "$jfr_file"
           test -s "$jfr_file"
@@ -126,7 +135,7 @@ jobs:
             echo "\`$early_marker\`"
             echo "\`$marker\`"
             echo
-            echo 'Startup diagnostics and scaling-campaign JFR validated.'
+            echo 'Startup diagnostics, resource-pipeline decomposition, and scaling-campaign JFR validated.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark diagnostics
