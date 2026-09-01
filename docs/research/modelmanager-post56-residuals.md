@@ -117,3 +117,19 @@ PR #57 is being extended with a deliberately short-scope material-resolution mem
 - log hit/miss counts and compare exact-pack `bakeModels`/gate/E2E against the immediately preceding PR #57 run
 
 This experiment is not production-approved. It must demonstrate a meaningful exact-pack wall-time improvement and preserve runtime behavior before promotion is considered.
+
+## Later outcome — 2026-09-01
+
+The material-resolution line above was completed inside PR #57 and is now **REJECTED** as a startup optimization. Several increasingly narrow implementations showed that the redundancy was real but that hit rate was not a useful proxy for elapsed-time benefit:
+
+- short-scope cache: `91.47%` hits, but exact-pack startup/gate/`bakeModels`/`ElementsModel` all failed to improve;
+- context-scoped cache: `95.98%` hits, yet `bakeModels` was `8,710.831 ms` versus the `8,129.116 ms` no-cache baseline and `ElementsModel` was also slower;
+- selective complex-only cache: `90.40%` of calls bypassed caching as direct-local lookups, while the remaining complex path still achieved `84.79%` hits (`179,349 / 211,520`), but direct affected metrics again regressed (`bakeModels=9,757.533 ms`, `ElementsModel=3,757.312 ms`).
+
+Conclusion: do not reopen `BlockModel#getMaterial` memoization merely because a future profiler again shows a high reuse percentage. A new attempt requires a materially different source-level mechanism and a positive measured ceiling.
+
+The generated-item part of this residual was subsequently superseded architecturally. PR #62 replaced the vanilla generated-item intermediary `BlockElement` construction with a direct compact-topology-to-stock-`FaceBakery` path; exact-pack verification reached `14,865 / 14,865` matches with zero mismatches/fallbacks after localized Trimmable Tools compatibility. That implementation was promoted to production in PR #64, so the old `getSpans`/generated-element path is no longer a useful optimization target while the direct baker is active.
+
+A later attempt to flatten repeated ordinary `ElementsModel` traversal was tested in PR #66 and is also **REJECTED**. The safe verifier produced `5,448 / 5,448` matches, zero mismatches and zero fallbacks, but the candidate was already slower than stock: `189.190 ms` versus `179.709 ms`. An intentionally unsafe optimistic ceiling test then removed per-call structural validation; it again verified `5,448 / 5,448` with zero mismatches/fallbacks, yet remained slower at `102.394 ms` candidate versus `91.267 ms` stock. PR #66 was closed without merge.
+
+Therefore ordinary `ElementsModel` element/face-map traversal does not have a positive ceiling under that flattening premise. Do not request an exact-pack run or rebuild the same live-plan approach unless the premise changes materially.
