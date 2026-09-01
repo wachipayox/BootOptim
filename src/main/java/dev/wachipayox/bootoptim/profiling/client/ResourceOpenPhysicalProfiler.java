@@ -82,16 +82,17 @@ public final class ResourceOpenPhysicalProfiler {
 
     public static PackToken beginPackScope(String packId, String sourceClass) {
         if (!enabled()) return null;
+        Context context = CONTEXT.get();
+        if (context == null || context.phase() == null || !context.phase().endsWith(".enumeration")) return null;
         PackIdentity previous = PACK_SCOPE.get();
         PackIdentity current = new PackIdentity(packId, sourceClass);
         PACK_SCOPE.set(current);
-        return new PackToken(previous, current, System.nanoTime());
+        return new PackToken(previous, current, context.phase(), System.nanoTime());
     }
 
     public static void endPackList(PackToken token) {
         if (token == null) return;
-        Context context = CONTEXT.get();
-        record("pack.list_resources", context == null ? "outside_model_context" : context.phase(), token.current(),
+        record("pack.list_resources", token.phase(), token.current(),
                 System.nanoTime() - token.startedNanos(), 1L, 0L);
         restorePack(token.previous());
     }
@@ -124,22 +125,6 @@ public final class ResourceOpenPhysicalProfiler {
     public static void endReaderOpen(ReaderToken token) {
         if (token == null) return;
         record("resource.open_as_reader", token.phase(), token.pack(), System.nanoTime() - token.startedNanos(), 1L, 0L);
-    }
-
-    public static long beginUnionStage() {
-        if (!enabled()) return 0L;
-        Context context = CONTEXT.get();
-        if (context == null || (!isModelPhase(context.phase()) && !context.phase().endsWith(".enumeration"))) return 0L;
-        return System.nanoTime();
-    }
-
-    public static void endUnionStage(String stage, long startedNanos) {
-        if (startedNanos == 0L) return;
-        Context context = CONTEXT.get();
-        PackIdentity pack = PACK_SCOPE.get();
-        if (pack == null && context != null) pack = context.pack();
-        record(stage, context == null ? "outside_model_context" : context.phase(), pack,
-                System.nanoTime() - startedNanos, 1L, 0L);
     }
 
     public static void dump() {
@@ -191,7 +176,7 @@ public final class ResourceOpenPhysicalProfiler {
     private record PackIdentity(String packId, String sourceClass) {
     }
 
-    public record PackToken(PackIdentity previous, PackIdentity current, long startedNanos) {
+    public record PackToken(PackIdentity previous, PackIdentity current, String phase, long startedNanos) {
     }
 
     public record OpenToken(String phase, PackIdentity previous, PackIdentity current, long startedNanos) {
