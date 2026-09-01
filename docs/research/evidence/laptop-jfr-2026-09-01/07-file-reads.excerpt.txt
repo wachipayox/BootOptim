@@ -1,0 +1,20 @@
+Source: JMC text export `07-file-reads.txt` supplied 2026-09-01.
+Preservation: leading rows and representative lower rows used by BootOptim research; not the complete raw file.
+
+Path / resource                                                     Reads  Total Read
+...\mods\Decocraft -57- {v3.0.11} [1.21.1] [SYNC].jar             3.603  11,8 MB
+...\mods\(fabric-port) MusicMakerMod -87- {v1.21.1-1.1.0}...jar       2   9,3 MB
+...\config\fancymenu\slideshows\carteles_portas\images\image_1.png 2   8,5 MB
+...\config\fancymenu\panoramas\portas_town\panorama\panorama_4.png 1 6,0 MB
+...\config\fancymenu\panoramas\portas_town\panorama\panorama_1.png 1 5,8 MB
+...\config\fancymenu\panoramas\portas_town\panorama\panorama_0.png 1 5,8 MB
+...\config\fancymenu\slideshows\raid_area\images\image_1.png       2 5,8 MB
+...\config\fancymenu\panoramas\portas_town\panorama\panorama_3.png 1 5,6 MB
+...\config\fancymenu\panoramas\anyisus_house_rain\...\panorama_4.png 1 5,5 MB
+...\config\fancymenu\panoramas\alvaro_zone_night\...\panorama_5.png 1 5,3 MB
+...\config\fancymenu\panoramas\anyisus_house_rain\...\panorama_2.png 1 5,3 MB
+...\config\fancymenu\panoramas\invernadero_noche\...\panorama_1.png 1 5,3 MB
+...\config\fancymenu\slideshows\carteles_portas\images\image_3.png 1 5,2 MB
+...\config\fancymenu\panoramas\alvaro_zone_night\...\panorama_1.png 1 5,2 MB
+
+Representative lower rows include many further FancyMenu panorama/slideshow PNGs around 2,0–2,3 MB each.
