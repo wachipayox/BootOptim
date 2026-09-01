@@ -44,6 +44,28 @@ jobs:
           grep -q 'boot_optim' bootstrap-jarjar-metadata.json
           cp "$packaged" bootoptim-ci.jar
 
+      - name: Audit exact Decocraft 3.0.11 JAR resources
+        if: github.head_ref == 'agent/profile-atlas-decode-decomposition' || github.ref == 'refs/heads/agent/profile-atlas-decode-decomposition'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            'https://cdn.modrinth.com/data/IZJSgKZe/versions/Z8xm2POI/decocraft-3.0.11-1.21.1-neoforge.jar' \
+            --output decocraft-3.0.11-1.21.1-neoforge.jar
+          sha256sum decocraft-3.0.11-1.21.1-neoforge.jar
+          python3 tools/audit_decocraft_jar.py \
+            decocraft-3.0.11-1.21.1-neoforge.jar \
+            decocraft-resource-audit.txt
+
+      - name: Upload Decocraft audit
+        if: github.head_ref == 'agent/profile-atlas-decode-decomposition' || github.ref == 'refs/heads/agent/profile-atlas-decode-decomposition'
+        uses: actions/upload-artifact@v4
+        with:
+          name: decocraft-resource-audit-${{ github.sha }}
+          path: decocraft-resource-audit.txt
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload packaged BootOptim
         uses: actions/upload-artifact@v4
         with:
