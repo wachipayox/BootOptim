@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.optimization.client.CompiledElementsBakePlan;
+import dev.wachipayox.bootoptim.optimization.client.CompiledElementsVerificationState;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -76,7 +77,7 @@ public abstract class ElementsModelLivePlanMixin {
     private List<BlockElement> elements;
 
     @Unique
-    private BootoptimVerification bootoptim$verification;
+    private CompiledElementsVerificationState bootoptim$verification;
 
     @Inject(method = "addQuads", at = @At("HEAD"), cancellable = true, require = 1)
     private void bootoptim$tryCompiledElementsPlan(
@@ -108,7 +109,7 @@ public abstract class ElementsModelLivePlanMixin {
 
             BOOTOPTIM_CANDIDATE_CALLS.increment();
             BOOTOPTIM_CANDIDATE_FACES.add(plan.faceCount());
-            bootoptim$verification = new BootoptimVerification(
+            bootoptim$verification = new CompiledElementsVerificationState(
                     context.getModelName(),
                     List.copyOf(candidateBuilder.records()),
                     new ArrayList<>(plan.faceCount()),
@@ -134,7 +135,7 @@ public abstract class ElementsModelLivePlanMixin {
             at = @At(value = "INVOKE", target = "Lnet/neoforged/neoforge/client/model/IModelBuilder;addUnculledFace(Lnet/minecraft/client/renderer/block/model/BakedQuad;)Lnet/neoforged/neoforge/client/model/IModelBuilder;"),
             require = 1)
     private IModelBuilder<?> bootoptim$recordStockUnculled(IModelBuilder<?> builder, BakedQuad quad) {
-        BootoptimVerification verification = bootoptim$verification;
+        CompiledElementsVerificationState verification = bootoptim$verification;
         if (verification != null) {
             verification.stock.add(new CompiledElementsBakePlan.QuadRecord(null, quad));
         }
@@ -146,7 +147,7 @@ public abstract class ElementsModelLivePlanMixin {
             at = @At(value = "INVOKE", target = "Lnet/neoforged/neoforge/client/model/IModelBuilder;addCulledFace(Lnet/minecraft/core/Direction;Lnet/minecraft/client/renderer/block/model/BakedQuad;)Lnet/neoforged/neoforge/client/model/IModelBuilder;"),
             require = 1)
     private IModelBuilder<?> bootoptim$recordStockCulled(IModelBuilder<?> builder, Direction direction, BakedQuad quad) {
-        BootoptimVerification verification = bootoptim$verification;
+        CompiledElementsVerificationState verification = bootoptim$verification;
         if (verification != null) {
             verification.stock.add(new CompiledElementsBakePlan.QuadRecord(direction, quad));
         }
@@ -161,7 +162,7 @@ public abstract class ElementsModelLivePlanMixin {
             Function<Material, TextureAtlasSprite> spriteGetter,
             ModelState modelState,
             CallbackInfo ci) {
-        BootoptimVerification verification = bootoptim$verification;
+        CompiledElementsVerificationState verification = bootoptim$verification;
         if (verification == null) {
             return;
         }
@@ -186,24 +187,5 @@ public abstract class ElementsModelLivePlanMixin {
     @Unique
     private static String bootoptim$millis(LongAdder nanos) {
         return String.format(Locale.ROOT, "%.3f", nanos.sum() / 1_000_000.0);
-    }
-
-    @Unique
-    private static final class BootoptimVerification {
-        private final String modelName;
-        private final List<CompiledElementsBakePlan.QuadRecord> candidate;
-        private final ArrayList<CompiledElementsBakePlan.QuadRecord> stock;
-        private final long stockStartNanos;
-
-        private BootoptimVerification(
-                String modelName,
-                List<CompiledElementsBakePlan.QuadRecord> candidate,
-                ArrayList<CompiledElementsBakePlan.QuadRecord> stock,
-                long stockStartNanos) {
-            this.modelName = modelName;
-            this.candidate = candidate;
-            this.stock = stock;
-            this.stockStartNanos = stockStartNanos;
-        }
     }
 }
