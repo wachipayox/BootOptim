@@ -28,6 +28,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 ## Research index
 
+- [Atlas sprite decode decomposition — 2026-09-01](atlas-sprite-decode-decomposition-2026-09-01.md) — **ACTIVE** diagnostic split of resource stream/JAR time, encoded-byte staging, STB PNG decode, animation metadata and NeoForge constructor hooks, driven by PR #69's Decocraft-heavy exact-pack tail.
 - [Client model / ModelManager pipeline](model-pipeline.md) — historical #13/#14/#35/#36/#37/#47 evidence, the validated #55 blockstate matcher, and rejected shallow approaches.
 - [Deep ModelManager follow-up — 2026-08-31](model-pipeline-deep-2026-08-31.md) — 97.60% recursive bake-cache hit rate, exclusive bake-cost attribution, 10.86M blockstate variant tests, and the indexed-matching architectural hypothesis.
 - [Post-promotion ModelManager residuals](modelmanager-post56-residuals.md) — PR #57 exact-pack gate/cost distribution after production promotions, rejected generated-item span-topology cache, and the short-scope material-resolution hypothesis.
