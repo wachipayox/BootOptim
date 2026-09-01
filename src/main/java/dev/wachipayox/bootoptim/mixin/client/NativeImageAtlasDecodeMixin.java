@@ -56,11 +56,12 @@ abstract class NativeImageAtlasDecodeMixin {
         long wall = AtlasDecodeProfiler.wallNow();
         long cpu = AtlasDecodeProfiler.cpuNow();
         ByteBuffer result = TextureUtil.readResource(input);
-        int encodedBytes = result == null ? 0 : Math.max(result.position(), result.remaining());
+        // TextureUtil grows an allocation buffer with a minimum capacity, so ByteBuffer position/capacity is not a
+        // trustworthy encoded-file length. AtlasDecodeProfiler's InputStream wrapper records authoritative bytes read.
         AtlasDecodeProfiler.textureRead(
                 AtlasDecodeProfiler.elapsed(wall, AtlasDecodeProfiler.wallNow()),
                 AtlasDecodeProfiler.elapsedCpu(cpu, AtlasDecodeProfiler.cpuNow()),
-                encodedBytes);
+                0);
         return result;
     }
 
