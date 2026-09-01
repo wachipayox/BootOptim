@@ -1,0 +1,71 @@
+Decocraft 3.0.11 NeoForge resource audit
+JAR: decocraft-3.0.11-1.21.1-neoforge.jar
+SHA256: b0589eb7d03b13bbf3b9c45df7f50db556a721882e9ad2bb6be0ff23e5a64526
+
+JAR bytes: 93170262 (88.854 MiB)
+Total JAR entries: 21330
+Decocraft PNG entries: 5775
+Decocraft texture PNG entries: 5773
+Texture PNGs with .mcmeta: 122
+Texture encoded PNG bytes after JAR decompression: 20700997 (19.742 MiB)
+Texture compressed bytes inside JAR: 20537997 (19.587 MiB)
+JAR compressed/encoded ratio for texture PNGs: 0.992126
+Physical texture-entry span: 21040565 (20.066 MiB)
+Texture compressed-byte density inside span: 0.976114
+
+ZIP methods:
+- deflated: files=5773 encoded=20700997 compressed=20537997 ratio=0.992126
+
+Encoded PNG size distribution:
+min=112 median=2905.0 p90=6285.4 p99=19706.7 max=76876 bytes
+
+Pixel-area distribution:
+min=128 median=4096.0 p90=8192.0 p99=32768.0 max=98304 pixels
+
+Dimensions:
+- 64x64: 3580
+- 64x32: 495
+- 32x32: 403
+- 128x128: 365
+- 64x128: 212
+- 128x64: 186
+- 16x16: 105
+- 32x64: 105
+- 32x16: 96
+- 256x128: 88
+- 64x192: 40
+- 256x256: 33
+- 16x32: 19
+- 128x256: 6
+- 16x432: 6
+- 32x96: 4
+- 128x32: 4
+- 16x48: 4
+- 16x128: 4
+- 16x8: 3
+- 32x224: 3
+- 128x384: 2
+- 32x128: 2
+- 16x416: 2
+- 128x192: 2
+- 64x31: 1
+- 128x768: 1
+- 16x144: 1
+- 64x224: 1
+
+Texture categories:
+- item: files=3255 encoded_bytes=12257819
+- block: files=2516 encoded_bytes=8429094
+- gui: files=2 encoded_bytes=14084
+
+Exact duplicate PNG content:
+duplicate_groups=80 duplicate_files_beyond_first=108 duplicate_encoded_bytes_beyond_first=662583
+
+JAR locality indicators:
+lexical-path consecutive physical offset gap: median=3085.0 p90=6857.9 p99=22000.6 max=1391556 bytes
+physical-order inter-entry gap: median=83.0 p90=93.0 p99=272.0 max=338 bytes
+lexical consecutive gaps >1MiB: 2 / 5772
+
+Malformed/non-IHDR PNG entries: 0
+
+Derived from the exact published JAR by tools/audit_decocraft_jar.py in Build #946 on 2026-09-01. The audit runs outside Minecraft and is static packaging/resource evidence, not startup timing evidence.
