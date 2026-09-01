@@ -1,0 +1,6 @@
+Source: JMC text export `09-longest-class-loading.txt` supplied 2026-09-01.
+Preservation: file contained no event rows.
+
+No events found for 'Longest Class Loading'.
+
+Important: the JFR summary reports jdk.ClassLoad=0 and jdk.ClassDefine=0, so this empty view means the recording did not capture those events. It is not evidence that classloading was free.
