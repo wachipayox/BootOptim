@@ -1,0 +1,34 @@
+Source: JMC text export `00-summary.txt` supplied 2026-09-01.
+Preservation: excerpt of rows used by BootOptim research; not the complete raw file.
+
+Version: 2.1
+Chunks: 2
+Start: 2026-09-01 02:00:56 (UTC)
+Duration: 321 s
+
+Event Type                              Count
+jdk.ModuleRequire                      261185
+jdk.ThreadPark                         111972
+jdk.JavaMonitorWait                     23916
+jdk.ObjectAllocationSample              21119
+jdk.ModuleExport                        18422
+jdk.ThreadSleep                         17298
+jdk.ExecutionSample                     15357
+jdk.GCPhaseParallel                     14145
+jdk.JavaExceptionThrow                  13982
+jdk.NativeMethodSample                  13906
+jdk.FileRead                             8899
+jdk.PromoteObjectInNewPLAB               5986
+jdk.JavaMonitorEnter                     3207
+jdk.Deoptimization                       2320
+jdk.ThreadCPULoad                        1970
+jdk.Compilation                           450
+jdk.GarbageCollection                     121
+jdk.FileWrite                              117
+jdk.YoungGarbageCollection                109
+jdk.G1GarbageCollection                   109
+jdk.MetaspaceAllocationFailure             55
+jdk.OldGarbageCollection                   12
+jdk.ClassLoad                                0
+jdk.ClassDefine                              0
+jdk.ClassUnload                              0
