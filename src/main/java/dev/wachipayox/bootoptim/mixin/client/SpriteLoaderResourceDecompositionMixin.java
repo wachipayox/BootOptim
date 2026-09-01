@@ -8,6 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.metadata.MetadataSectionSerializer;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
+import net.neoforged.neoforge.client.textures.SpriteContentsConstructor;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -21,7 +22,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.function.Function;
 
 /** Diagnostic-only atlas decomposition: source future, per-sprite load/decode and final stitch. */
 @Mixin(SpriteLoader.class)
@@ -81,10 +81,12 @@ abstract class SpriteLoaderResourceDecompositionMixin {
         if (!ResourcePipelineProfiler.enabled() || delegate == null) {
             return delegate;
         }
-        return (ResourceLocation id, Resource resource) -> {
+        // NeoForge 1.21.1 extends SpriteResourceLoader's SAM with a SpriteContentsConstructor.
+        // Delegate that constructor unchanged so Forge/custom sprite semantics stay authoritative.
+        return (ResourceLocation id, Resource resource, SpriteContentsConstructor constructor) -> {
             long started = ResourcePipelineProfiler.start();
             try {
-                return delegate.loadSprite(id, resource);
+                return delegate.loadSprite(id, resource, constructor);
             } finally {
                 ResourcePipelineProfiler.recordResource(
                         "atlas.sprite_load_inclusive",
