@@ -8,7 +8,12 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.ModelBakeryCompiledPlanProfilingMixin",
+    "client.ElementsModelCompiledPlanProfilingMixin",
+    "client.FaceBakeryCompiledPlanProfilingMixin",
+    "client.ClientHooksCompiledPlanProfilingMixin",
+    "client.BlockElementFaceCompiledPlanProfilingMixin"
   ],
   "injectors": {
     "defaultRequire": 0
