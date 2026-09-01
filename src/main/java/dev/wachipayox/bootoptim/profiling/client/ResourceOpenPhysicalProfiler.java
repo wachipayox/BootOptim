@@ -130,16 +130,17 @@ public final class ResourceOpenPhysicalProfiler {
     public static void dump() {
         if (!enabled() || !DUMPED.compareAndSet(false, true)) return;
 
-        LOGGER.info("BOOTOPTIM_RESOURCE_PHYSICAL kind=summary rows={} note=task_sum_is_not_wall_or_critical_path", STATS.size());
+        LOGGER.info("BOOTOPTIM_RESOURCE_PHYSICAL kind=summary rows={} note=metric_kind_distinguishes_wall_from_task_sum;critical_path_not_measured", STATS.size());
 
         STATS.entrySet().stream()
                 .sorted(Map.Entry.<Key, Stats>comparingByValue(Comparator.comparingLong(Stats::nanos)).reversed())
                 .forEach(entry -> {
                     Key key = entry.getKey();
                     Stats stats = entry.getValue();
+                    String metricKind = "enumeration.wall".equals(key.stage()) ? "wall" : "task_sum";
                     LOGGER.info(
-                            "BOOTOPTIM_RESOURCE_PHYSICAL stage={} phase={} pack={} source={} calls={} task_sum_ms={} bytes={} avg_us={}",
-                            key.stage(), key.phase(), key.packId(), key.sourceClass(), stats.calls(), nanosToMs(stats.nanos()),
+                            "BOOTOPTIM_RESOURCE_PHYSICAL stage={} metric_kind={} phase={} pack={} source={} calls={} elapsed_ms={} bytes={} avg_us={}",
+                            key.stage(), metricKind, key.phase(), key.packId(), key.sourceClass(), stats.calls(), nanosToMs(stats.nanos()),
                             stats.bytes(), stats.calls() == 0 ? 0L : (stats.nanos() / stats.calls()) / 1_000L);
                 });
     }
