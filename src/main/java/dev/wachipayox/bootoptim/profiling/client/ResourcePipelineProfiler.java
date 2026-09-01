@@ -222,6 +222,16 @@ public final class ResourcePipelineProfiler {
         }
     }
 
+    /**
+     * Diagnostic-only ModernFix 5.27.14 probe.
+     *
+     * <p>The exact 1.21.1 release exposes a boolean {@code Option} directly through
+     * {@code ModernFixEarlyConfig#getEffectiveOptionForMixin(String)}. It does not have the later
+     * {@code Option#asBoolean()/getValue()} API. Selection is also separate from the permanent per-mixin
+     * compatibility gate, so both layers are reported. Finally, source-pinned structural markers on the
+     * already-transformed target classes distinguish "selected" from "actually merged" without adding a
+     * compile/runtime dependency on ModernFix.
+     */
     private static void probeModernFix() {
         try {
             ClassLoader loader = ResourcePipelineProfiler.class.getClassLoader();
@@ -233,21 +243,79 @@ public final class ResourcePipelineProfiler {
                 return;
             }
 
+            String implementationVersion = pluginClass.getPackage().getImplementationVersion();
+            LOGGER.info(
+                    "BOOTOPTIM_RESOURCE_CONFIG mod=modernfix status=present implementation_version={}",
+                    implementationVersion == null ? "unknown" : implementationVersion);
+
             Field configField = pluginClass.getField("config");
             Object config = configField.get(plugin);
             Method effective = config.getClass().getMethod("getEffectiveOptionForMixin", String.class);
+            Method permanentlyDisabledMethod = config.getClass().getMethod("getPermanentlyDisabledMixins");
+            Object disabledValue = permanentlyDisabledMethod.invoke(config);
+            Map<?, ?> permanentlyDisabled = disabledValue instanceof Map<?, ?> map ? map : Map.of();
 
-            probeModernFixOption(config, effective, "mixin.perf.dynamic_resources", "perf.dynamic_resources.ModelManagerMixin");
-            probeModernFixOption(config, effective, "mixin.perf.resourcepacks", "perf.resourcepacks.FilePackResourcesMixin");
-            probeModernFixOption(config, effective, "mixin.perf.faster_texture_stitching", "perf.faster_texture_stitching.StitcherMixin");
-            probeModernFixOption(config, effective, "mixin.perf.deduplicate_wall_shapes", "perf.deduplicate_wall_shapes.WallBlockMixin");
+            probeModernFixOption(
+                    loader,
+                    config,
+                    effective,
+                    permanentlyDisabled,
+                    "mixin.perf.dynamic_resources",
+                    "perf.dynamic_resources.ModelManagerMixin");
+            probeModernFixOption(
+                    loader,
+                    config,
+                    effective,
+                    permanentlyDisabled,
+                    "mixin.perf.dynamic_resources",
+                    "perf.dynamic_resources.ModelBakeryMixin");
+            probeModernFixOption(
+                    loader,
+                    config,
+                    effective,
+                    permanentlyDisabled,
+                    "mixin.perf.dynamic_resources",
+                    "perf.dynamic_resources.BlockStateModelLoaderMixin");
+            probeModernFixOption(
+                    loader,
+                    config,
+                    effective,
+                    permanentlyDisabled,
+                    "mixin.perf.resourcepacks",
+                    "perf.resourcepacks.FilePackResourcesMixin");
+            probeModernFixOption(
+                    loader,
+                    config,
+                    effective,
+                    permanentlyDisabled,
+                    "mixin.perf.resourcepacks",
+                    "perf.resourcepacks.PathPackResourcesMixin");
+            probeModernFixOption(
+                    loader,
+                    config,
+                    effective,
+                    permanentlyDisabled,
+                    "mixin.perf.faster_texture_stitching",
+                    "perf.faster_texture_stitching.StitcherMixin");
+            probeModernFixOption(
+                    loader,
+                    config,
+                    effective,
+                    permanentlyDisabled,
+                    "mixin.perf.deduplicate_wall_shapes",
+                    "perf.deduplicate_wall_shapes.WallBlockMixin");
 
             try {
-                Method featureLevel = pluginClass.getMethod("activeFeatureLevel");
-                Object value = featureLevel.invoke(null);
+                Class<?> earlyConfigClass = Class.forName(
+                        "org.embeddedt.modernfix.core.config.ModernFixEarlyConfig",
+                        false,
+                        loader);
+                Object value = earlyConfigClass.getField("ACTIVE_FEATURE_LEVEL").get(null);
                 LOGGER.info("BOOTOPTIM_RESOURCE_CONFIG mod=modernfix option=stability_level effective={}", value);
-            } catch (ReflectiveOperationException ignored) {
-                LOGGER.info("BOOTOPTIM_RESOURCE_CONFIG mod=modernfix option=stability_level effective=unknown");
+            } catch (ReflectiveOperationException failure) {
+                LOGGER.info(
+                        "BOOTOPTIM_RESOURCE_CONFIG mod=modernfix option=stability_level effective=probe_failed reason={}",
+                        failure.getClass().getName());
             }
         } catch (ClassNotFoundException absent) {
             LOGGER.info("BOOTOPTIM_RESOURCE_CONFIG mod=modernfix status=absent");
@@ -258,31 +326,100 @@ public final class ResourcePipelineProfiler {
         }
     }
 
-    private static void probeModernFixOption(Object config, Method effective, String optionName, String mixinPath) {
+    private static void probeModernFixOption(
+            ClassLoader loader,
+            Object config,
+            Method effective,
+            Map<?, ?> permanentlyDisabled,
+            String optionName,
+            String mixinPath) {
         try {
             Object option = effective.invoke(config, mixinPath);
             if (option == null) {
-                LOGGER.info("BOOTOPTIM_RESOURCE_CONFIG mod=modernfix option={} effective=unmatched", optionName);
+                LOGGER.info(
+                        "BOOTOPTIM_RESOURCE_CONFIG mod=modernfix option={} mixin={} effective=unmatched applied_structural={}",
+                        optionName,
+                        mixinPath,
+                        probeModernFixStructuralMarker(loader, mixinPath));
                 return;
             }
 
-            Object booleanOption = option.getClass().getMethod("asBoolean").invoke(option);
-            Object value = booleanOption.getClass().getMethod("getValue").invoke(booleanOption);
+            Object enabledValue = option.getClass().getMethod("isEnabled").invoke(option);
+            boolean enabled = Boolean.TRUE.equals(enabledValue);
+            Object permanentReasonValue = permanentlyDisabled.get(mixinPath);
+            String permanentReason = permanentReasonValue == null ? "none" : String.valueOf(permanentReasonValue);
+            boolean selected = enabled && permanentReasonValue == null;
             String rule = optionalString(option, "getName", "unknown");
             String userDefined = optionalString(option, "isUserDefined", "unknown");
             String modDefined = optionalString(option, "isModDefined", "unknown");
+            String definingMods = optionalString(option, "getDefiningMods", "unknown");
             LOGGER.info(
-                    "BOOTOPTIM_RESOURCE_CONFIG mod=modernfix option={} effective={} controlling_rule={} user_defined={} mod_defined={}",
+                    "BOOTOPTIM_RESOURCE_CONFIG mod=modernfix option={} mixin={} effective={} controlling_rule={} user_defined={} mod_defined={} defining_mods={} permanent_disable={} selected_by_modernfix={} applied_structural={}",
                     optionName,
-                    value,
+                    mixinPath,
+                    enabled,
                     rule,
                     userDefined,
-                    modDefined);
+                    modDefined,
+                    definingMods,
+                    permanentReason,
+                    selected,
+                    probeModernFixStructuralMarker(loader, mixinPath));
         } catch (Throwable failure) {
             LOGGER.info(
-                    "BOOTOPTIM_RESOURCE_CONFIG mod=modernfix option={} effective=probe_failed reason={}",
+                    "BOOTOPTIM_RESOURCE_CONFIG mod=modernfix option={} mixin={} effective=probe_failed reason={}",
                     optionName,
+                    mixinPath,
                     failure.getClass().getName());
+        }
+    }
+
+    private static String probeModernFixStructuralMarker(ClassLoader loader, String mixinPath) {
+        try {
+            return switch (mixinPath) {
+                case "perf.dynamic_resources.ModelManagerMixin" -> Boolean.toString(
+                        Class.forName("org.embeddedt.modernfix.duck.IExtendedModelManager", false, loader)
+                                .isAssignableFrom(Class.forName(
+                                        "net.minecraft.client.resources.model.ModelManager",
+                                        false,
+                                        loader)));
+                case "perf.dynamic_resources.ModelBakeryMixin" -> Boolean.toString(
+                        Class.forName("org.embeddedt.modernfix.duck.IExtendedModelBakery", false, loader)
+                                .isAssignableFrom(Class.forName(
+                                        "net.minecraft.client.resources.model.ModelBakery",
+                                        false,
+                                        loader)));
+                case "perf.dynamic_resources.BlockStateModelLoaderMixin" -> Boolean.toString(
+                        Class.forName("org.embeddedt.modernfix.duck.IBlockStateModelLoader", false, loader)
+                                .isAssignableFrom(Class.forName(
+                                        "net.minecraft.client.resources.model.BlockStateModelLoader",
+                                        false,
+                                        loader)));
+                case "perf.resourcepacks.FilePackResourcesMixin" -> Boolean.toString(hasDeclaredField(
+                        Class.forName("net.minecraft.server.packs.FilePackResources", false, loader),
+                        "mf$packIndex"));
+                case "perf.resourcepacks.PathPackResourcesMixin" -> Boolean.toString(hasDeclaredField(
+                        Class.forName("net.minecraft.server.packs.PathPackResources", false, loader),
+                        "cacheEngine"));
+                case "perf.faster_texture_stitching.StitcherMixin" -> Boolean.toString(hasDeclaredField(
+                        Class.forName("net.minecraft.client.renderer.texture.Stitcher", false, loader),
+                        "loadableSpriteInfos"));
+                case "perf.deduplicate_wall_shapes.WallBlockMixin" -> Boolean.toString(hasDeclaredField(
+                        Class.forName("net.minecraft.world.level.block.WallBlock", false, loader),
+                        "CACHE_BY_SHAPE_VALS"));
+                default -> "unknown_marker";
+            };
+        } catch (Throwable failure) {
+            return "probe_failed:" + failure.getClass().getSimpleName();
+        }
+    }
+
+    private static boolean hasDeclaredField(Class<?> target, String fieldName) {
+        try {
+            target.getDeclaredField(fieldName);
+            return true;
+        } catch (NoSuchFieldException ignored) {
+            return false;
         }
     }
 
