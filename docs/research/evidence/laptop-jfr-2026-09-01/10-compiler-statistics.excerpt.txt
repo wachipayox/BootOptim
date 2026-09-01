@@ -1,0 +1,18 @@
+Source: JMC text export `10-compiler-statistics.txt` supplied 2026-09-01.
+Preservation: visible compiler statistics.
+
+Compiler Statistics
+-------------------
+
+Compiled Methods: 30.832
+Peak Time: 7,52 s
+Total Time: 4 m 27 s
+Bailouts: 10
+OSR Compilations: 419
+Standard Compilations: 30.413
+OSR Bytes Compiled: 0 bytes
+Standard Bytes Compiled: 0 bytes
+Compilation Resulting Size: 84,3 MB
+Compilation Resulting Code Size: 59,4 MB
+
+Interpretation note: Total Time is aggregate compiler-thread time, not serial startup wall time.
