@@ -54,30 +54,30 @@ public final class McefFirstConsumerCeiling {
             return true;
         }
 
-        State state = STATE.get();
-        if (state == State.READY || state == State.ABORTED) {
-            return false;
-        }
-        if (state == State.FORCING) {
-            // A second already-queued automatic call must not race the one real forced init.
-            LOGGER.info("BOOTOPTIM_MCEF_FIRST_CONSUMER event=suppress_parallel_init state=FORCING");
+        for (;;) {
+            State state = STATE.get();
+            if (state == State.READY || state == State.ABORTED) {
+                return false;
+            }
+            if (state == State.FORCING) {
+                // A second already-queued automatic call must not race the one real forced init.
+                LOGGER.info("BOOTOPTIM_MCEF_FIRST_CONSUMER event=suppress_parallel_init state=FORCING");
+                return true;
+            }
+            if (state == State.ARMED) {
+                if (!STATE.compareAndSet(State.ARMED, State.DEFERRED)) {
+                    continue;
+                }
+                firstSuppressedNanos = System.nanoTime();
+            }
+
+            suppressedCalls++;
+            LOGGER.info(
+                    "BOOTOPTIM_MCEF_FIRST_CONSUMER event=suppress_auto_init count={} thread={}",
+                    suppressedCalls,
+                    Thread.currentThread().getName());
             return true;
         }
-
-        if (state == State.ARMED && STATE.compareAndSet(State.ARMED, State.DEFERRED)) {
-            firstSuppressedNanos = System.nanoTime();
-            state = State.DEFERRED;
-        }
-        if (state != State.DEFERRED && STATE.get() != State.DEFERRED) {
-            return false;
-        }
-
-        suppressedCalls++;
-        LOGGER.info(
-                "BOOTOPTIM_MCEF_FIRST_CONSUMER event=suppress_auto_init count={} thread={}",
-                suppressedCalls,
-                Thread.currentThread().getName());
-        return true;
     }
 
     /** Guard for MCEF APIs that require the client/app/browser objects to exist. */
@@ -90,25 +90,24 @@ public final class McefFirstConsumerCeiling {
             return;
         }
 
-        State current = STATE.get();
-        if (current == State.ABORTED) {
-            return;
-        }
-        if (current == State.FORCING) {
-            return;
-        }
-        if (!STATE.compareAndSet(current, State.FORCING)) {
-            beforeConsumer(consumer);
-            return;
-        }
+        for (;;) {
+            State current = STATE.get();
+            if (current == State.ABORTED || current == State.FORCING || current == State.READY) {
+                return;
+            }
+            if (!STATE.compareAndSet(current, State.FORCING)) {
+                continue;
+            }
 
-        forceReason = "consumer:" + consumer;
-        LOGGER.info(
-                "BOOTOPTIM_MCEF_FIRST_CONSUMER event=first_consumer consumer={} previous_state={} thread={}",
-                consumer,
-                current,
-                Thread.currentThread().getName());
-        forceInitializeOnClientThread(forceReason);
+            forceReason = "consumer:" + consumer;
+            LOGGER.info(
+                    "BOOTOPTIM_MCEF_FIRST_CONSUMER event=first_consumer consumer={} previous_state={} thread={}",
+                    consumer,
+                    current,
+                    Thread.currentThread().getName());
+            forceInitializeOnClientThread(forceReason);
+            return;
+        }
     }
 
     /**
@@ -116,28 +115,31 @@ public final class McefFirstConsumerCeiling {
      * active even when no browser API was needed on the title screen.
      */
     public static void beforeWorldJoin() {
-        if (!ENABLED || !isCompatible() || isMcefInitialized()) {
-            if (isMcefInitialized()) {
-                STATE.set(State.READY);
+        if (!ENABLED || !isCompatible()) {
+            return;
+        }
+        if (isMcefInitialized()) {
+            STATE.set(State.READY);
+            return;
+        }
+
+        for (;;) {
+            State current = STATE.get();
+            if (current == State.ABORTED || current == State.FORCING || current == State.READY) {
+                return;
             }
-            return;
-        }
+            if (!STATE.compareAndSet(current, State.FORCING)) {
+                continue;
+            }
 
-        State current = STATE.get();
-        if (current == State.ABORTED || current == State.FORCING || current == State.READY) {
+            forceReason = "world_join";
+            LOGGER.info(
+                    "BOOTOPTIM_MCEF_FIRST_CONSUMER event=world_boundary previous_state={} thread={}",
+                    current,
+                    Thread.currentThread().getName());
+            forceInitializeOnClientThread(forceReason);
             return;
         }
-        if (!STATE.compareAndSet(current, State.FORCING)) {
-            beforeWorldJoin();
-            return;
-        }
-
-        forceReason = "world_join";
-        LOGGER.info(
-                "BOOTOPTIM_MCEF_FIRST_CONSUMER event=world_boundary previous_state={} thread={}",
-                current,
-                Thread.currentThread().getName());
-        forceInitializeOnClientThread(forceReason);
     }
 
     /** Called by BootOptim's existing title-screen startup hook for ceiling attribution. */
