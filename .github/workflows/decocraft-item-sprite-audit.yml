@@ -22,20 +22,23 @@ jobs:
       - name: Audit exact Decocraft release
         run: python tools/audit_decocraft_item_sprites.py
 
-      - name: Validate exact candidate count
+      - name: Validate exact candidate and keep counts
         shell: bash
         run: |
           set -euo pipefail
-          count=$(grep -vc '^#' decocraft-3d-item-candidates.txt)
-          echo "candidate_count=$count"
-          test "$count" -eq 3192
+          candidates=$(grep -vc '^#' decocraft-3d-item-candidates.txt)
+          keep=$(grep -vc '^#' decocraft-3d-item-keep-textures.txt)
+          echo "candidate_count=$candidates keep_count=$keep"
+          test "$candidates" -eq 3192
+          test "$keep" -eq 63
 
-      - name: Upload report and candidate mapping
+      - name: Upload report and mappings
         uses: actions/upload-artifact@v4
         with:
           name: decocraft-item-sprite-audit-${{ github.sha }}
           path: |
             decocraft-item-sprite-audit.md
             decocraft-3d-item-candidates.txt
+            decocraft-3d-item-keep-textures.txt
           if-no-files-found: error
           retention-days: 14
