@@ -123,7 +123,15 @@ def format_ms(value):
 def parse_aggregate(args):
     files = sorted(Path(args.results_dir).rglob("result.json"))
     if not files:
-        raise SystemExit("No exact-pack result.json files found")
+        markdown_text = (
+            "# Exact-pack startup benchmark\n\n"
+            "No successful exact-pack run produced `result.json`. Inspect the per-run console/thread-dump artifacts.\n"
+        )
+        Path(args.output).write_text(markdown_text, encoding="utf-8")
+        Path(args.json_output).write_text(json.dumps({"status": "no_successful_runs"}, indent=2), encoding="utf-8")
+        print(markdown_text)
+        return
+
     rows = [json.loads(path.read_text(encoding="utf-8")) for path in files]
     variants = sorted({row["variant"] for row in rows})
     metrics = [
