@@ -6,6 +6,8 @@
   "client": [
     "client.BlockStateModelLoaderIndexedVariantMixin",
     "client.FancyMenuPanoramaPreloadMixin",
+    "client.InitialResourceReloadMcefOverlapMixin",
+    "client.McefInitializationOverlapMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
