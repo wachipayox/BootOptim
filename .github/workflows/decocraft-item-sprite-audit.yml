@@ -22,7 +22,7 @@ jobs:
       - name: Audit exact Decocraft release
         run: python tools/audit_decocraft_item_sprites.py
 
-      - name: Validate exact candidate and keep counts
+      - name: Validate exact candidate and keep invariants
         shell: bash
         run: |
           set -euo pipefail
@@ -31,6 +31,22 @@ jobs:
           echo "candidate_count=$candidates keep_count=$keep"
           test "$candidates" -eq 3192
           test "$keep" -eq 63
+          cmp decocraft-3d-item-keep-textures.txt src/main/resources/bootoptim/decocraft-3.0.11-item-textures-keep.txt
+          python - <<'PY'
+          from pathlib import Path
+          rows = []
+          for line in Path('decocraft-3d-item-candidates.txt').read_text(encoding='utf-8').splitlines():
+              if not line or line.startswith('#'):
+                  continue
+              item_model, texture = line.split('\t')
+              texture_path = texture.split(':', 1)[1]
+              assert texture_path.startswith('item/')
+              rows.append((item_model, texture_path[len('item/'):]))
+          mismatches = [(item, texture) for item, texture in rows if item != texture]
+          print(f'same_name_candidates={len(rows) - len(mismatches)} mismatches={len(mismatches)}')
+          assert len(rows) == 3192
+          assert not mismatches
+          PY
 
       - name: Upload report and mappings
         uses: actions/upload-artifact@v4
