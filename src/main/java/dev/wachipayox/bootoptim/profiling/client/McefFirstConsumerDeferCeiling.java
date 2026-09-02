@@ -47,19 +47,18 @@ public final class McefFirstConsumerDeferCeiling {
             return false;
         }
 
-        if (isMcefInitialized()) {
-            STATE.set(State.COMPLETE);
-            return false;
-        }
-
         State state = STATE.get();
         if (state == State.COMPLETE) {
             // A delayed CefInitMixin task can arrive after a consumer already forced the real init.
-            // If MCEF reports initialized, suppressing that redundant automatic call avoids double init.
+            // Suppress it only when MCEF itself confirms the successful initialization.
             if (isMcefInitialized()) {
                 LOGGER.info("BOOTOPTIM_MCEF_FIRST_CONSUMER event=suppress_redundant_init");
                 return true;
             }
+            return false;
+        }
+        if (isMcefInitialized()) {
+            STATE.set(State.COMPLETE);
             return false;
         }
         if (state != State.ARMED && state != State.DEFERRED) {
