@@ -12,8 +12,8 @@ import net.neoforged.fml.ModList;
 import org.slf4j.Logger;
 
 /**
- * Diagnostic-only ceiling that moves MCEF's automatic initialization from immediately before the
- * first client resource reload to immediately after that reload has been kicked off.
+ * Diagnostic-only ceiling that moves MCEF's initialization from immediately before the first client
+ * resource reload to immediately after that reload has been kicked off.
  *
  * <p>The real MCEF.initialize() still runs on the Minecraft client/render thread. Downloader state,
  * MCEF's awaiting-init callback list, browser construction, message-loop pumping and shutdown remain
@@ -49,23 +49,12 @@ public final class McefReloadOverlapCeiling {
         }
 
         State state = STATE.get();
-        boolean automatic = calledFromMcefAutoInit();
-
-        if (!automatic) {
-            if (state == State.SUPPRESSED_WAITING_RELOAD) {
-                STATE.compareAndSet(State.SUPPRESSED_WAITING_RELOAD, State.FORCED_BY_CONSUMER);
-                LOGGER.info(
-                        "BOOTOPTIM_MCEF_RELOAD_OVERLAP event=abort reason=non_auto_initialize thread={}",
-                        Thread.currentThread().getName());
-            }
-            return false;
-        }
-
         if (state == State.COMPLETE && isMcefInitialized()) {
-            LOGGER.info("BOOTOPTIM_MCEF_RELOAD_OVERLAP event=suppress_redundant_auto_init");
+            // Delaying initialization can allow another already-queued CefInitMixin task to arrive
+            // after the forced call. Do not initialize CEF twice because of the experiment.
+            LOGGER.info("BOOTOPTIM_MCEF_RELOAD_OVERLAP event=suppress_redundant_init");
             return true;
         }
-
         if (state != State.ARMED && state != State.SUPPRESSED_WAITING_RELOAD) {
             return false;
         }
@@ -73,18 +62,23 @@ public final class McefReloadOverlapCeiling {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || !minecraft.isSameThread()) {
             STATE.compareAndSet(State.ARMED, State.ABORTED);
+            STATE.compareAndSet(State.SUPPRESSED_WAITING_RELOAD, State.ABORTED);
             LOGGER.info(
-                    "BOOTOPTIM_MCEF_RELOAD_OVERLAP event=abort reason=auto_init_not_client_thread thread={}",
+                    "BOOTOPTIM_MCEF_RELOAD_OVERLAP event=abort reason=initialize_not_client_thread thread={}",
                     Thread.currentThread().getName());
             return false;
         }
 
+        // MCEF 2.1.6 documents initialize() as an internal entry point called by CefInitMixin and
+        // explicitly says other callers should not invoke it. Do not depend on a CefInitMixin stack
+        // frame here: Mixin copies injected handlers/lambdas into Minecraft, so that source class is
+        // not guaranteed to survive in the transformed runtime call stack.
         if (STATE.compareAndSet(State.ARMED, State.SUPPRESSED_WAITING_RELOAD)) {
             firstSuppressedNanos = System.nanoTime();
         }
         suppressedCalls++;
         LOGGER.info(
-                "BOOTOPTIM_MCEF_RELOAD_OVERLAP event=suppress_auto_init count={} thread={}",
+                "BOOTOPTIM_MCEF_RELOAD_OVERLAP event=suppress_init count={} thread={}",
                 suppressedCalls,
                 Thread.currentThread().getName());
         return true;
@@ -242,15 +236,6 @@ public final class McefReloadOverlapCeiling {
             }
             return compatible;
         }
-    }
-
-    private static boolean calledFromMcefAutoInit() {
-        for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
-            if ("com.cinemamod.mcef.mixins.CefInitMixin".equals(element.getClassName())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean isMcefInitialized() {
