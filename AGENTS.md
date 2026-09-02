@@ -28,11 +28,61 @@ A green build is necessary but not sufficient.
 
 1. Compile/package CI must pass.
 2. Startup CI must reach the main menu without new BootOptim/Mixin failures.
-3. Behavior-changing optimizations require exact-reference-pack runtime validation by the user.
-4. Performance claims require comparable warm/cold conditions and must distinguish CPU time, inclusive wall time, and actual critical-path wall time.
-5. A microphase improvement is not accepted as an end-to-end win unless it moves time-to-main-menu or removes CPU for a mechanism the project deliberately chooses to keep.
+3. Hosted exact-pack CI should be the default next runtime gate for changes that can be exercised there; see `docs/research/exact-pack-ci.md`.
+4. Behavior-changing optimizations still require semantic/visual validation where the hosted workflow cannot prove equivalence.
+5. Performance claims require comparable conditions and must distinguish CPU time, inclusive wall time, and actual critical-path wall time.
+6. A microphase improvement is not accepted as an end-to-end win unless it moves time-to-main-menu or removes CPU for a mechanism the project deliberately chooses to keep.
+7. Real laptop/fast-PC runs remain the final gate for small/noisy effects and hardware-sensitive mechanisms, but agents should not ask for repetitive laptop A/B runs when hosted exact-pack CI can reject or validate the premise first.
 
 The distributable JAR is the packaged bootstrap from `bootstrap/build/libs/`. A normal `./gradlew build` is expected to produce it. The root `build/libs` JAR is the inner regular mod and is not the standalone distributable.
+
+## Hosted exact-pack CI
+
+The project has a pinned public exact-pack fixture and a hosted startup workflow. Read `docs/research/exact-pack-ci.md` before requesting manual exact-pack hardware runs.
+
+Current fixture contract:
+
+- release/tag: `exact-pack-2026-09-02-v1`
+- asset: `bootoptim-exact-pack.zip`
+- SHA-256: `7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639`
+- fixture contains the user's enabled resource-pack state and preseeded `mods/mcef-libraries/`;
+- fixture intentionally excludes mutable `mods/mcef-cache/`;
+- laptop JVM baseline is Oracle Java 25.0.4, `-Xmx6G`, G1 with the user's supplied tuning, plus `-XX:ActiveProcessorCount=4` on hosted runners.
+
+To request a hosted smoke run for a PR targeting `agent/integration-current`, put this in the PR body:
+
+```text
+[exact-pack-ci]
+exact-pack-mode: smoke
+```
+
+For a same-branch A/B where a JVM property selects candidate/control behavior:
+
+```text
+[exact-pack-ci]
+exact-pack-mode: ab
+exact-pack-repetitions: 3
+exact-pack-candidate-jvm-arg: -Dboot_optim.exampleFeature=true
+exact-pack-control-jvm-arg: -Dboot_optim.exampleFeature=false
+```
+
+Multiple candidate/control JVM-arg lines are allowed. Each A/B run gets a fresh hosted VM. The workflow aggregates medians and uploads `latest.log`, `bootoptim-startup.log`, effective config/options, timeout dumps, and a compact result JSON.
+
+Hosted exact-pack CI is a reproducible **software-pack surrogate**, not the historical laptop itself. Do not overclaim exact hardware equivalence. A physical laptop gate is still required when the mechanism materially depends on storage/page-cache behavior, native/GPU timing, or when the hosted delta is small relative to variance. Large coherent hosted wins should be used to avoid unnecessary manual laptop iteration.
+
+## User-owned / user-edited mod lane
+
+The user explicitly permits direct modifications to mods they authored or edited.
+
+If repository/source/history shows that the user is the author of a mod, or a pack JAR is a user-maintained/custom fork such as a `-wedit` build, **do not assume BootOptim must work around that mod from the outside**. A direct source change in the controlled mod is a valid optimization candidate and may be cleaner/safer than a BootOptim mixin.
+
+When this applies:
+
+- tell the user which direct-mod change you propose and why;
+- ask for/evaluate the relevant mod repository or source if it is not already accessible;
+- keep that change isolated to the appropriate mod repository rather than silently vendoring it into BootOptim;
+- still apply the same correctness, startup, exact-pack, and regression gates;
+- do not treat user ownership as permission to bypass semantic or visual validation.
 
 ## Durable project memory
 
