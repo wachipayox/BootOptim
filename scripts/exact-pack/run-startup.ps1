@@ -21,6 +21,7 @@ Write-Host "Launching exact-pack benchmark variant=$Variant iteration=$Iteration
 $process = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d', '/s', '/c', $command -PassThru -NoNewWindow
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $markerFound = $false
+$processExitedEarly = $false
 
 try {
     while ((Get-Date) -lt $deadline) {
@@ -33,10 +34,11 @@ try {
             }
         }
 
+        $process.Refresh()
         if ($process.HasExited) {
+            $processExitedEarly = $true
             break
         }
-        $process.Refresh()
     }
 
     if (-not $markerFound) {
@@ -55,6 +57,10 @@ try {
 
         if (Test-Path -LiteralPath $consoleLog) {
             Get-Content -LiteralPath $consoleLog -Tail 200 | Out-Host
+        }
+
+        if ($processExitedEarly) {
+            throw "Exact-pack benchmark process exited before the main-menu marker. launcher_exit=$($process.ExitCode)"
         }
         throw "Exact-pack benchmark did not reach the main-menu marker within $TimeoutSeconds seconds."
     }
@@ -89,6 +95,7 @@ try {
         throw "Exact-pack summarizer failed with exit $LASTEXITCODE"
     }
 } finally {
+    $process.Refresh()
     if (-not $process.HasExited) {
         & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null
     }
