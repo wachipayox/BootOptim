@@ -1,0 +1,30 @@
+name: Decocraft item-sprite audit
+
+on:
+  push:
+    branches:
+      - agent/research-decocraft-item-sprite-elision
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Audit exact Decocraft release
+        run: python tools/audit_decocraft_item_sprites.py
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: decocraft-item-sprite-audit-${{ github.sha }}
+          path: decocraft-item-sprite-audit.md
+          if-no-files-found: error
+          retention-days: 14
