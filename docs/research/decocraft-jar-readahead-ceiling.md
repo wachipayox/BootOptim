@@ -2,9 +2,13 @@
 
 Status: **ACTIVE DIAGNOSTIC / DO NOT MERGE**
 
-Branch: `agent/experiment-decocraft-jar-readahead`
+Enabled branch: `agent/experiment-decocraft-jar-readahead`
+
+Paired control branch: `agent/experiment-decocraft-jar-readahead-control`
 
 This experiment exists only to test whether the laptop's expensive stock resource opens are dominated by cold/random physical reads that can be converted into page-cache hits by one sequential pass over Decocraft's physical mod JAR. It does not change resource selection or decoded content.
+
+The paired control contains the same hook and diagnostic class but defaults `boot_optim.experimentDecocraftJarReadahead` to `false`; it therefore emits `status=disabled` and performs no physical scan. That control exists only to make exact-pack A/B independent of historical startup variability.
 
 ## Exact-pack evidence that motivated the experiment
 
@@ -57,13 +61,15 @@ The experiment emits exactly one `BOOTOPTIM_DECOCRAFT_JAR_READAHEAD` line per cl
 - `failed_open`: an exception occurred and stock startup continues;
 - `disabled`: system property kill switch disabled the diagnostic.
 
-The kill switch is `-Dboot_optim.experimentDecocraftJarReadahead=false`. It defaults to enabled **only on this diagnostic branch**.
+On the enabled branch the property defaults to `true` and can be disabled with `-Dboot_optim.experimentDecocraftJarReadahead=false`.
+
+On the paired control branch it defaults to `false` and can only be enabled explicitly with `-Dboot_optim.experimentDecocraftJarReadahead=true`.
 
 ## Validation / stop conditions
 
-1. Build CI must pass.
-2. Vanilla Startup CI must reach the menu with the mixin injection applied and the no-Decocraft path fail-open.
+1. Build CI must pass for both enabled and control artifacts.
+2. Vanilla Startup CI must reach the menu with the mixin injection applied. The enabled branch must fail open when Decocraft is absent; the paired control must emit `status=disabled`.
 3. Do not request an exact-pack laptop run merely because CI is green. First inspect the CI marker and source-level hook placement.
-4. If exact-pack testing is later warranted, compare the read-ahead artifact with the same artifact disabled via the system property. Use initial resource-reload/ModelManager wall and end-to-end main-menu wall; do not infer a global win from the read-ahead function's own duration.
+4. If exact-pack testing is later warranted, compare the enabled and paired-control artifacts. Use initial resource-reload/ModelManager wall and end-to-end main-menu wall; do not infer a global win from the read-ahead function's own duration.
 5. If synchronous read-ahead adds roughly as much wall as it removes from the subsequent reload, close the idea. Only then consider whether a carefully scheduled overlap has any independent ceiling.
-6. This branch is diagnostic and must not be merged into `agent/integration-current`.
+6. Neither diagnostic branch may be merged into `agent/integration-current`.
