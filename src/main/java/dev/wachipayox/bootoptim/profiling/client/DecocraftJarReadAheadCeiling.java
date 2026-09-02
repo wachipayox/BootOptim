@@ -22,16 +22,16 @@ import org.slf4j.LoggerFactory;
  * intended effect is warming the operating-system page cache so the later stock ZipFS reads can be
  * compared against the cold/random-access case.</p>
  *
- * <p>This experiment is deliberately enabled by default only on its diagnostic branch. It must not
- * be promoted to integration without exact-pack A/B evidence and a no-regression result on the fast
- * PC. Disable with {@code -Dboot_optim.experimentDecocraftJarReadahead=false}.</p>
+ * <p>This control build is deliberately disabled by default. Its runtime surface remains otherwise
+ * identical to the enabled diagnostic build so exact-pack A/B can isolate the read-ahead itself.
+ * Enable explicitly with {@code -Dboot_optim.experimentDecocraftJarReadahead=true}.</p>
  */
 public final class DecocraftJarReadAheadCeiling {
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/DecocraftJarReadAhead");
     private static final String MOD_ID = "decocraft";
     private static final int BUFFER_BYTES = 1024 * 1024;
     private static final boolean ENABLED = Boolean.parseBoolean(
-            System.getProperty("boot_optim.experimentDecocraftJarReadahead", "true"));
+            System.getProperty("boot_optim.experimentDecocraftJarReadahead", "false"));
     private static final ThreadMXBean THREAD_MX_BEAN = ManagementFactory.getThreadMXBean();
 
     private DecocraftJarReadAheadCeiling() {}
