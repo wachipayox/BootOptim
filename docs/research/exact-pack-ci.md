@@ -2,38 +2,92 @@
 
 Status: **ACTIVE INFRASTRUCTURE**
 
-This document defines the reproducible hosted surrogate for BootOptim's exact reference modpack. Its purpose is to eliminate most manual laptop launches while preserving the project's requirement that startup work be tested against the real software pack rather than a vanilla/dev-only client.
+This document defines BootOptim's reproducible hosted surrogate for the exact reference modpack. It exists to move repeated software-pack A/B work out of scarce laptop launches while preserving the requirement that candidates be exercised against the real mods, configs and enabled resource packs.
 
-Hosted exact-pack CI is a **surrogate**, not a claim that GitHub hardware is the Intel i3-2350M laptop. Hardware-sensitive effects still require a real-hardware gate when the hosted effect is small, when storage/page-cache behavior is the mechanism, or when native/GPU behavior materially controls the result.
+It is a **software-pack surrogate**, not an emulation of the Intel i3-2350M laptop. Absolute hosted wall time is not a laptop baseline.
 
 ## Fixture pin
 
-The authoritative fixture is a public BootOptim Release asset:
+Authoritative public Release asset:
 
-- release/tag: `exact-pack-2026-09-02-v1`
+- tag: `exact-pack-2026-09-02-v1`
 - asset: `bootoptim-exact-pack.zip`
-- asset size: `1,202,581,263` bytes
+- size: `1,202,581,263` bytes
 - SHA-256: `7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639`
 
-The workflow verifies the SHA-256 before extracting the fixture and caches the ZIP by the pinned digest. Never retarget this tag/asset silently. A changed pack gets a new release/tag and a new documented hash.
+The workflow verifies SHA-256 before extraction and caches the ZIP by the pinned digest. Never silently replace the asset behind this fixture; a changed pack needs a new release/tag and documented hash.
 
-The ZIP was assembled from the user's PC rather than the laptop. It is the authoritative **software pack** fixture: exact mod/config/resource-pack contents supplied by the user, including the resource packs they normally keep enabled. Laptop hardware characteristics are approximated separately by the benchmark JVM/runtime settings.
+The ZIP was assembled on the user's PC, not the laptop. Its purpose is to pin **software state**. `options.txt` is copied so the resource packs the user normally enables participate in hosted resource resolution too.
 
-## MCEF baseline
+The fixture deliberately contains `mods/mcef-libraries/`, deliberately excludes mutable `mods/mcef-cache/`, and must not contain a BootOptim JAR. The branch/PR build is injected by ModDevGradle.
 
-The fixture deliberately includes `mods/mcef-libraries/` and deliberately excludes `mods/mcef-cache/`.
+## Why the hosted client uses Linux + software OpenGL
 
-Rationale:
+The first Windows Server hosted smoke proved that a stock Minecraft client cannot create a usable GLFW window on the GitHub Windows runner. After the Drippy early window was disabled, vanilla reached `glfwCreateWindow`, failed, then blocked in `Window.bootCrash -> TinyFileDialogs.tinyfd_messageBox` trying to show an error dialog on the non-interactive runner.
 
-- native CEF libraries are pinned inputs and must not introduce network/download/extraction variance on each hosted VM;
-- Chromium browser cache is mutable runtime state and would make runs depend on prior navigation/history;
-- each hosted benchmark therefore starts with preseeded CEF binaries but a cold browser cache.
+That failure is a runner graphics limitation, not an exact-pack compatibility result.
 
-`scripts/exact-pack/prepare-fixture.ps1` fails if this invariant changes.
+Hosted exact-pack jobs therefore use `ubuntu-22.04` with:
+
+- Xvfb display `:99`;
+- Mesa llvmpipe software rendering;
+- `LIBGL_ALWAYS_SOFTWARE=true`;
+- `GALLIUM_DRIVER=llvmpipe`;
+- Mesa GL/GLSL exposure forced to 4.6/460 because the exact pack requests an OpenGL 4.6 context.
+
+`glxinfo -B` is captured for every run and the job fails if llvmpipe is not active.
+
+This makes client/render/resource code executable in CI, but **GPU/render/native timing is not portable evidence**. Use hosted timing primarily for paired Java/resource/model/atlas directionality.
+
+## Hosted-only Drippy exception
+
+The extracted ephemeral copy gets:
+
+```toml
+earlyWindowControl = false
+```
+
+in `config/fml.toml`.
+
+Exact FML behavior for this setting is to skip the `ImmediateWindowProvider`. Drippy itself remains installed and its normal resources/classes remain part of the pack.
+
+Consequences:
+
+- work performed by the Drippy early-window provider itself is **not measured**;
+- ModLauncher, mod discovery/transforms, Minecraft client initialization, MCEF, resource reload, models, atlases and FancyMenu work that occur outside that provider still execute normally and remain in startup measurements.
+
+The original Release ZIP is never modified.
+
+## Deterministic MCEF setup
+
+Exact MCEF is `2.1.6-1.21.1`. Its source has a special development path: when `../build` exists relative to the game directory it uses `../build/mcef-libraries/` instead of `mods/mcef-libraries/`. ModDevGradle exact-pack runs satisfy that condition, so merely copying the fixture's Windows MCEF directory does not preseed the binaries used by the hosted run.
+
+Hosted CI pins the java-cef commit observed/source-resolved for this exact MCEF build:
+
+```text
+a78e832f9f13c2c688caea3d04d8b84fcd238d94
+```
+
+Before any timed Minecraft launch, the fixture job downloads and SHA-verifies the corresponding `linux_amd64` JCEF archive, extracts it, and caches it. Each benchmark VM restores that immutable cache and stages it at:
+
+```text
+build/mcef-libraries/linux_amd64/
+```
+
+MCEF 2.1.6 still performs a checksum HTTP request during its download thread even when binaries are already present. To remove WAN variance without patching MCEF, the ephemeral `config/mcef/mcef.properties` is changed to:
+
+- `download-mirror=http://127.0.0.1:18765`;
+- `skip-download=true`.
+
+A tiny localhost HTTP server serves the already-pinned checksum during the Minecraft launch. The local checksum is also staged beside JCEF, so a match means no archive download/extraction occurs inside measured startup. `-Dmcef.java.cef.commit=...` pins MCEF's source-supported commit override explicitly.
+
+`use-cache` and user-agent settings from the supplied pack are preserved. The fixture contains no `mcef-cache`, so each fresh hosted VM starts without prior browser-history/cache state.
+
+Hosted MCEF initialization wall is useful as a **noise/control marker only**. Linux JCEF + llvmpipe must not be used to accept or reject a Windows-native MCEF optimization without real-hardware validation.
 
 ## Laptop JVM surrogate
 
-The user-provided laptop JVM arguments are reproduced for the Minecraft process:
+Minecraft receives the user's laptop JVM arguments:
 
 ```text
 -Xmx6G
@@ -45,19 +99,19 @@ The user-provided laptop JVM arguments are reproduced for the Minecraft process:
 -XX:G1HeapRegionSize=32M
 ```
 
-Hosted CI additionally sets:
+and additionally:
 
 ```text
 -XX:ActiveProcessorCount=4
 ```
 
-because the reference laptop has four logical processors and a hosted runner must not expose a different processor count to Minecraft/ForkJoinPool heuristics.
+so JVM/ForkJoin heuristics see the laptop's four logical processors. The runtime is Oracle JDK `25.0.4`; BootOptim remains compiled with Java 21.
 
-The reference runtime is Oracle JDK `25.0.4`, matching the user's current laptop runs. BootOptim remains compiled with its production Java 21 toolchain; only the `runPackBenchmarkClient` Java launcher is overridden to the exact-pack runtime when `BOOTOPTIM_PACK_JAVA_VERSION` is set.
+The workflow records actual hosted CPU/memory separately. `ActiveProcessorCount=4` does not make hosted hardware identical to the laptop.
 
-## What the fixture copies
+## Copied instance state
 
-`preparePackBenchmark` copies startup-relevant instance content into `run-pack-benchmark`, including:
+`preparePackBenchmark` copies startup-relevant instance content into `run-pack-benchmark`:
 
 - `mods/`
 - `config/`
@@ -73,22 +127,18 @@ The reference runtime is Oracle JDK `25.0.4`, matching the user's current laptop
 - `fancymenu_data/`
 - `options.txt`
 
-BootOptim itself must not be present in the fixture. The source/PR build is injected by ModDevGradle, ensuring an A/B tests exactly the branch under review.
-
-## Workflow trigger protocol
+## Trigger protocol
 
 Workflow: `.github/workflows/exact-pack-startup-benchmark.yml`.
 
-Because `agent/integration-current` is not the repository default branch, agents must not rely on `workflow_dispatch` being available for integration-only workflow revisions. The durable PR trigger is the PR body marker:
+Smoke:
 
 ```text
 [exact-pack-ci]
 exact-pack-mode: smoke
 ```
 
-A smoke run uses one fresh Windows hosted VM and current feature defaults.
-
-For same-branch A/B, use:
+Same-branch A/B:
 
 ```text
 [exact-pack-ci]
@@ -98,53 +148,53 @@ exact-pack-candidate-jvm-arg: -Dboot_optim.exampleFeature=true
 exact-pack-control-jvm-arg: -Dboot_optim.exampleFeature=false
 ```
 
-Multiple `exact-pack-candidate-jvm-arg:` / `exact-pack-control-jvm-arg:` lines are allowed. The workflow creates independent hosted VMs for each run, alternating logical matrix entries as control/candidate and aggregating medians. Repetitions are restricted to 1-5 per variant to bound CI cost.
+Multiple candidate/control JVM-arg lines are supported. Repetitions are limited to 1-5 per variant. Every matrix entry gets a fresh hosted VM, so candidate/control runs do not share JVM state, Minecraft process state or OS page cache.
 
-Editing the PR body or pushing a new commit triggers the workflow while `[exact-pack-ci]` remains present. Remove the marker when continuous exact-pack reruns are no longer wanted.
+PR-body triggering is the durable contract because `agent/integration-current` is not the repository default branch. `workflow_dispatch` is also defined for environments where the workflow is available from the default branch.
 
-`workflow_dispatch` is also defined for use if/when the workflow is available on the repository default branch, but PR-body triggering is the integration-branch contract agents can rely on today.
+## Evidence produced
 
-## Produced evidence
+Per run, CI keeps lightweight diagnostics rather than re-uploading the pack:
 
-Each run uploads only lightweight diagnostics rather than the copied pack:
+- `result.json`;
+- console log;
+- thread dump on failure/timeout;
+- `latest.log` and `bootoptim-startup.log`;
+- effective BootOptim/FML/MCEF config and `options.txt`;
+- Xvfb/OpenGL and hosted-resource diagnostics.
 
-- `result.json`
-- exact-pack console log
-- timeout thread dump when present
-- `run-pack-benchmark/logs/latest.log`
-- `run-pack-benchmark/logs/bootoptim-startup.log`
-- effective `boot_optim.properties`
-- effective `options.txt`
+Aggregate medians cover, when available:
 
-The aggregate job reports medians for available markers including:
-
-- total/main-menu startup uptime;
+- main-menu startup uptime;
 - mod-entrypoint uptime;
 - mod-entrypoint -> main-menu wall;
 - MCEF initialization wall;
-- initial resource-reload start -> FancyMenu reload-finished wall;
-- FancyMenu panorama wall when a compatible marker is present;
-- BootOptim Mixin failure count;
-- Decocraft 3D-item markers are retained verbatim in each run result.
+- initial reload start -> FancyMenu reload-finished wall;
+- FancyMenu panorama wall;
+- BootOptim Mixin failures;
+- Decocraft 3D-item markers.
 
-Do not sum concurrent/asynchronous listener or task-sum measurements. Hosted CI remains governed by the same critical-path rules as laptop profiling.
+Never sum asynchronous listener/task-sum measurements. The same critical-path rules used on laptop evidence apply here.
 
-## Interpretation and hardware gate
+## Interpretation / hardware gate
 
-Use hosted exact-pack CI as the default first runtime/performance gate after Build CI and vanilla Startup CI.
+Use hosted exact-pack CI after Build CI and normal Startup CI as the default repeated-runtime gate.
 
-A large, coherent hosted win across repeated A/B runs can eliminate most manual laptop iteration. A laptop/fast-PC confirmation remains appropriate before production promotion when:
+Good hosted evidence is a **coherent paired effect**: candidate medians move in the expected direction, relevant phase markers move with them, mechanism markers prove the optimization ran, and unrelated MCEF/FancyMenu variance is bounded.
 
-- the expected gain is small relative to run variance;
-- physical disk access, OS page cache, storage queueing, or filesystem behavior is the mechanism;
-- native CEF/GPU behavior is central;
-- steady-state visual/render behavior must be inspected;
-- the hosted runner and laptop disagree materially in phase scaling.
+Real hardware is still required before production promotion when:
 
-The goal is not to make hosted wall time equal the historical ~337 s laptop wall. The goal is a reproducible exact-software-pack environment that predicts direction and exposes phase regressions before scarce hardware runs.
+- the effect is small/noisy;
+- physical disk, filesystem or OS page-cache behavior is the mechanism;
+- native CEF or GPU behavior is central;
+- Windows-specific behavior matters;
+- visual/steady-state rendering must be inspected;
+- hosted and laptop phase scaling disagree materially.
+
+The goal is not to reproduce the historical ~337 s laptop wall. The goal is to remove avoidable run-to-run software/environment noise before asking the laptop to arbitrate the remaining hardware-sensitive question.
 
 ## Editable/custom mod lane
 
-The user explicitly permits direct modifications to mods they authored or edited. When source/history indicates a mod is authored by the user or is a user-maintained/custom `-wedit` fork, agents may treat **editing that mod directly** as a valid optimization candidate instead of assuming BootOptim must work around it externally.
+The user explicitly permits direct modifications to mods they authored or edited. If source/history shows a mod is user-authored or a user-maintained/custom `-wedit` fork, editing that mod directly is a valid optimization candidate rather than forcing an external BootOptim workaround.
 
-Agents should surface the proposed direct-mod change to the user for evaluation, keep the change isolated to the appropriate repository, and still apply normal correctness/performance validation. This permission does not waive semantic safety; it removes an artificial repository-boundary constraint when the user controls the relevant mod.
+Agents should present the direct-mod change for user evaluation, isolate it in the appropriate repository, and retain the normal correctness/performance gates. This permission removes a repository-boundary constraint; it does not waive semantic safety.
