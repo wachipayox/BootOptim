@@ -8,6 +8,8 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
+    "client.ModelManagerDecocraft3dItemsMixin",
+    "client.SpriteSourceListDecocraft3dItemsMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
