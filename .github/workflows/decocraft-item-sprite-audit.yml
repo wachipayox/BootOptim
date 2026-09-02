@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - agent/research-decocraft-item-sprite-elision
+      - agent/experiment-decocraft-3d-items
   workflow_dispatch:
 
 jobs:
@@ -21,10 +22,20 @@ jobs:
       - name: Audit exact Decocraft release
         run: python tools/audit_decocraft_item_sprites.py
 
-      - name: Upload report
+      - name: Validate exact candidate count
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(grep -vc '^#' decocraft-3d-item-candidates.txt)
+          echo "candidate_count=$count"
+          test "$count" -eq 3192
+
+      - name: Upload report and candidate mapping
         uses: actions/upload-artifact@v4
         with:
           name: decocraft-item-sprite-audit-${{ github.sha }}
-          path: decocraft-item-sprite-audit.md
+          path: |
+            decocraft-item-sprite-audit.md
+            decocraft-3d-item-candidates.txt
           if-no-files-found: error
           retention-days: 14
