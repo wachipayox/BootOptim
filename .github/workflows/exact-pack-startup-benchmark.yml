@@ -1,0 +1,314 @@
+name: Exact Pack Startup Benchmark
+
+on:
+  pull_request:
+    branches:
+      - agent/integration-current
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Benchmark mode
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - ab
+      repetitions:
+        description: A/B repetitions per variant (1-5)
+        required: true
+        default: '3'
+        type: string
+      smoke_jvm_args:
+        description: Optional newline-separated JVM args for smoke mode
+        required: false
+        default: ''
+        type: string
+      candidate_jvm_args:
+        description: Optional newline-separated candidate JVM args for A/B
+        required: false
+        default: ''
+        type: string
+      control_jvm_args:
+        description: Optional newline-separated control JVM args for A/B
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exact-pack-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+  EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+  EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+  EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd90497a4d
+
+jobs:
+  plan:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body || '', '[exact-pack-ci]')
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      mode: ${{ steps.plan.outputs.mode }}
+    env:
+      PR_BODY: ${{ github.event.pull_request.body || '' }}
+      DISPATCH_MODE: ${{ inputs.mode || '' }}
+      DISPATCH_REPETITIONS: ${{ inputs.repetitions || '' }}
+      DISPATCH_SMOKE_ARGS: ${{ inputs.smoke_jvm_args || '' }}
+      DISPATCH_CANDIDATE_ARGS: ${{ inputs.candidate_jvm_args || '' }}
+      DISPATCH_CONTROL_ARGS: ${{ inputs.control_jvm_args || '' }}
+    steps:
+      - name: Build benchmark matrix
+        id: plan
+        shell: python
+        run: |
+          import json
+          import os
+          import re
+
+          body = os.environ.get('PR_BODY', '')
+          event_is_dispatch = bool(os.environ.get('DISPATCH_MODE', '').strip())
+
+          def directive(name):
+              pattern = rf'^\s*{re.escape(name)}\s*:\s*(.*?)\s*$'
+              return [m.group(1) for m in re.finditer(pattern, body, re.IGNORECASE | re.MULTILINE)]
+
+          if event_is_dispatch:
+              mode = os.environ.get('DISPATCH_MODE', 'smoke').strip().lower()
+              repetitions_text = os.environ.get('DISPATCH_REPETITIONS', '3').strip() or '3'
+              smoke_args = os.environ.get('DISPATCH_SMOKE_ARGS', '').strip()
+              candidate_args = os.environ.get('DISPATCH_CANDIDATE_ARGS', '').strip()
+              control_args = os.environ.get('DISPATCH_CONTROL_ARGS', '').strip()
+          else:
+              mode_values = directive('exact-pack-mode')
+              mode = (mode_values[-1] if mode_values else 'smoke').strip().lower()
+              repetition_values = directive('exact-pack-repetitions')
+              repetitions_text = (repetition_values[-1] if repetition_values else '3').strip()
+              smoke_args = '\n'.join(directive('exact-pack-smoke-jvm-arg')).strip()
+              candidate_args = '\n'.join(directive('exact-pack-candidate-jvm-arg')).strip()
+              control_args = '\n'.join(directive('exact-pack-control-jvm-arg')).strip()
+
+          if mode not in {'smoke', 'ab'}:
+              raise SystemExit(f'Unsupported exact-pack mode: {mode}')
+
+          try:
+              repetitions = int(repetitions_text)
+          except ValueError as exc:
+              raise SystemExit(f'Invalid exact-pack-repetitions: {repetitions_text}') from exc
+          if not 1 <= repetitions <= 5:
+              raise SystemExit('exact-pack-repetitions must be between 1 and 5')
+
+          include = []
+          if mode == 'smoke':
+              include.append({'variant': 'smoke', 'iteration': 1, 'jvm_args': smoke_args})
+          else:
+              if candidate_args == control_args:
+                  raise SystemExit('A/B mode requires candidate and control JVM args to differ.')
+              for iteration in range(1, repetitions + 1):
+                  include.append({'variant': 'control', 'iteration': iteration, 'jvm_args': control_args})
+                  include.append({'variant': 'candidate', 'iteration': iteration, 'jvm_args': candidate_args})
+
+          matrix = json.dumps({'include': include}, separators=(',', ':'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'matrix={matrix}\n')
+              output.write(f'mode={mode}\n')
+          print(json.dumps({'mode': mode, 'runs': include}, indent=2))
+
+  fixture:
+    needs: plan
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Restore exact-pack ZIP cache
+        id: pack-cache
+        uses: actions/cache@v4
+        with:
+          path: .exact-pack-cache/bootoptim-exact-pack.zip
+          key: ${{ env.EXACT_PACK_CACHE_KEY }}
+
+      - name: Download pinned exact-pack release asset
+        if: steps.pack-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Path .exact-pack-cache -Force | Out-Null
+          gh release download $env:EXACT_PACK_TAG `
+            --repo $env:GITHUB_REPOSITORY `
+            --pattern $env:EXACT_PACK_ASSET `
+            --dir .exact-pack-cache `
+            --clobber
+
+      - name: Verify pinned exact-pack SHA-256
+        shell: pwsh
+        run: |
+          $path = '.exact-pack-cache/bootoptim-exact-pack.zip'
+          if (-not (Test-Path -LiteralPath $path)) {
+            throw "Exact-pack ZIP is missing after cache/download: $path"
+          }
+          $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:EXACT_PACK_SHA256) {
+            throw "Exact-pack SHA mismatch. expected=$env:EXACT_PACK_SHA256 actual=$actual"
+          }
+          Write-Host "Exact-pack fixture SHA-256 verified: $actual"
+
+  benchmark:
+    needs:
+      - plan
+      - fixture
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      BOOTOPTIM_PACK_JAVA_VERSION: '25'
+      BOOTOPTIM_PACK_BASE_JVM_ARGS: |-
+        -Xmx6G
+        -XX:+UnlockExperimentalVMOptions
+        -XX:+UseG1GC
+        -XX:G1NewSizePercent=20
+        -XX:G1ReservePercent=20
+        -XX:MaxGCPauseMillis=50
+        -XX:G1HeapRegionSize=32M
+        -XX:ActiveProcessorCount=4
+      BOOTOPTIM_PACK_EXTRA_JVM_ARGS: ${{ matrix.jvm_args }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup compile JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Remember JDK 21 path
+        shell: pwsh
+        run: |
+          "BOOTOPTIM_JDK21=$($env:JAVA_HOME -replace '\\','/')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup reference runtime Oracle JDK 25.0.4
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25.0.4'
+          distribution: oracle
+
+      - name: Remember JDK 25 path
+        shell: pwsh
+        run: |
+          "BOOTOPTIM_JDK25=$($env:JAVA_HOME -replace '\\','/')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Pin Gradle toolchain discovery
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "$HOME/.gradle" -Force | Out-Null
+          $paths = "$env:BOOTOPTIM_JDK21,$env:BOOTOPTIM_JDK25"
+          Add-Content -LiteralPath "$HOME/.gradle/gradle.properties" -Value "org.gradle.java.installations.paths=$paths"
+          Write-Host "Gradle JDK paths: $paths"
+
+      - name: Restore exact-pack ZIP
+        uses: actions/cache/restore@v4
+        with:
+          path: .exact-pack-cache/bootoptim-exact-pack.zip
+          key: ${{ env.EXACT_PACK_CACHE_KEY }}
+          fail-on-cache-miss: true
+
+      - name: Verify and extract exact-pack fixture
+        shell: pwsh
+        run: |
+          ./scripts/exact-pack/prepare-fixture.ps1 `
+            -ZipPath '.exact-pack-cache/bootoptim-exact-pack.zip' `
+            -ExpectedSha256 $env:EXACT_PACK_SHA256 `
+            -ExtractDirectory '.exact-pack-run'
+
+      - name: Launch exact pack to main menu
+        shell: pwsh
+        run: |
+          ./scripts/exact-pack/run-startup.ps1 `
+            -Variant '${{ matrix.variant }}' `
+            -Iteration ${{ matrix.iteration }} `
+            -TimeoutSeconds 900
+
+      - name: Upload exact-pack run diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-pack-result-${{ matrix.variant }}-${{ matrix.iteration }}
+          path: |
+            result.json
+            exact-pack-console.log
+            exact-pack-thread-dump.log
+            run-pack-benchmark/logs/latest.log
+            run-pack-benchmark/logs/bootoptim-startup.log
+            run-pack-benchmark/config/boot_optim.properties
+            run-pack-benchmark/options.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+  aggregate:
+    if: always() && needs.plan.result == 'success'
+    needs:
+      - plan
+      - benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Download exact-pack run results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: exact-pack-result-*
+          path: exact-pack-results
+
+      - name: Aggregate exact-pack medians
+        shell: bash
+        run: |
+          python scripts/exact-pack/summarize_startup.py aggregate \
+            --results-dir exact-pack-results \
+            --output exact-pack-summary.md \
+            --json-output exact-pack-summary.json
+          cat exact-pack-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload exact-pack summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-pack-summary
+          path: |
+            exact-pack-summary.md
+            exact-pack-summary.json
+          retention-days: 30
+
+      - name: Propagate benchmark failure
+        if: needs.benchmark.result != 'success'
+        shell: bash
+        run: |
+          echo 'One or more exact-pack benchmark jobs failed.' >&2
+          exit 1
