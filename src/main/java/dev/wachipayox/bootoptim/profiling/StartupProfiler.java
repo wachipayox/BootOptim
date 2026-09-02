@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.profiling;
 
 import com.mojang.logging.LogUtils;
+import dev.wachipayox.bootoptim.profiling.client.McefFirstConsumerDeferCeiling;
 import java.lang.management.ManagementFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
@@ -48,6 +49,8 @@ public final class StartupProfiler {
             StartupReport.phase("main_menu", uptimeMs);
             StartupReport.complete(uptimeMs);
         }
+        // Diagnostic-only hook: report whether MCEF is still truly deferred at the title boundary.
+        McefFirstConsumerDeferCeiling.onMainMenuReached();
         if (PROFILING_ENABLED) {
             logPhase("main_menu");
         }
