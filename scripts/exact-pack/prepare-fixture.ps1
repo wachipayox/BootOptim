@@ -62,6 +62,24 @@ if ($bootOptimJars.Count -gt 0) {
     throw "Exact-pack fixture must not contain BootOptim; the PR build is injected by ModDevGradle. Found: $($bootOptimJars.Name -join ', ')"
 }
 
+# GitHub's hosted Windows Server runner has no usable graphics adapter/interactive desktop for
+# Drippy's ImmediateWindowProvider. Keep the Drippy mod and all of its normal resources/config,
+# but disable only FML's pre-Minecraft early window in this ephemeral extracted copy. FML treats
+# earlyWindowControl=false as a first-class opt-out and continues without loading any provider.
+$fmlConfig = Join-Path $packRoot 'config/fml.toml'
+if (-not (Test-Path -LiteralPath $fmlConfig)) {
+    throw 'Exact-pack fixture is missing config/fml.toml; cannot apply the documented hosted early-window exception.'
+}
+$fmlText = Get-Content -LiteralPath $fmlConfig -Raw
+$earlyWindowPattern = '(?m)^\s*earlyWindowControl\s*=\s*(true|false)\s*$'
+if ([regex]::IsMatch($fmlText, $earlyWindowPattern)) {
+    $fmlText = [regex]::Replace($fmlText, $earlyWindowPattern, 'earlyWindowControl = false', 1)
+} else {
+    $fmlText = $fmlText.TrimEnd() + "`r`n`r`n# BootOptim hosted exact-pack CI exception: no interactive early window.`r`nearlyWindowControl = false`r`n"
+}
+Set-Content -LiteralPath $fmlConfig -Value $fmlText -Encoding utf8
+Write-Host 'Exact-pack hosted exception applied: config/fml.toml earlyWindowControl=false (Drippy mod retained).'
+
 $modJarCount = @(Get-ChildItem -LiteralPath (Join-Path $packRoot 'mods') -File -Filter '*.jar').Count
 Write-Host "Exact-pack fixture verified: sha256=$actualHash mod_jars=$modJarCount root=$packRoot"
 
