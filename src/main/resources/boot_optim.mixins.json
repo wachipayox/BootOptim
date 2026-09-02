@@ -9,6 +9,7 @@
     "client.LevelRendererReloadTimingMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
+    "client.PostChainReloadTimingMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
