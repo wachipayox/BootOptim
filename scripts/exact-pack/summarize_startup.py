@@ -6,8 +6,13 @@ import statistics
 from pathlib import Path
 
 
+CLOCK_RE = re.compile(
+    r"^\[(?:(?:\d{2}[A-Za-z]{3}\d{4})\s+)?(\d{2}):(\d{2}):(\d{2})(?:\.(\d{3}))?\]"
+)
+
+
 def parse_clock_ms(line: str):
-    match = re.match(r"^\[(\d{2}):(\d{2}):(\d{2})(?:\.(\d{3}))?\]", line)
+    match = CLOCK_RE.match(line)
     if not match:
         return None
     hour, minute, second = (int(match.group(i)) for i in range(1, 4))
@@ -54,6 +59,43 @@ def parse_startup_report(path: Path):
     return phases, total
 
 
+def find_int(line: str, key: str):
+    match = re.search(rf"(?:^|\s){re.escape(key)}=(\d+)(?:\s|$)", line)
+    return int(match.group(1)) if match else None
+
+
+def parse_decocraft(lines):
+    markers = [line.strip() for line in lines if "BOOTOPTIM_DECOCRAFT_3D_ITEMS" in line]
+    status = None
+    remapped = None
+    removed = None
+    for line in markers:
+        if " stage=" not in line and " status=" in line:
+            match = re.search(r"\bstatus=(\S+)", line)
+            if match:
+                status = match.group(1)
+        if "stage=models" in line:
+            remapped = find_int(line, "remapped")
+        if "stage=atlas " in line:
+            removed = find_int(line, "removed")
+    if status == "disabled":
+        remapped = 0 if remapped is None else remapped
+        removed = 0 if removed is None else removed
+    return markers, status, remapped, removed
+
+
+def parse_blocks_atlas(lines):
+    pattern = re.compile(
+        r"Created:\s*(\d+)x(\d+)x(\d+)\s+minecraft:textures/atlas/blocks\.png-atlas"
+    )
+    for line in lines:
+        match = pattern.search(line)
+        if match:
+            width, height, levels = (int(match.group(i)) for i in range(1, 4))
+            return width, height, levels
+    return None, None, None
+
+
 def parse_single(args):
     latest_path = Path(args.latest)
     startup_path = Path(args.startup)
@@ -70,6 +112,7 @@ def parse_single(args):
 
     panorama_ms = None
     panorama_patterns = [
+        re.compile(r"\bpreload_ms=([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE),
         re.compile(r"preload(?:ing)?[^\n]*?([0-9]+(?:[.,][0-9]+)?)\s*ms", re.IGNORECASE),
         re.compile(r"panorama[^\n]*?([0-9]+(?:[.,][0-9]+)?)\s*ms", re.IGNORECASE),
     ]
@@ -83,7 +126,10 @@ def parse_single(args):
                     panorama_ms = float(match.group(1).replace(",", "."))
                 except ValueError:
                     pass
-    decocraft_markers = [line.strip() for line in lines if "BOOTOPTIM_DECOCRAFT_3D_ITEMS" in line]
+                break
+
+    decocraft_markers, decocraft_status, decocraft_remapped, decocraft_removed = parse_decocraft(lines)
+    atlas_width, atlas_height, atlas_levels = parse_blocks_atlas(lines)
 
     error_patterns = [
         "InvalidInjectionException",
@@ -103,7 +149,13 @@ def parse_single(args):
         "reload_to_fancymenu_finish_ms": delta_ms(reload_start, fancy_reload_end),
         "fancymenu_panorama_ms": panorama_ms,
         "bootoptim_mixin_errors": bootoptim_mixin_errors,
+        "decocraft_status": decocraft_status,
+        "decocraft_models_remapped": decocraft_remapped,
+        "decocraft_atlas_removed": decocraft_removed,
         "decocraft_markers": decocraft_markers,
+        "blocks_atlas_width": atlas_width,
+        "blocks_atlas_height": atlas_height,
+        "blocks_atlas_levels": atlas_levels,
     }
     Path(args.output).write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
@@ -118,6 +170,20 @@ def format_ms(value):
     if value is None:
         return "n/a"
     return f"{value:,.1f}"
+
+
+def stable_text(values):
+    filtered = sorted({str(value) for value in values if value is not None})
+    return ", ".join(filtered) if filtered else "n/a"
+
+
+def atlas_text(row):
+    width = row.get("blocks_atlas_width")
+    height = row.get("blocks_atlas_height")
+    levels = row.get("blocks_atlas_levels")
+    if None in (width, height, levels):
+        return None
+    return f"{width}x{height}x{levels}"
 
 
 def parse_aggregate(args):
@@ -148,14 +214,18 @@ def parse_aggregate(args):
         summary[variant] = {metric: median([row.get(metric) for row in subset]) for metric in metrics}
         summary[variant]["runs"] = len(subset)
         summary[variant]["bootoptim_mixin_errors"] = sum(row.get("bootoptim_mixin_errors", 0) for row in subset)
+        summary[variant]["decocraft_status"] = stable_text(row.get("decocraft_status") for row in subset)
+        summary[variant]["decocraft_models_remapped"] = median([row.get("decocraft_models_remapped") for row in subset])
+        summary[variant]["decocraft_atlas_removed"] = median([row.get("decocraft_atlas_removed") for row in subset])
+        summary[variant]["blocks_atlas"] = stable_text(atlas_text(row) for row in subset)
 
     markdown = [
         "# Exact-pack startup benchmark",
         "",
-        "Hosted measurements are a reproducible surrogate. Hardware-sensitive conclusions still require a real-hardware gate when the effect is small or storage/native timing is material.",
+        "Hosted measurements are a reproducible software-pack surrogate. Hardware-sensitive conclusions still require a real-hardware gate.",
         "",
-        "| Variant | Runs | main_menu ms | mod_entrypoint ms | post-mod ms | MCEF ms | reload→FancyMenu ms | panorama ms | BootOptim mixin errors |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Variant | Runs | main_menu ms | mod_entrypoint ms | post-mod ms | MCEF ms | reload→FancyMenu ms | panorama ms | Decocraft status | remapped | sprites removed | blocks atlas | mixin errors |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- | ---: |",
     ]
     for variant in variants:
         data = summary[variant]
@@ -163,7 +233,10 @@ def parse_aggregate(args):
             f"| {variant} | {data['runs']} | {format_ms(data['startup_total_ms'])} | "
             f"{format_ms(data['mod_entrypoint_ms'])} | {format_ms(data['post_mod_entrypoint_ms'])} | "
             f"{format_ms(data['mcef_init_ms'])} | {format_ms(data['reload_to_fancymenu_finish_ms'])} | "
-            f"{format_ms(data['fancymenu_panorama_ms'])} | {data['bootoptim_mixin_errors']} |"
+            f"{format_ms(data['fancymenu_panorama_ms'])} | {data['decocraft_status']} | "
+            f"{data['decocraft_models_remapped'] if data['decocraft_models_remapped'] is not None else 'n/a'} | "
+            f"{data['decocraft_atlas_removed'] if data['decocraft_atlas_removed'] is not None else 'n/a'} | "
+            f"{data['blocks_atlas']} | {data['bootoptim_mixin_errors']} |"
         )
 
     if "candidate" in summary and "control" in summary:
