@@ -2,8 +2,8 @@
 """Static audit for Decocraft 3.0.11 item textures/models.
 
 Research-only helper. Downloads the exact public Modrinth release, inspects the JAR
-without extracting it, and emits aggregate counts needed to decide whether an
-opt-in item-sprite elision experiment has a meaningful ceiling.
+without extracting it, and emits aggregate counts plus the exact item->texture
+mapping used by the guarded 3D-item experiment.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ import json
 import struct
 import urllib.request
 import zipfile
-from pathlib import PurePosixPath
 
 VERSION_ID = "Z8xm2POI"
 PROJECT_ID = "IZJSgKZe"
@@ -231,6 +230,15 @@ def main() -> None:
     print(report)
     with open("decocraft-item-sprite-audit.md", "w", encoding="utf-8") as out:
         out.write(report)
+
+    # This is the exact static allowlist consumed by the runtime experiment. Keep the
+    # item id and texture id separate: a small number of valid candidates do not use
+    # a same-name texture. No asset bytes are copied, only public resource identifiers.
+    with open("decocraft-3d-item-candidates.txt", "w", encoding="utf-8", newline="\n") as out:
+        out.write("# Decocraft 3.0.11 / Modrinth Z8xm2POI\n")
+        out.write("# item_model_path<TAB>item_texture_resource_location\n")
+        for item_id, texture in sorted(no_other_ref_candidates):
+            out.write(f"{item_id}\t{texture}\n")
 
 
 if __name__ == "__main__":
