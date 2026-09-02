@@ -2,8 +2,8 @@
 """Static audit for Decocraft 3.0.11 item textures/models.
 
 Research-only helper. Downloads the exact public Modrinth release, inspects the JAR
-without extracting it, and emits aggregate counts plus the exact item->texture
-mapping used by the guarded 3D-item experiment.
+without extracting it, and emits aggregate counts plus compact identifiers needed
+by the guarded 3D-item experiment.
 """
 
 from __future__ import annotations
@@ -72,8 +72,6 @@ def main() -> None:
     parsed_json = {name: load_json(zf, name) for name in all_json}
     block_ids = {model_id_from_path(n, BLOCK_MODEL_PREFIX) for n in block_models}
 
-    # Count exact resource-id references in every asset JSON. This lets us identify
-    # textures that are only referenced by the generated item model that owns them.
     texture_referrers: dict[str, set[str]] = collections.defaultdict(set)
     for path, obj in parsed_json.items():
         if obj is None:
@@ -85,7 +83,6 @@ def main() -> None:
     stats = collections.Counter()
     candidate_textures: set[str] = set()
     generated_textures: set[str] = set()
-    same_name_candidates: list[tuple[str, str]] = []
     no_other_ref_candidates: list[tuple[str, str]] = []
     custom_block_candidates = 0
 
@@ -130,7 +127,6 @@ def main() -> None:
         if not extra_keys and only_layer0:
             stats["pure_generated_same_name_block"] += 1
             candidate_textures.add(layer0)
-            same_name_candidates.append((item_id, layer0))
 
             refs = texture_referrers.get(layer0, set())
             if refs <= {path}:
@@ -146,7 +142,6 @@ def main() -> None:
             ):
                 custom_block_candidates += 1
 
-    # Encoded/decoded footprint of exact item texture corpus and candidate subsets.
     def footprint(resource_ids: set[str] | None):
         encoded = compressed = decoded = count = 0
         for path in item_textures:
@@ -163,10 +158,16 @@ def main() -> None:
                 decoded += dims[0] * dims[1] * 4
         return count, encoded, compressed, decoded
 
+    all_item_texture_ids = {
+        f"{NS}:item/{path[len(ITEM_TEXTURE_PREFIX):-4]}" for path in item_textures
+    }
+    removable_textures = {tex for _, tex in no_other_ref_candidates}
+    keep_textures = sorted(all_item_texture_ids - removable_textures)
+
     all_fp = footprint(None)
     generated_fp = footprint(generated_textures)
     candidate_fp = footprint(candidate_textures)
-    no_other_ref_fp = footprint({tex for _, tex in no_other_ref_candidates})
+    no_other_ref_fp = footprint(removable_textures)
 
     atlas_files = [n for n in sorted(names) if n.endswith(".json") and n.startswith(ATLAS_PREFIXES)]
     atlas_directory_item_mentions = []
@@ -184,18 +185,14 @@ def main() -> None:
     lines.append("")
     lines.append("## Model mapping")
     for key in [
-        "item_models",
-        "item_models_unparseable",
-        "generated_parent",
-        "generated_decocraft_layer0",
-        "generated_layer0_texture_exists",
-        "generated_texture_same_name",
-        "same_name_block_model_exists",
-        "pure_generated_same_name_block",
-        "pure_candidate_no_other_json_ref",
+        "item_models", "item_models_unparseable", "generated_parent",
+        "generated_decocraft_layer0", "generated_layer0_texture_exists",
+        "generated_texture_same_name", "same_name_block_model_exists",
+        "pure_generated_same_name_block", "pure_candidate_no_other_json_ref",
     ]:
         lines.append(f"- `{key}`: **{stats[key]}**")
     lines.append(f"- pure candidates whose same-name block JSON advertises a custom/loader-like key: **{custom_block_candidates}**")
+    lines.append(f"- exact Decocraft item textures retained by the compact keep-list: **{len(keep_textures)}**")
     lines.append("")
     lines.append("`pure_generated_same_name_block` means the item JSON contains only a generated parent + texture map, its layer0 PNG exists, and a same-path block model exists. It is a static candidate count, not yet a semantic-equivalence claim.")
     lines.append("")
@@ -214,11 +211,8 @@ def main() -> None:
     lines.append("## Atlas declarations inside Decocraft JAR")
     lines.append(f"- atlas JSON files found: **{len(atlas_files)}**")
     lines.append(f"- atlas JSONs with an explicit directory `source: item`: **{len(atlas_directory_item_mentions)}**")
-    if atlas_files:
-        for n in atlas_files[:20]:
-            lines.append(f"  - `{n}`")
     lines.append("")
-    lines.append("Absence of a Decocraft-local `source: item` does not prove the sprites are demand-driven: Minecraft's blocks atlas can enumerate `textures/item` across namespaces. Runtime PR #72 loaded 5,771/5,773 Decocraft texture PNGs, so any production experiment must verify that the atlas supplier set itself shrinks; replacing item model JSON alone is not enough.")
+    lines.append("Runtime PR #72 loaded 5,771/5,773 Decocraft texture PNGs, so the runtime experiment must shrink the atlas supplier map rather than only remap item models.")
     lines.append("")
     lines.append("## Sample mechanically clean candidates")
     for item_id, tex in no_other_ref_candidates[:40]:
@@ -231,14 +225,16 @@ def main() -> None:
     with open("decocraft-item-sprite-audit.md", "w", encoding="utf-8") as out:
         out.write(report)
 
-    # This is the exact static allowlist consumed by the runtime experiment. Keep the
-    # item id and texture id separate: a small number of valid candidates do not use
-    # a same-name texture. No asset bytes are copied, only public resource identifiers.
     with open("decocraft-3d-item-candidates.txt", "w", encoding="utf-8", newline="\n") as out:
         out.write("# Decocraft 3.0.11 / Modrinth Z8xm2POI\n")
         out.write("# item_model_path<TAB>item_texture_resource_location\n")
         for item_id, texture in sorted(no_other_ref_candidates):
             out.write(f"{item_id}\t{texture}\n")
+
+    with open("decocraft-3d-item-keep-textures.txt", "w", encoding="utf-8", newline="\n") as out:
+        out.write("# Exact Decocraft 3.0.11 item textures NOT proven safe to elide.\n")
+        for texture in keep_textures:
+            out.write(texture + "\n")
 
 
 if __name__ == "__main__":
