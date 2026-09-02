@@ -6,6 +6,7 @@
   "client": [
     "client.BlockStateModelLoaderIndexedVariantMixin",
     "client.FancyMenuPanoramaPreloadMixin",
+    "client.LevelRendererReloadTimingMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
