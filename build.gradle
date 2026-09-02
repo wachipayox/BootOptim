@@ -32,6 +32,9 @@ repositories {
 var packBenchmarkDirectory = project.file('run-pack-benchmark')
 var externalPackDirectory = providers.gradleProperty('bootoptimPackDir')
         .orElse(providers.environmentVariable('BOOTOPTIM_PACK_DIR'))
+var packBenchmarkJavaVersion = providers.environmentVariable('BOOTOPTIM_PACK_JAVA_VERSION')
+var packBenchmarkBaseJvmArgs = providers.environmentVariable('BOOTOPTIM_PACK_BASE_JVM_ARGS')
+var packBenchmarkExtraJvmArgs = providers.environmentVariable('BOOTOPTIM_PACK_EXTRA_JVM_ARGS')
 var connectorCleanMinecraft = project.file('build/createCleanArtifact/minecraft-renamed.jar')
 
 // IntelliJ launches the root project but MOD_CLASSES also points at the bootstrap subproject outputs.
@@ -61,6 +64,12 @@ var preparePackBenchmark = tasks.register('preparePackBenchmark', Sync) {
         include 'automodpack/**'
         include 'resourcepacks/**'
         include 'shaderpacks/**'
+        include 'kubejs/**'
+        include 'scripts/**'
+        include 'paxi/**'
+        include 'openloader/**'
+        include 'global_packs/**'
+        include 'fancymenu_data/**'
         include 'options.txt'
     }
 
@@ -116,6 +125,15 @@ neoForge {
             systemProperty 'boot_optim.profileStartup', 'true'
             systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
             systemProperty 'connector.clean.path', connectorCleanMinecraft.absolutePath
+
+            [packBenchmarkBaseJvmArgs, packBenchmarkExtraJvmArgs].each { argsProvider ->
+                if (argsProvider.isPresent()) {
+                    argsProvider.get().readLines()
+                            .collect { it.trim() }
+                            .findAll { !it.isEmpty() }
+                            .each { jvmArgument it }
+                }
+            }
         }
 
         server {
@@ -126,7 +144,6 @@ neoForge {
 
         gameTestServer {
             type = 'gameTestServer'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         data {
@@ -161,6 +178,13 @@ neoForge {
 
 tasks.named('runPackBenchmarkClient').configure {
     dependsOn preparePackBenchmark
+
+    if (packBenchmarkJavaVersion.isPresent()) {
+        var requestedJavaVersion = Integer.parseInt(packBenchmarkJavaVersion.get())
+        javaLauncher.set(javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(requestedJavaVersion)
+        })
+    }
 }
 
 configurations {
