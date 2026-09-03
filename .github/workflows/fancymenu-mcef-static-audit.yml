@@ -1,0 +1,88 @@
+name: FancyMenu MCEF Static Audit
+
+on:
+  pull_request:
+    branches:
+      - agent/integration-current
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.head_ref == 'agent/audit-fancymenu-mcef-wedit'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download pinned exact-pack fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download exact-pack-2026-09-02-v1 \
+            --repo wachipayox/BootOptim \
+            --pattern bootoptim-exact-pack.zip \
+            --output /tmp/bootoptim-exact-pack.zip
+          echo '7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639  /tmp/bootoptim-exact-pack.zip' | sha256sum -c -
+
+      - name: Extract exact FancyMenu wedit JAR and audit MCEF consumers
+        run: |
+          python3 - <<'PY'
+          import io, pathlib, re, zipfile
+          outer = pathlib.Path('/tmp/bootoptim-exact-pack.zip')
+          out = pathlib.Path('/tmp/fancymenu-audit')
+          out.mkdir(parents=True, exist_ok=True)
+          with zipfile.ZipFile(outer) as z:
+              jars = [n for n in z.namelist() if n.lower().endswith('.jar') and 'fancymenu' in n.lower()]
+              if len(jars) != 1:
+                  raise SystemExit(f'expected exactly one FancyMenu JAR, found {jars}')
+              jar_name = jars[0]
+              data = z.read(jar_name)
+              (out/'fancymenu.jar').write_bytes(data)
+              print('fixture_fancymenu_jar=' + jar_name)
+              # Record any pack configuration/layout files that mention MCEF/video.
+              with (out/'fixture-video-references.txt').open('w', encoding='utf-8') as f:
+                  for name in z.namelist():
+                      lower = name.lower()
+                      if not lower.endswith(('.txt','.json','.properties','.xml','.yaml','.yml','.config')):
+                          continue
+                      try:
+                          text = z.read(name).decode('utf-8', errors='replace')
+                      except Exception:
+                          continue
+                      if re.search(r'(?i)\bmcef\b|video', text):
+                          f.write(f'### {name}\n')
+                          for idx,line in enumerate(text.splitlines(),1):
+                              if re.search(r'(?i)\bmcef\b|video', line):
+                                  f.write(f'{idx}: {line[:1200]}\n')
+          PY
+
+          cd /tmp/fancymenu-audit
+          jar tf fancymenu.jar | grep -Ei '(^|/)(mcef|.*video.*mcef|.*mcef.*video|BrowserHandler).*\.class$' | sort > mcef-classes.txt || true
+          echo '=== MCEF-related classes ===' > audit.txt
+          cat mcef-classes.txt >> audit.txt
+          echo >> audit.txt
+
+          while IFS= read -r classfile; do
+            [ -n "$classfile" ] || continue
+            classname="${classfile%.class}"
+            classname="${classname//\//.}"
+            echo "===== JAVAP $classname =====" >> audit.txt
+            javap -classpath fancymenu.jar -c -p "$classname" >> audit.txt 2>&1 || true
+            echo >> audit.txt
+          done < mcef-classes.txt
+
+          echo '===== MCEF/browser symbols across classfiles =====' >> audit.txt
+          unzip -p fancymenu.jar | strings | grep -Ei 'MCEFVideoManager|BrowserHandler|createBrowser|scheduleForInit|isInitialized|MCEF|getApp|getClient' | sort -u >> audit.txt || true
+
+          echo '===== FIXTURE VIDEO REFERENCES =====' >> audit.txt
+          cat fixture-video-references.txt >> audit.txt
+          sed -n '1,3000p' audit.txt
+
+      - name: Upload static audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: fancymenu-mcef-static-audit
+          path: /tmp/fancymenu-audit/
+          retention-days: 14
