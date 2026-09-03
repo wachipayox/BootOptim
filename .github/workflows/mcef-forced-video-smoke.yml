@@ -152,7 +152,7 @@ jobs:
             --extract .exact-pack-run \
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 
-      - name: Force bg_arbol_carton onto hosted Lavaplayer welcome screen
+      - name: Force bg_arbol_carton onto hosted title screen
         shell: python
         run: |
           import os
@@ -163,7 +163,7 @@ jobs:
           customization = root / 'config' / 'fancymenu' / 'customization'
           backgrounds = sorted(customization.glob('bg_*.txt'))
           target = customization / 'bg_arbol_carton.txt'
-          target_screen = 'com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen'
+          target_screen = 'title_screen'
           if len(backgrounds) != 22:
               raise SystemExit(f'expected 22 bg_*.txt layouts, found {len(backgrounds)}')
           if target not in backgrounds:
@@ -248,7 +248,7 @@ jobs:
             --iteration 1 \
             --timeout 1200
 
-      - name: Attribute FancyMenu active layouts and backgrounds
+      - name: Validate forced FancyMenu MCEF video consumer
         if: always()
         shell: python
         run: |
@@ -260,16 +260,39 @@ jobs:
           text = latest.read_text(encoding='utf-8', errors='replace')
 
           required = (
-              'ScreenCustomizationLayer registered: com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen',
-              'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=resolved screen=com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen',
+              'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=resolved screen=title_screen',
+              'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=background screen=title_screen',
+              'de.keksuccino.fancymenu.customization.background.backgrounds.video.mcef.MCEFVideoMenuBackground',
+              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=consumer_force consumer=fancymenu_video_render',
+              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=force_init_complete trigger=consumer:fancymenu_video_render result=true',
+              'Chromium Embedded Framework initialized',
+              'MCEFVideoManager successfully initialized!',
           )
           missing = [marker for marker in required if marker not in text]
           if missing:
-              raise SystemExit(f'FancyMenu active-layout diagnostic missing required markers: {missing}')
-          if 'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=error' in text:
-              raise SystemExit('FancyMenu active-layout diagnostic emitted an error marker.')
+              raise SystemExit(f'forced-video MCEF path missing required markers: {missing}')
 
-          lines = [line for line in text.splitlines() if 'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG' in line]
+          forbidden = (
+              'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=error',
+              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=force_init_failed',
+              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=abort',
+              '[FANCYMENU] Failed to initialize MCEFVideoPlayer',
+              '[FANCYMENU] MCEFVideoPlayer: Browser was not created successfully',
+              '[FANCYMENU] Failed to create video player',
+              '[FANCYMENU] Failed to initialize/verify web resources for video player',
+          )
+          present = [marker for marker in forbidden if marker in text]
+          if present:
+              raise SystemExit(f'forced-video MCEF path emitted forbidden markers: {present}')
+
+          lines = [
+              line for line in text.splitlines()
+              if 'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG' in line
+              or 'BOOTOPTIM_MCEF_FIRST_CONSUMER' in line
+              or 'Chromium Embedded Framework initialized' in line
+              or 'MCEFVideoManager' in line
+              or 'MCEFVideoPlayer' in line
+          ]
           print('\n'.join(lines))
 
       - name: Upload forced-video diagnostics
