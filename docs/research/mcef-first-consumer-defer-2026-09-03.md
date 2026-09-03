@@ -17,6 +17,40 @@ PR #88 hosted exact-pack 3x3 A/B on SHA `5a714c77e24675ded66eb79b155a9cab9c60fb1
 - delta: **-1.994 s / -2.14%**;
 - all three candidate runs reached the main-menu marker with real MCEF state still `initialized=false` and no pre-title first consumer.
 
+After production hardening, including concurrent first-consumer serialization, the user requested two independent repeat campaigns on the exact same PR #90 runtime head `d45df21b8ad820fae1f898bdaf6220c6adc6b9a7` to distinguish signal from hosted noise.
+
+### Production-head confirmation campaign #1
+
+Fresh-VM exact-pack 3x3:
+
+- candidate main-menu median: **92.831 s**;
+- control main-menu median: **93.882 s**;
+- delta: **-1.051 s / -1.12%**;
+- post-entrypoint delta: **-753 ms / -1.21%**;
+- reload -> FancyMenu delta: **-36 ms / -0.08%**;
+- panorama delta: **+285.4 ms / +7.08%**;
+- control MCEF median: **1.433 s**;
+- candidate MCEF: not initialized before title;
+- BootOptim Mixin errors: **0** in both variants.
+
+The positive TTMM result therefore did not depend on a faster FancyMenu panorama path; panorama actually moved against the candidate in this campaign.
+
+### Production-head confirmation campaign #2
+
+Independent fresh-VM exact-pack 3x3 on the same SHA:
+
+- candidate main-menu median: **90.109 s**;
+- control main-menu median: **92.311 s**;
+- delta: **-2.202 s / -2.39%**;
+- post-entrypoint delta: **-1.935 s / -3.16%**;
+- reload -> FancyMenu delta: **-1.375 s / -3.22%**;
+- panorama delta: **-22.5 ms / -0.54%**, effectively tied;
+- control MCEF median: **0.944 s**;
+- candidate MCEF: not initialized before title;
+- BootOptim Mixin errors: **0** in both variants.
+
+Both requested current-head campaigns therefore reproduce the favorable TTMM direction. The exact magnitude remains variable on hosted runners, so the project should retain the conservative claim: first-consumer defer removes unnecessary pre-title CEF work and has repeatedly improved TTMM in the hosted exact-pack surrogate; it is not valid to attribute every second of the observed end-to-end delta directly to CEF.
+
 This is hosted software-pack evidence, not laptop-hardware equivalence. It establishes a coherent TTMM win and confirms that the normal exact-pack title path does not require CEF before BootOptim's main-menu boundary.
 
 ## FancyMenu compatibility hardening
@@ -63,4 +97,4 @@ Optional targets use `@Pseudo` / `require=0`; version mismatch, absent MCEF, sig
 
 Hosted validation proves startup/title behavior and a real FancyMenu MCEF-video first consumer. A physical final check is still useful for Windows-native CEF timing/visual output and an in-world WebDisplays browser, but repetitive laptop A/B is not required to establish the mechanism.
 
-Relevant PRs: #78 rejected overlap experiment, #88 first-consumer experiment, #89 FancyMenu/static/dynamic compatibility audit.
+Relevant PRs: #78 rejected overlap experiment, #88 first-consumer experiment, #89 FancyMenu/static/dynamic compatibility audit, #90 production promotion and repeated current-head confirmation.
