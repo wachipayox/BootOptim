@@ -152,7 +152,7 @@ jobs:
             --extract .exact-pack-run \
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 
-      - name: Force bg_arbol_carton and keep client alive after title
+      - name: Force bg_arbol_carton outside random selection and keep client alive after title
         shell: python
         run: |
           import os
@@ -179,6 +179,15 @@ jobs:
           ):
               if marker not in target_text:
                   raise SystemExit(f'target layout drift: missing {marker!r}')
+          target_text, random_replacements = re.subn(
+              r'(?m)^(\s*)randommode\s*=\s*true\s*$',
+              r'\1randommode = false',
+              target_text,
+              count=1,
+          )
+          if random_replacements != 1:
+              raise SystemExit(f'expected one randommode=true in target, got {random_replacements}')
+          target.write_text(target_text, encoding='utf-8')
 
           enabled = re.compile(r'(?m)^(\s*)is_enabled\s*=\s*true\s*$')
           disabled = []
@@ -198,11 +207,15 @@ jobs:
 
           Path('forced-video-layout.txt').write_text(
               'target=bg_arbol_carton.txt\n' +
+              'target_randommode=false\n' +
               f'disabled={len(disabled)}\n' +
               '\n'.join(disabled) + '\n',
               encoding='utf-8',
           )
-          print(f'BOOTOPTIM_EXACT_PACK_FORCED_MCEF_VIDEO target={target.name} disabled={len(disabled)}')
+          print(
+              'BOOTOPTIM_EXACT_PACK_FORCED_MCEF_VIDEO '
+              f'target={target.name} target_randommode=false disabled={len(disabled)}'
+          )
 
           build = Path('build.gradle')
           build_text = build.read_text(encoding='utf-8')
