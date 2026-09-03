@@ -41,6 +41,15 @@ jobs:
               jar_name = jars[0]
               (out/'fancymenu.jar').write_bytes(z.read(jar_name))
               print('fixture_fancymenu_jar=' + jar_name)
+
+              customization_names = [n for n in z.namelist() if n.lower().startswith('config/fancymenu/customization/')]
+              (out/'customization-file-list.txt').write_text('\n'.join(customization_names) + '\n', encoding='utf-8')
+
+              target = 'config/fancymenu/customization/bg_arbol_carton.txt'
+              if target not in z.namelist():
+                  raise SystemExit(f'missing expected exact-pack file: {target}')
+              (out/'bg_arbol_carton.txt').write_bytes(z.read(target))
+
               with (out/'fixture-mcef-browser-video-references.txt').open('w', encoding='utf-8') as f:
                   for name in z.namelist():
                       lower = name.lower()
@@ -77,7 +86,11 @@ jobs:
 
           echo '===== FIXTURE MCEF/BROWSER/VIDEO REFERENCES =====' >> audit.txt
           cat fixture-mcef-browser-video-references.txt >> audit.txt
-          sed -n '1,5000p' audit.txt
+          echo '===== EXACT bg_arbol_carton.txt =====' >> audit.txt
+          cat bg_arbol_carton.txt >> audit.txt
+          echo '===== CUSTOMIZATION FILE LIST =====' >> audit.txt
+          cat customization-file-list.txt >> audit.txt
+          sed -n '1,7000p' audit.txt
 
       - name: Upload static audit
         uses: actions/upload-artifact@v4
