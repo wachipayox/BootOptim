@@ -1,0 +1,275 @@
+name: MCEF Forced Video Smoke
+
+on:
+  pull_request:
+    branches:
+      - agent/integration-current
+
+permissions:
+  contents: read
+
+jobs:
+  forced-video:
+    if: github.head_ref == 'agent/audit-fancymenu-mcef-wedit'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      DISPLAY: ':99'
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+      GALLIUM_DRIVER: llvmpipe
+      MESA_GL_VERSION_OVERRIDE: '4.6'
+      MESA_GLSL_VERSION_OVERRIDE: '460'
+      BOOTOPTIM_MCEF_MIRROR_PORT: '18765'
+      BOOTOPTIM_PACK_JAVA_VERSION: '25'
+      BOOTOPTIM_PACK_BASE_JVM_ARGS: |-
+        -Xmx6G
+        -XX:+UnlockExperimentalVMOptions
+        -XX:+UseG1GC
+        -XX:G1NewSizePercent=20
+        -XX:G1ReservePercent=20
+        -XX:MaxGCPauseMillis=50
+        -XX:G1HeapRegionSize=32M
+        -XX:ActiveProcessorCount=4
+        -Dmcef.java.cef.commit=a78e832f9f13c2c688caea3d04d8b84fcd238d94
+      BOOTOPTIM_PACK_EXTRA_JVM_ARGS: -Dboot_optim.experimentMcefFirstConsumerDefer=true
+      MCEF_JAVA_CEF_COMMIT: a78e832f9f13c2c688caea3d04d8b84fcd238d94
+      MCEF_PLATFORM: linux_amd64
+
+    steps:
+      - name: Checkout exact #88 compatibility head
+        uses: actions/checkout@v4
+        with:
+          ref: d2931b02637f842267a61cbe99dc6138a0a09995
+
+      - name: Install software display and CEF runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            xvfb mesa-utils libgl1-mesa-dri libglx-mesa0 \
+            libgtk-3-0 libnss3 libnspr4 libxss1 libasound2 \
+            libatk1.0-0 libatk-bridge2.0-0 libdrm2 libgbm1 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 \
+            libxfixes3 libx11-xcb1 libxshmfence1 libcups2 \
+            libatspi2.0-0 libpango-1.0-0 libpangocairo-1.0-0 \
+            fonts-liberation
+
+      - name: Start Xvfb and verify llvmpipe OpenGL
+        shell: bash
+        run: |
+          set -euo pipefail
+          Xvfb "$DISPLAY" -screen 0 1280x720x24 -nolisten tcp > xvfb.log 2>&1 &
+          echo $! > xvfb.pid
+          sleep 2
+          glxinfo -B | tee glxinfo.txt
+          grep -qi 'llvmpipe' glxinfo.txt
+
+      - name: Setup compile JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Remember JDK 21 path
+        shell: bash
+        run: echo "BOOTOPTIM_JDK21=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Setup reference runtime Oracle JDK 25.0.4
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25.0.4'
+          distribution: oracle
+
+      - name: Remember JDK 25 path
+        shell: bash
+        run: echo "BOOTOPTIM_JDK25=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Pin Gradle toolchain discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.gradle"
+          echo "org.gradle.java.installations.paths=$BOOTOPTIM_JDK21,$BOOTOPTIM_JDK25" >> "$HOME/.gradle/gradle.properties"
+
+      - name: Download and verify pinned exact pack
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download exact-pack-2026-09-02-v1 \
+            --repo wachipayox/BootOptim \
+            --pattern bootoptim-exact-pack.zip \
+            --output /tmp/bootoptim-exact-pack.zip
+          echo '7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639  /tmp/bootoptim-exact-pack.zip' | sha256sum -c -
+
+      - name: Download and stage pinned Linux JCEF
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .mcef-jcef build/mcef-libraries .mcef-mirror
+          mkdir -p .mcef-jcef
+          base="https://mcef-download.cinemamod.com/java-cef-builds/$MCEF_JAVA_CEF_COMMIT"
+          checksum=".mcef-jcef/${MCEF_PLATFORM}.tar.gz.sha256"
+          archive=".mcef-jcef/${MCEF_PLATFORM}.tar.gz"
+          curl --fail --location --retry 5 --retry-all-errors "$base/${MCEF_PLATFORM}.tar.gz.sha256" -o "$checksum"
+          curl --fail --location --retry 5 --retry-all-errors "$base/${MCEF_PLATFORM}.tar.gz" -o "$archive"
+          expected=$(tr -d '\r' < "$checksum" | awk 'NR==1 {print $1}')
+          actual=$(sha256sum "$archive" | awk '{print $1}')
+          test "$actual" = "$expected"
+          tar -xzf "$archive" -C .mcef-jcef
+          rm -f "$archive"
+          test -f ".mcef-jcef/$MCEF_PLATFORM/jcef_helper"
+
+          mkdir -p build/mcef-libraries
+          cp -a .mcef-jcef/. build/mcef-libraries/
+          chmod +x "build/mcef-libraries/$MCEF_PLATFORM/jcef_helper"
+
+          mirror_root="$PWD/.mcef-mirror"
+          mirror_dir="$mirror_root/java-cef-builds/$MCEF_JAVA_CEF_COMMIT"
+          mkdir -p "$mirror_dir"
+          cp "$checksum" "$mirror_dir/${MCEF_PLATFORM}.tar.gz.sha256"
+          echo "BOOTOPTIM_MCEF_MIRROR_ROOT=$mirror_root" >> "$GITHUB_ENV"
+
+      - name: Prepare exact pack fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/exact-pack/prepare_fixture.py \
+            --zip /tmp/bootoptim-exact-pack.zip \
+            --sha256 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639 \
+            --extract .exact-pack-run \
+            --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
+
+      - name: Force bg_arbol_carton and keep client alive after title
+        shell: python
+        run: |
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ['BOOTOPTIM_PACK_DIR'])
+          customization = root / 'config' / 'fancymenu' / 'customization'
+          backgrounds = sorted(customization.glob('bg_*.txt'))
+          target = customization / 'bg_arbol_carton.txt'
+          if len(backgrounds) != 22:
+              raise SystemExit(f'expected 22 bg_*.txt layouts, found {len(backgrounds)}')
+          if target not in backgrounds:
+              raise SystemExit('bg_arbol_carton.txt missing')
+
+          target_text = target.read_text(encoding='utf-8', errors='replace')
+          for marker in (
+              'identifier = %fancymenu:universal_layout%',
+              'is_enabled = true',
+              'randommode = true',
+              'randomgroup = 0',
+              'background_type = video_mcef',
+              'config/fancymenu/assets/arbol.mp4',
+          ):
+              if marker not in target_text:
+                  raise SystemExit(f'target layout drift: missing {marker!r}')
+
+          enabled = re.compile(r'(?m)^(\s*)is_enabled\s*=\s*true\s*$')
+          disabled = []
+          for path in backgrounds:
+              if path == target:
+                  continue
+              text = path.read_text(encoding='utf-8', errors='replace')
+              if 'identifier = %fancymenu:universal_layout%' not in text:
+                  raise SystemExit(f'unexpected identifier in {path.name}')
+              if 'randommode = true' not in text or 'randomgroup = 0' not in text:
+                  raise SystemExit(f'unexpected random metadata in {path.name}')
+              text, count = enabled.subn(r'\1is_enabled = false', text, count=1)
+              if count != 1:
+                  raise SystemExit(f'expected one is_enabled=true in {path.name}, got {count}')
+              path.write_text(text, encoding='utf-8')
+              disabled.append(path.name)
+
+          Path('forced-video-layout.txt').write_text(
+              'target=bg_arbol_carton.txt\n' +
+              f'disabled={len(disabled)}\n' +
+              '\n'.join(disabled) + '\n',
+              encoding='utf-8',
+          )
+          print(f'BOOTOPTIM_EXACT_PACK_FORCED_MCEF_VIDEO target={target.name} disabled={len(disabled)}')
+
+          build = Path('build.gradle')
+          build_text = build.read_text(encoding='utf-8')
+          old = "systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'"
+          count = build_text.count(old)
+          if count != 2:
+              raise SystemExit(f'expected two benchmark exitOnTitle=true declarations, found {count}')
+          build.write_text(build_text.replace(old, "systemProperty 'boot_optim.benchmark.exitOnTitle', 'false'"), encoding='utf-8')
+          print('Diagnostic workspace only: benchmark exitOnTitle=false; run_startup will terminate after its 45s post-marker wait.')
+
+      - name: Launch forced-video exact pack smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/exact-pack/run_startup.py \
+            --variant forced-video \
+            --iteration 1 \
+            --timeout 1200
+
+      - name: Validate first-consumer video path
+        if: always()
+        shell: python
+        run: |
+          from pathlib import Path
+
+          latest = Path('run-pack-benchmark/logs/latest.log')
+          if not latest.is_file():
+              raise SystemExit('latest.log missing')
+          text = latest.read_text(encoding='utf-8', errors='replace')
+
+          required = (
+              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=consumer_force consumer=fancymenu_video_render',
+              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=force_init_complete trigger=consumer:fancymenu_video_render result=true',
+              'Chromium Embedded Framework initialized',
+              'MCEFVideoManager successfully initialized!',
+          )
+          missing = [marker for marker in required if marker not in text]
+          if missing:
+              raise SystemExit(f'forced-video MCEF path missing required markers: {missing}')
+
+          forbidden = (
+              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=force_init_failed',
+              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=abort',
+              '[FANCYMENU] Failed to initialize MCEFVideoPlayer',
+              '[FANCYMENU] MCEFVideoPlayer: Browser was not created successfully',
+              '[FANCYMENU] Failed to create video player',
+              '[FANCYMENU] Failed to initialize/verify web resources for video player',
+          )
+          present = [marker for marker in forbidden if marker in text]
+          if present:
+              raise SystemExit(f'forced-video MCEF path emitted forbidden markers: {present}')
+
+          print('Forced MCEF video first-consumer path validated without player/browser errors.')
+
+      - name: Upload forced-video diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcef-forced-video-smoke
+          path: |
+            forced-video-layout.txt
+            result.json
+            exact-pack-console.log
+            exact-pack-thread-dump.log
+            xvfb.log
+            glxinfo.txt
+            run-pack-benchmark/logs/latest.log
+            run-pack-benchmark/logs/bootoptim-startup.log
+          if-no-files-found: ignore
+          retention-days: 14
