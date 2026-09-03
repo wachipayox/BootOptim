@@ -216,10 +216,32 @@ jobs:
               path.write_text(text, encoding='utf-8')
               disabled.append(path.name)
 
+          # The pristine hosted fixture opens AnalogAudio's one-time Lavaplayer welcome screen about
+          # one second after TitleScreen creation. The user's long-lived instance has already dealt
+          # with that prompt. Disable only this prompt in the ephemeral fixture so FancyMenu gets real
+          # TitleScreen background frames; do not call the video render path artificially.
+          analog_config = root / 'config' / 'analogaudio' / 'analogaudio.client.toml'
+          if not analog_config.is_file():
+              raise SystemExit(f'AnalogAudio client config missing: {analog_config}')
+          analog_text = analog_config.read_text(encoding='utf-8', errors='replace')
+          analog_text, analog_replacements = re.subn(
+              r'(?m)^(\s*lavaplayerWelcomeScreen\s*=\s*)true\s*$',
+              r'\1false',
+              analog_text,
+              count=1,
+          )
+          if analog_replacements != 1:
+              raise SystemExit(
+                  'expected exactly one lavaplayerWelcomeScreen=true in AnalogAudio client config, '
+                  f'got {analog_replacements}'
+              )
+          analog_config.write_text(analog_text, encoding='utf-8')
+
           Path('forced-video-layout.txt').write_text(
               'target=bg_arbol_carton.txt\n' +
               f'target_identifier={target_screen}\n' +
               'target_randommode=false\n' +
+              'analogaudio_lavaplayer_welcome=false\n' +
               f'disabled={len(disabled)}\n' +
               '\n'.join(disabled) + '\n',
               encoding='utf-8',
@@ -229,6 +251,7 @@ jobs:
               f'target={target.name} target_identifier={target_screen} '
               f'target_randommode=false disabled={len(disabled)}'
           )
+          print('BOOTOPTIM_EXACT_PACK_ANALOGAUDIO_WELCOME disabled=true')
 
           build = Path('build.gradle')
           build_text = build.read_text(encoding='utf-8')
@@ -273,6 +296,7 @@ jobs:
               raise SystemExit(f'forced-video MCEF path missing required markers: {missing}')
 
           forbidden = (
+              'ScreenCustomizationLayer registered: com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen',
               'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=error',
               'BOOTOPTIM_MCEF_FIRST_CONSUMER event=force_init_failed',
               'BOOTOPTIM_MCEF_FIRST_CONSUMER event=abort',
@@ -308,7 +332,9 @@ jobs:
             xvfb.log
             glxinfo.txt
             .exact-pack-run/config/fancymenu/customization/bg_arbol_carton.txt
+            .exact-pack-run/config/analogaudio/analogaudio.client.toml
             run-pack-benchmark/config/fancymenu/customization/bg_arbol_carton.txt
+            run-pack-benchmark/config/analogaudio/analogaudio.client.toml
             run-pack-benchmark/logs/latest.log
             run-pack-benchmark/logs/bootoptim-startup.log
           if-no-files-found: ignore
