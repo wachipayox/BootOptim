@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.profiling.client;
 
 import com.mojang.logging.LogUtils;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Locale;
@@ -24,6 +25,7 @@ public final class McefFirstConsumerDeferCeiling {
 
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String MCEF_CLASS = "com.cinemamod.mcef.MCEF";
+    private static final String FANCY_MCEF_UTIL_CLASS = "de.keksuccino.fancymenu.util.mcef.MCEFUtil";
     private static final String EXPECTED_VERSION = "2.1.6-1.21.1";
     private static final boolean ENABLED = Boolean.getBoolean(PROPERTY);
     private static final ThreadLocal<Boolean> FORCE_INITIALIZE = ThreadLocal.withInitial(() -> false);
@@ -89,13 +91,17 @@ public final class McefFirstConsumerDeferCeiling {
         return true;
     }
 
-    /** Guard direct CEF consumers. */
-    public static void beforeConsumer(String consumer) {
+    /**
+     * Guard a real CEF consumer.
+     *
+     * @return true only when this invocation won the transition from deferred to the real initializer.
+     */
+    public static boolean beforeConsumer(String consumer) {
         if (!ENABLED || STATE.get() != State.DEFERRED) {
-            return;
+            return false;
         }
         if (!STATE.compareAndSet(State.DEFERRED, State.FORCING_BY_CONSUMER)) {
-            return;
+            return false;
         }
 
         long deferredNanos = firstSuppressedNanos == 0L ? 0L : System.nanoTime() - firstSuppressedNanos;
@@ -105,6 +111,28 @@ public final class McefFirstConsumerDeferCeiling {
                 formatMs(deferredNanos),
                 Thread.currentThread().getName());
         forceInitializeOnClientThread("consumer:" + consumer);
+        return true;
+    }
+
+    /**
+     * FancyMenu maintains a separate readiness flag which its BrowserHandler updates after observing
+     * MCEF's real initialized state. Do not fake that flag; consumers which are naturally retried may
+     * render their normal fallback for a tick while FancyMenu's own bridge catches up.
+     */
+    public static boolean isFancyMenuMcefBridgeReady() {
+        if (!ENABLED || !isCompatible() || !isMcefInitialized()) {
+            return false;
+        }
+        try {
+            Class<?> util = Class.forName(
+                    FANCY_MCEF_UTIL_CLASS,
+                    false,
+                    McefFirstConsumerDeferCeiling.class.getClassLoader());
+            Field initialized = util.getField("MCEF_initialized");
+            return initialized.getBoolean(null);
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            return false;
+        }
     }
 
     /** Called immediately before the normal main-menu marker used by CI/reporting. */
