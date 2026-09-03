@@ -13,13 +13,16 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * DIAGNOSTIC ONLY. Dumps FancyMenu's resolved active layouts/backgrounds for the title and the
- * exact-pack AnalogAudio welcome screen so MCEF video compatibility can be attributed precisely.
+ * DIAGNOSTIC ONLY. Dumps FancyMenu's resolved active layouts/backgrounds plus the exact candidate
+ * set used for the title and the exact-pack AnalogAudio welcome screen. This is intentionally kept
+ * off production branches.
  */
 @Pseudo
 @Mixin(targets = "de.keksuccino.fancymenu.customization.layer.ScreenCustomizationLayer", remap = false)
 abstract class FancyMenuActiveLayoutDiagnosticMixin {
     private static final Logger BOOTOPTIM_LOGGER = LogUtils.getLogger();
+    private static final String TARGET_LAYOUT_NAME = "bg_arbol_carton";
+    private static final String LAYOUT_HANDLER = "de.keksuccino.fancymenu.customization.layout.LayoutHandler";
 
     @Inject(
             method = "onInitOrResizeScreenPre(Lde/keksuccino/fancymenu/events/screen/InitOrResizeScreenEvent$Pre;)V",
@@ -30,6 +33,35 @@ abstract class FancyMenuActiveLayoutDiagnosticMixin {
             String screen = String.valueOf(bootoptim$readField(this, "screenIdentifier"));
             if (!"title_screen".equals(screen) && !screen.endsWith("LavaplayerWelcomeScreen")) {
                 return;
+            }
+
+            List<?> enabledLayouts = bootoptim$invokeLayoutHandlerList("getEnabledLayouts");
+            List<?> candidates = bootoptim$invokeLayoutHandlerList(
+                    "getEnabledLayoutsForScreenIdentifier", screen, true);
+
+            BOOTOPTIM_LOGGER.info(
+                    "BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=candidates screen={} enabled_total={} matching={}",
+                    screen,
+                    enabledLayouts.size(),
+                    candidates.size());
+
+            boolean targetLoaded = false;
+            for (Object layout : enabledLayouts) {
+                if (!TARGET_LAYOUT_NAME.equals(String.valueOf(bootoptim$invokeNoArgs(layout, "getLayoutName")))) {
+                    continue;
+                }
+                targetLoaded = true;
+                bootoptim$logLayout("loaded-target", screen, -1, layout);
+            }
+            if (!targetLoaded) {
+                BOOTOPTIM_LOGGER.info(
+                        "BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=loaded-target-missing screen={} target={}",
+                        screen,
+                        TARGET_LAYOUT_NAME);
+            }
+
+            for (int i = 0; i < candidates.size(); i++) {
+                bootoptim$logLayout("candidate", screen, i, candidates.get(i));
             }
 
             List<?> activeLayouts = bootoptim$asList(bootoptim$readField(this, "activeLayouts"));
@@ -48,21 +80,7 @@ abstract class FancyMenuActiveLayoutDiagnosticMixin {
                     layoutBase == null ? "null" : layoutBase.getClass().getName());
 
             for (int i = 0; i < activeLayouts.size(); i++) {
-                Object layout = activeLayouts.get(i);
-                Object fileValue = bootoptim$readField(layout, "layoutFile");
-                String file = fileValue instanceof File layoutFile ? layoutFile.getPath() : String.valueOf(fileValue);
-                BOOTOPTIM_LOGGER.info(
-                        "BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=layout screen={} index={} file={} name={} runtime_id={} declared_screen={} random={} random_group={} enabled={} layout_index={}",
-                        screen,
-                        i,
-                        file,
-                        bootoptim$invokeNoArgs(layout, "getLayoutName"),
-                        bootoptim$readField(layout, "runtimeLayoutIdentifier"),
-                        bootoptim$readField(layout, "screenIdentifier"),
-                        bootoptim$readField(layout, "randomMode"),
-                        bootoptim$readField(layout, "randomGroup"),
-                        bootoptim$invokeNoArgs(layout, "isEnabled"),
-                        bootoptim$readField(layout, "layoutIndex"));
+                bootoptim$logLayout("layout", screen, i, activeLayouts.get(i));
             }
 
             for (int i = 0; i < backgrounds.size(); i++) {
@@ -91,6 +109,39 @@ abstract class FancyMenuActiveLayoutDiagnosticMixin {
                     this.getClass().getName(),
                     throwable);
         }
+    }
+
+    private static void bootoptim$logLayout(String event, String screen, int index, Object layout)
+            throws ReflectiveOperationException {
+        Object fileValue = bootoptim$readField(layout, "layoutFile");
+        String file = fileValue instanceof File layoutFile ? layoutFile.getPath() : String.valueOf(fileValue);
+        BOOTOPTIM_LOGGER.info(
+                "BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event={} screen={} index={} file={} name={} runtime_id={} declared_screen={} random={} random_group={} enabled={} layout_index={}",
+                event,
+                screen,
+                index,
+                file,
+                bootoptim$invokeNoArgs(layout, "getLayoutName"),
+                bootoptim$readField(layout, "runtimeLayoutIdentifier"),
+                bootoptim$readField(layout, "screenIdentifier"),
+                bootoptim$readField(layout, "randomMode"),
+                bootoptim$readField(layout, "randomGroup"),
+                bootoptim$invokeNoArgs(layout, "isEnabled"),
+                bootoptim$readField(layout, "layoutIndex"));
+    }
+
+    private List<?> bootoptim$invokeLayoutHandlerList(String methodName, Object... arguments)
+            throws ReflectiveOperationException {
+        ClassLoader loader = this.getClass().getClassLoader();
+        Class<?> handler = Class.forName(LAYOUT_HANDLER, false, loader);
+        Method method;
+        if (arguments.length == 0) {
+            method = handler.getMethod(methodName);
+        } else {
+            method = handler.getMethod(methodName, String.class, boolean.class);
+        }
+        method.setAccessible(true);
+        return bootoptim$asList(method.invoke(null, arguments));
     }
 
     private static List<?> bootoptim$asList(Object value) {
