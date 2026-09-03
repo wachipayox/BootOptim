@@ -36,10 +36,10 @@ jobs:
       MCEF_PLATFORM: linux_amd64
 
     steps:
-      - name: Checkout exact #88 compatibility head
+      - name: Checkout #88 plus temporary FancyMenu active-layout probe
         uses: actions/checkout@v4
         with:
-          ref: d2931b02637f842267a61cbe99dc6138a0a09995
+          ref: 845db97db0fdc12a5584360b68db6190f2e2ce2f
 
       - name: Install software display and CEF runtime dependencies
         shell: bash
@@ -248,7 +248,7 @@ jobs:
             --iteration 1 \
             --timeout 1200
 
-      - name: Validate first-consumer video path
+      - name: Attribute FancyMenu active layouts and backgrounds
         if: always()
         shell: python
         run: |
@@ -261,28 +261,16 @@ jobs:
 
           required = (
               'ScreenCustomizationLayer registered: com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen',
-              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=consumer_force consumer=fancymenu_video_render',
-              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=force_init_complete trigger=consumer:fancymenu_video_render result=true',
-              'Chromium Embedded Framework initialized',
-              'MCEFVideoManager successfully initialized!',
+              'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=resolved screen=com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen',
           )
           missing = [marker for marker in required if marker not in text]
           if missing:
-              raise SystemExit(f'forced-video MCEF path missing required markers: {missing}')
+              raise SystemExit(f'FancyMenu active-layout diagnostic missing required markers: {missing}')
+          if 'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG event=error' in text:
+              raise SystemExit('FancyMenu active-layout diagnostic emitted an error marker.')
 
-          forbidden = (
-              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=force_init_failed',
-              'BOOTOPTIM_MCEF_FIRST_CONSUMER event=abort',
-              '[FANCYMENU] Failed to initialize MCEFVideoPlayer',
-              '[FANCYMENU] MCEFVideoPlayer: Browser was not created successfully',
-              '[FANCYMENU] Failed to create video player',
-              '[FANCYMENU] Failed to initialize/verify web resources for video player',
-          )
-          present = [marker for marker in forbidden if marker in text]
-          if present:
-              raise SystemExit(f'forced-video MCEF path emitted forbidden markers: {present}')
-
-          print('Forced MCEF video first-consumer path validated without player/browser errors.')
+          lines = [line for line in text.splitlines() if 'BOOTOPTIM_FANCYMENU_LAYOUT_DIAG' in line]
+          print('\n'.join(lines))
 
       - name: Upload forced-video diagnostics
         if: always()
