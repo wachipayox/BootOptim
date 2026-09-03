@@ -28,6 +28,7 @@ public final class McefFirstConsumerDefer {
     private static final boolean ENABLED = Boolean.parseBoolean(System.getProperty(PROPERTY, "true"));
     private static final ThreadLocal<Boolean> FORCE_INITIALIZE = ThreadLocal.withInitial(() -> false);
     private static final AtomicReference<State> STATE = new AtomicReference<>(State.ARMED);
+    private static final CompletableFuture<Boolean> INITIALIZATION_COMPLETION = new CompletableFuture<>();
 
     private static volatile boolean compatibilityChecked;
     private static volatile boolean compatible;
@@ -51,6 +52,7 @@ public final class McefFirstConsumerDefer {
         }
         if (isMcefInitialized()) {
             STATE.set(State.COMPLETE);
+            INITIALIZATION_COMPLETION.complete(true);
             return false;
         }
         if (state != State.ARMED && state != State.DEFERRED) {
@@ -60,6 +62,7 @@ public final class McefFirstConsumerDefer {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || !minecraft.isSameThread()) {
             STATE.set(State.ABORTED);
+            INITIALIZATION_COMPLETION.complete(false);
             LOGGER.warn(
                     "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=initialize_not_client_thread thread={}",
                     Thread.currentThread().getName());
@@ -78,12 +81,25 @@ public final class McefFirstConsumerDefer {
 
     /** Guard a real CEF consumer and synchronously initialize MCEF if this is the first one. */
     public static void beforeConsumer(String consumer) {
-        if (!ENABLED || STATE.get() != State.DEFERRED) {
+        if (!ENABLED) {
+            return;
+        }
+
+        State state = STATE.get();
+        if (state == State.FORCING_BY_CONSUMER) {
+            awaitInFlightInitialization(consumer);
+            return;
+        }
+        if (state != State.DEFERRED) {
             return;
         }
         if (!STATE.compareAndSet(State.DEFERRED, State.FORCING_BY_CONSUMER)) {
+            if (STATE.get() == State.FORCING_BY_CONSUMER) {
+                awaitInFlightInitialization(consumer);
+            }
             return;
         }
+
         LOGGER.info(
                 "BOOTOPTIM_MCEF_FIRST_CONSUMER status=initializing consumer={} suppressed_auto_init_calls={} thread={}",
                 consumer,
@@ -112,33 +128,57 @@ public final class McefFirstConsumerDefer {
         }
     }
 
+    private static void awaitInFlightInitialization(String consumer) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null && minecraft.isSameThread() && !isMcefInitialized()) {
+            // A worker may have won the state transition and queued its client-thread initializer.
+            // Never block the client thread waiting for work queued to that same thread; perform the
+            // authoritative real initializer here. The queued task will later observe initialized=true.
+            boolean result = forceInitializeNow("concurrent-consumer:" + consumer);
+            INITIALIZATION_COMPLETION.complete(result);
+            return;
+        }
+
+        try {
+            INITIALIZATION_COMPLETION.get(30L, TimeUnit.SECONDS);
+        } catch (Exception exception) {
+            STATE.set(State.ABORTED);
+            INITIALIZATION_COMPLETION.complete(false);
+            LOGGER.error(
+                    "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=concurrent_consumer_wait_failed consumer={}",
+                    consumer,
+                    exception);
+        }
+    }
+
     private static void forceInitializeOnClientThread(String reason) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null) {
             STATE.set(State.ABORTED);
+            INITIALIZATION_COMPLETION.complete(false);
             LOGGER.warn("BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=no_minecraft_instance trigger={}", reason);
             return;
         }
 
         if (minecraft.isSameThread()) {
-            forceInitializeNow(reason);
+            INITIALIZATION_COMPLETION.complete(forceInitializeNow(reason));
             return;
         }
 
-        CompletableFuture<Void> completion = new CompletableFuture<>();
         minecraft.execute(() -> {
             try {
-                forceInitializeNow(reason);
-                completion.complete(null);
+                INITIALIZATION_COMPLETION.complete(forceInitializeNow(reason));
             } catch (Throwable throwable) {
-                completion.completeExceptionally(throwable);
+                STATE.set(State.ABORTED);
+                INITIALIZATION_COMPLETION.completeExceptionally(throwable);
             }
         });
 
         try {
-            completion.get(30L, TimeUnit.SECONDS);
+            INITIALIZATION_COMPLETION.get(30L, TimeUnit.SECONDS);
         } catch (Exception exception) {
             STATE.set(State.ABORTED);
+            INITIALIZATION_COMPLETION.complete(false);
             LOGGER.error(
                     "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=client_thread_handoff_failed trigger={}",
                     reason,
@@ -146,10 +186,10 @@ public final class McefFirstConsumerDefer {
         }
     }
 
-    private static void forceInitializeNow(String reason) {
+    private static boolean forceInitializeNow(String reason) {
         if (isMcefInitialized()) {
             STATE.set(State.COMPLETE);
-            return;
+            return true;
         }
 
         long startNanos = System.nanoTime();
@@ -170,7 +210,7 @@ public final class McefFirstConsumerDefer {
                     "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=force_init_failed trigger={}",
                     reason,
                     cause);
-            return;
+            return false;
         } finally {
             FORCE_INITIALIZE.remove();
         }
@@ -181,6 +221,7 @@ public final class McefFirstConsumerDefer {
                 result,
                 String.format(java.util.Locale.ROOT, "%.3f", (System.nanoTime() - startNanos) / 1_000_000.0D),
                 Thread.currentThread().getName());
+        return result;
     }
 
     private static boolean isCompatible() {
