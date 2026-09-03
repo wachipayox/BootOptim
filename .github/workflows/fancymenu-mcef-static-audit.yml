@@ -33,6 +33,8 @@ jobs:
           outer = pathlib.Path('/tmp/bootoptim-exact-pack.zip')
           out = pathlib.Path('/tmp/fancymenu-audit')
           out.mkdir(parents=True, exist_ok=True)
+          custom_out = out / 'customization'
+          custom_out.mkdir(parents=True, exist_ok=True)
           pattern = re.compile(r'(?i)\bmcef\b|video|browser|bg_arbol_carton')
           with zipfile.ZipFile(outer) as z:
               jars = [n for n in z.namelist() if n.lower().endswith('.jar') and 'fancymenu' in n.lower()]
@@ -42,8 +44,14 @@ jobs:
               (out/'fancymenu.jar').write_bytes(z.read(jar_name))
               print('fixture_fancymenu_jar=' + jar_name)
 
-              customization_names = [n for n in z.namelist() if n.lower().startswith('config/fancymenu/customization/')]
+              prefix = 'config/fancymenu/customization/'
+              customization_names = [n for n in z.namelist() if n.lower().startswith(prefix) and not n.endswith('/')]
               (out/'customization-file-list.txt').write_text('\n'.join(customization_names) + '\n', encoding='utf-8')
+              for name in customization_names:
+                  rel = pathlib.Path(name[len(prefix):])
+                  dest = custom_out / rel
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  dest.write_bytes(z.read(name))
 
               target = 'config/fancymenu/customization/bg_arbol_carton.txt'
               if target not in z.namelist():
