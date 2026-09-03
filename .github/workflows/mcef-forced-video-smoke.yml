@@ -152,7 +152,7 @@ jobs:
             --extract .exact-pack-run \
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 
-      - name: Force bg_arbol_carton outside random selection and keep client alive after title
+      - name: Force bg_arbol_carton onto hosted Lavaplayer welcome screen
         shell: python
         run: |
           import os
@@ -163,6 +163,7 @@ jobs:
           customization = root / 'config' / 'fancymenu' / 'customization'
           backgrounds = sorted(customization.glob('bg_*.txt'))
           target = customization / 'bg_arbol_carton.txt'
+          target_screen = 'com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen'
           if len(backgrounds) != 22:
               raise SystemExit(f'expected 22 bg_*.txt layouts, found {len(backgrounds)}')
           if target not in backgrounds:
@@ -179,6 +180,16 @@ jobs:
           ):
               if marker not in target_text:
                   raise SystemExit(f'target layout drift: missing {marker!r}')
+
+          target_text, identifier_replacements = re.subn(
+              r'(?m)^(\s*)identifier\s*=\s*%fancymenu:universal_layout%\s*$',
+              rf'\1identifier = {target_screen}',
+              target_text,
+              count=1,
+          )
+          if identifier_replacements != 1:
+              raise SystemExit(f'expected one universal identifier in target, got {identifier_replacements}')
+
           target_text, random_replacements = re.subn(
               r'(?m)^(\s*)randommode\s*=\s*true\s*$',
               r'\1randommode = false',
@@ -207,6 +218,7 @@ jobs:
 
           Path('forced-video-layout.txt').write_text(
               'target=bg_arbol_carton.txt\n' +
+              f'target_identifier={target_screen}\n' +
               'target_randommode=false\n' +
               f'disabled={len(disabled)}\n' +
               '\n'.join(disabled) + '\n',
@@ -214,7 +226,8 @@ jobs:
           )
           print(
               'BOOTOPTIM_EXACT_PACK_FORCED_MCEF_VIDEO '
-              f'target={target.name} target_randommode=false disabled={len(disabled)}'
+              f'target={target.name} target_identifier={target_screen} '
+              f'target_randommode=false disabled={len(disabled)}'
           )
 
           build = Path('build.gradle')
@@ -247,6 +260,7 @@ jobs:
           text = latest.read_text(encoding='utf-8', errors='replace')
 
           required = (
+              'ScreenCustomizationLayer registered: com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen',
               'BOOTOPTIM_MCEF_FIRST_CONSUMER event=consumer_force consumer=fancymenu_video_render',
               'BOOTOPTIM_MCEF_FIRST_CONSUMER event=force_init_complete trigger=consumer:fancymenu_video_render result=true',
               'Chromium Embedded Framework initialized',
@@ -282,6 +296,8 @@ jobs:
             exact-pack-thread-dump.log
             xvfb.log
             glxinfo.txt
+            .exact-pack-run/config/fancymenu/customization/bg_arbol_carton.txt
+            run-pack-benchmark/config/fancymenu/customization/bg_arbol_carton.txt
             run-pack-benchmark/logs/latest.log
             run-pack-benchmark/logs/bootoptim-startup.log
           if-no-files-found: ignore
