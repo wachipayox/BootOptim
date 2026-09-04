@@ -1,14 +1,15 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import com.mojang.logging.LogUtils;
+import java.util.Locale;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -75,7 +76,7 @@ abstract class EntityRenderDispatcherFirstConsumerDeferMixin {
 
     @Inject(method = "getSkinMap", at = @At("HEAD"), require = 1)
     private void bootoptim$forceBeforeSkinMapLookup(
-            CallbackInfoReturnable<Map<PlayerSkin.Model, EntityRenderer<? extends AbstractClientPlayer>>> cir) {
+            CallbackInfoReturnable<Map<PlayerSkin.Model, EntityRenderer<? extends Player>>> cir) {
         this.bootoptim$forcePendingReload("getSkinMap");
     }
 
@@ -104,7 +105,7 @@ abstract class EntityRenderDispatcherFirstConsumerDeferMixin {
             BOOTOPTIM$LOGGER.info(
                     "BOOTOPTIM_RENDERER_FIRST_CONSUMER dispatcher=entity status=forced consumer={} force_ms={} thread={}",
                     consumer,
-                    String.format(java.util.Locale.ROOT, "%.3f", (System.nanoTime() - startNanos) / 1_000_000.0D),
+                    String.format(Locale.ROOT, "%.3f", (System.nanoTime() - startNanos) / 1_000_000.0D),
                     Thread.currentThread().getName());
         } finally {
             this.bootoptim$forcing = false;
