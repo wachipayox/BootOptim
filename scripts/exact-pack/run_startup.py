@@ -2,6 +2,7 @@
 import argparse
 import http.server
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -10,6 +11,13 @@ import time
 from pathlib import Path
 
 MARKER = "BOOTOPTIM_STARTUP phase=main_menu"
+CIT_FILTER_PROPERTY = "-Dboot_optim.experimentCitLegacyWarningFilter=true"
+CIT_WARNING_FRAGMENT = "Using legacy nbt.display.Name"
+CIT_COMPLETION_RE = re.compile(
+    r"BOOTOPTIM_CIT_LEGACY_WARNING_FILTER status=complete .*\bsuppressed=(\d+)\b"
+)
+CIT_EXPECTED = 7_920
+CIT_TOLERANCE = 120
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -108,6 +116,42 @@ def wait_for_marker(process: subprocess.Popen, console_path: Path, timeout_secon
     return False, "timeout"
 
 
+def validate_cit_filter_proof(latest_text: str) -> None:
+    extra_args = os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "")
+    if CIT_FILTER_PROPERTY not in extra_args:
+        return
+
+    armed = latest_text.count("BOOTOPTIM_CIT_LEGACY_WARNING_FILTER status=armed")
+    matches = [int(match.group(1)) for match in CIT_COMPLETION_RE.finditer(latest_text)]
+    visible = latest_text.count(CIT_WARNING_FRAGMENT)
+    minimum = CIT_EXPECTED - CIT_TOLERANCE
+    maximum = CIT_EXPECTED + CIT_TOLERANCE
+
+    if armed != 1 or len(matches) != 1:
+        raise SystemExit(
+            "CIT legacy-warning proof invalid: expected exactly one armed and one completion marker, "
+            f"got armed={armed} completions={len(matches)}."
+        )
+
+    suppressed = matches[0]
+    if not minimum <= suppressed <= maximum:
+        raise SystemExit(
+            "CIT legacy-warning proof invalid: suppression count outside gate "
+            f"expected~={CIT_EXPECTED} tolerance={CIT_TOLERANCE} actual={suppressed}."
+        )
+    if visible != 0:
+        raise SystemExit(
+            "CIT legacy-warning proof invalid: matching diagnostics remained visible "
+            f"after interception (visible={visible}, suppressed={suppressed})."
+        )
+
+    print(
+        "CIT legacy-warning proof valid: "
+        f"suppressed={suppressed} visible={visible} expected={CIT_EXPECTED} tolerance={CIT_TOLERANCE}",
+        flush=True,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--variant", required=True)
@@ -180,6 +224,8 @@ def main() -> None:
         )
         if any(pattern in latest_text for pattern in mixin_failures):
             raise SystemExit("BootOptim Mixin failure detected in exact-pack latest.log.")
+
+        validate_cit_filter_proof(latest_text)
 
         summary = subprocess.run(
             [
