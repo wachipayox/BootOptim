@@ -120,12 +120,12 @@ public final class CitResewnLegacyWarningFilter {
         }
     }
 
-    private static Result bootoptim$result(String loggerName, Level level, String message) {
+    private static Filter.Result bootoptim$result(String loggerName, Level level, String message) {
         if (!bootoptim$matches(loggerName, level, message)) {
-            return Result.NEUTRAL;
+            return Filter.Result.NEUTRAL;
         }
         SUPPRESSED.incrementAndGet();
-        return Result.DENY;
+        return Filter.Result.DENY;
     }
 
     private static boolean bootoptim$matches(String loggerName, Level level, String message) {
