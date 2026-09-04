@@ -66,6 +66,9 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
+        if (Boolean.getBoolean(XaeroDeferredTaskBoundaryTransformer.PROFILE_PROPERTY)) {
+            return List.of(new XaeroDeferredTaskBoundaryTransformer());
+        }
         return List.of();
     }
 
