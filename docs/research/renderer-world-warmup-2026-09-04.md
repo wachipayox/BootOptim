@@ -81,6 +81,52 @@ This single-run force wall is not an A/B performance estimate. It does establish
 - after forcing, both pending generations are cleared;
 - the normal candidate boundary can be moved to the first non-null world attachment, before either renderer dispatcher receives the new world.
 
+## Physical world-entry probe
+
+The final hardware gate needs candidate/control timings on the same clock. Property:
+
+```text
+-Dboot_optim.experimentRendererWorldEntryProbe=true
+```
+
+The probe is independent of the optimization switch so it can run in both variants. The candidate also uses:
+
+```text
+-Dboot_optim.experimentRendererFirstConsumerDefer=true
+```
+
+and the control uses:
+
+```text
+-Dboot_optim.experimentRendererFirstConsumerDefer=false
+```
+
+The probe emits, for every non-null world attachment:
+
+```text
+BOOTOPTIM_RENDERER_WORLD_ENTRY status=attach_begin entry=1 uptime_ms=... renderer_reload_pending=true|false ...
+BOOTOPTIM_RENDERER_WORLD_ENTRY status=attach_ready entry=1 uptime_ms=... warmup_ms=... ...
+BOOTOPTIM_RENDERER_WORLD_ENTRY status=attach_complete entry=1 uptime_ms=... vanilla_attach_ms=... since_attach_begin_ms=... ...
+BOOTOPTIM_RENDERER_WORLD_ENTRY status=first_render entry=1 uptime_ms=... since_attach_begin_ms=... since_attach_ready_ms=... since_attach_complete_ms=... ...
+```
+
+Semantics of the four points:
+
+- `attach_begin`: HEAD of `Minecraft.updateLevelInEngines(non-null)`, before any renderer warmup or vanilla level attachment;
+- `attach_ready`: immediately after candidate warmup (or immediately in control), still before vanilla `LevelRenderer`/dispatcher attachment;
+- `attach_complete`: TAIL of `updateLevelInEngines`, after ordinary engine/dispatcher attachment;
+- `first_render`: first `GameRenderer.renderLevel(DeltaTracker)` after that attachment.
+
+The markers are numbered. After disconnecting and entering a second world, `entry=2` must appear; for the candidate it should report `renderer_reload_pending=false` and no second `reason=world_attach` coordinated force.
+
+A Windows helper on this branch parses these markers and the force markers:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/laptop/summarize-renderer-world-gate.ps1 -LogPath <path-to-latest.log>
+```
+
+Use `-Json` for machine-readable output. It reports main-menu uptime, title→attach, warmup, remaining vanilla attach, attach→first-render, attach-complete→first-render, block/entity/coordinator force wall, and BootOptim Mixin failures.
+
 ## Remaining limitations
 
 - A post-title forced reload proves construction/callback correctness but is not a true world-render visual test.
@@ -93,23 +139,28 @@ This single-run force wall is not an A/B performance estimate. It does establish
 Run candidate/control from the same refreshed pack state and record separately:
 
 1. time-to-main-menu;
-2. title -> world-attachment / first playable frame wall;
-3. `BOOTOPTIM_RENDERER_RELOAD_COORDINATOR` total and per-dispatcher `force_ms`;
-4. whether forcing occurs with `reason=world_attach` rather than a first-render consumer;
-5. visible hitch duration around world transition;
-6. Fresh Animations / EMF entity appearance and animation;
-7. local and remote player rendering / skin model selection;
-8. representative block entities (at minimum chest/sign plus modded animated/special renderer if available in the reference world);
-9. disconnect back to title and a second world entry;
-10. one manual resource reload after initialization, which must remain stock and complete normally.
+2. title → `attach_begin` and title → `first_render` wall from the probe;
+3. candidate `warmup_ms`, vanilla attach remainder, and `attach_complete` → `first_render` wall;
+4. `BOOTOPTIM_RENDERER_RELOAD_COORDINATOR` total and per-dispatcher `force_ms`;
+5. whether forcing occurs with `reason=world_attach` rather than a first-render consumer;
+6. visible hitch duration around world transition;
+7. Fresh Animations / EMF entity appearance and animation;
+8. local and remote player rendering / skin model selection;
+9. representative block entities (at minimum chest/sign plus modded animated/special renderer if available in the reference world);
+10. disconnect back to title and a second world entry: `entry=2`, no pending renderer reload;
+11. one manual resource reload after initialization, which must remain stock and complete normally.
 
 Reject or redesign the lifecycle candidate if world attachment produces an unacceptable multi-second freeze, renderer/model corruption, missing player skins, callback ordering problems, or reload-generation errors. If semantics are clean but laptop forcing remains too expensive, the next target is EMF/Fresh Animations intrinsic parser/ASM provider construction rather than moving the payment later again.
 
+## Hosted CI boundary
+
+The hosted exact-pack workflow intentionally stops at the main-menu marker. Its `preparePackBenchmark` copy excludes `saves/`, and `runPackBenchmarkClient` sets `boot_optim.benchmark.exitOnTitle=true`. Fabricating a synthetic `ClientLevel` or a tiny artificial save solely to make a world check green would not validate Fresh Animations, player skins, real block entities, or the user-visible Windows transition. The real-world hardware gate above therefore remains explicit rather than being replaced with a misleading hosted surrogate.
+
 ## Gate status
 
-1. Build with properties off: **PASS**.
-2. Standard Startup Benchmark with properties off: **PASS**.
-3. Hosted exact-pack post-title forcing smoke: **PASS**.
+1. Build with properties off: **PASS** on the forcing candidate; current probe-enhanced HEAD must remain green.
+2. Standard Startup Benchmark with properties off: **PASS** on the forcing candidate; current probe-enhanced HEAD must remain green.
+3. Hosted exact-pack post-title forcing smoke: **PASS** on the forcing candidate; current probe-enhanced HEAD is re-running the same smoke.
 4. Hosted callback/order/pending-state gate: **PASS**, 147.010 ms block + 1,682.770 ms entity, 1,830.114 ms total.
 5. Physical laptop world-entry + visual + subsequent-reload gate: **PENDING**.
 6. Production promotion decision: **BLOCKED on step 5**.
