@@ -5,9 +5,11 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "client.BlockEntityRenderDispatcherReloadTimingMixin",
+    "client.BlockEntityRenderersCreateTimingMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
     "client.EntityModelSetBakeTimingMixin",
     "client.EntityRenderDispatcherReloadTimingMixin",
+    "client.EntityRenderersCreateTimingMixin",
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
