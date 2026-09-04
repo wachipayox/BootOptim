@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim;
 
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
+import dev.wachipayox.bootoptim.profiling.client.XaeroDeferredTaskProfiler;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -19,8 +20,11 @@ public final class BootOptim {
 
     public BootOptim() {
         StartupProfiler.markModEntrypoint();
-        if (StartupProfiler.isEnabled() && FMLEnvironment.dist == Dist.CLIENT) {
-            ClientStartupHooks.install();
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            XaeroDeferredTaskProfiler.install();
+            if (StartupProfiler.isEnabled()) {
+                ClientStartupHooks.install();
+            }
         }
     }
 }
