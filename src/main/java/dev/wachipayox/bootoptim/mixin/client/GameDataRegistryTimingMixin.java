@@ -48,8 +48,10 @@ abstract class GameDataRegistryTimingMixin {
             method = "postRegisterEvents",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/neoforged/fml/ModLoader;postEventWrapContainerInModOrder(Lnet/neoforged/bus/api/Event;)V"),
-            require = 0)
+                    target = "Lnet/neoforged/fml/ModLoader;postEventWrapContainerInModOrder(Lnet/neoforged/bus/api/Event;)V",
+                    remap = false),
+            require = 0,
+            remap = false)
     private static void bootoptim$profileRegisterEventDispatch(Event event) {
         RegisterEvent registerEvent = (RegisterEvent) event;
         if (!FmlRegistryProfiler.enabled()) {
