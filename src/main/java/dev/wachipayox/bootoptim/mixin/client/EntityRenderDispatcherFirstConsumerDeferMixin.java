@@ -1,6 +1,8 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import com.mojang.logging.LogUtils;
+import dev.wachipayox.bootoptim.optimization.client.DeferredRendererReloadAccess;
+import dev.wachipayox.bootoptim.optimization.client.RendererReloadCoordinator;
 import java.util.Locale;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
@@ -18,16 +20,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/**
- * Experimental first-consumer defer for the initial entity-renderer reconstruction.
- *
- * <p>The first startup reload is retained as a pending authoritative ResourceManager instead of
- * reconstructing every renderer before the title screen. The original onResourceManagerReload
- * method is invoked exactly once on Minecraft's client thread before the first renderer-map
- * consumer. Subsequent reloads stay stock and supersede a still-pending startup reload.</p>
- */
+/** Experimental first-consumer defer for the initial entity-renderer reconstruction. */
 @Mixin(EntityRenderDispatcher.class)
-abstract class EntityRenderDispatcherFirstConsumerDeferMixin {
+abstract class EntityRenderDispatcherFirstConsumerDeferMixin implements DeferredRendererReloadAccess {
     @Unique
     private static final Logger BOOTOPTIM$LOGGER = LogUtils.getLogger();
 
@@ -71,24 +66,33 @@ abstract class EntityRenderDispatcherFirstConsumerDeferMixin {
     @Inject(method = "getRenderer", at = @At("HEAD"), require = 1)
     private void bootoptim$forceBeforeRendererLookup(
             Entity entity, CallbackInfoReturnable<EntityRenderer<?>> cir) {
-        this.bootoptim$forcePendingReload("getRenderer");
+        if (BOOTOPTIM$ENABLED) {
+            RendererReloadCoordinator.forcePending("entity:getRenderer");
+        }
     }
 
     @Inject(method = "getSkinMap", at = @At("HEAD"), require = 1)
     private void bootoptim$forceBeforeSkinMapLookup(
             CallbackInfoReturnable<Map<PlayerSkin.Model, EntityRenderer<? extends Player>>> cir) {
-        this.bootoptim$forcePendingReload("getSkinMap");
+        if (BOOTOPTIM$ENABLED) {
+            RendererReloadCoordinator.forcePending("entity:getSkinMap");
+        }
     }
 
-    @Unique
-    private void bootoptim$forcePendingReload(String consumer) {
-        if (!BOOTOPTIM$ENABLED || this.bootoptim$pendingResourceManager == null) {
+    @Override
+    public boolean bootoptim$hasPendingRendererReload() {
+        return BOOTOPTIM$ENABLED && this.bootoptim$pendingResourceManager != null;
+    }
+
+    @Override
+    public void bootoptim$forcePendingRendererReload(String consumer) {
+        if (!BOOTOPTIM$ENABLED || this.bootoptim$pendingResourceManager == null || this.bootoptim$forcing) {
             return;
         }
 
         Minecraft minecraft = Minecraft.getInstance();
         if (!minecraft.isSameThread()) {
-            minecraft.executeBlocking(() -> this.bootoptim$forcePendingReload(consumer));
+            minecraft.executeBlocking(() -> this.bootoptim$forcePendingRendererReload(consumer));
             return;
         }
 
