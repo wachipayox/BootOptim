@@ -42,4 +42,11 @@ abstract class MinecraftRendererWorldWarmupMixin {
             RendererWorldEntryProbe.finishAttachWarmup();
         }
     }
+
+    @Inject(method = "updateLevelInEngines", at = @At("TAIL"), require = 1)
+    private void bootoptim$markWorldAttachmentComplete(ClientLevel level, CallbackInfo ci) {
+        if (level != null && BOOTOPTIM$WORLD_ENTRY_PROBE) {
+            RendererWorldEntryProbe.finishEngineAttach();
+        }
+    }
 }
