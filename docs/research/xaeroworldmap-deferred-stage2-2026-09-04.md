@@ -68,7 +68,7 @@ A single hosted smoke is sufficient to answer the first attribution question:
 ```text
 [exact-pack-ci]
 exact-pack-mode: smoke
-exact-pack-candidate-jvm-arg: -Dboot_optim.profileXaeroDeferredTask=true
+exact-pack-smoke-jvm-arg: -Dboot_optim.profileXaeroDeferredTask=true
 ```
 
 Required mechanism checks:
