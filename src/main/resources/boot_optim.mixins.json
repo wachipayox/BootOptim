@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.CommonModLoaderLifecycleTimingMixin",
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
