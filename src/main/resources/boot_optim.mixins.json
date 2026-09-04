@@ -10,6 +10,7 @@
     "client.GameDataRegistryTimingMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
+    "client.ModernFixRegistryEventProgressTimingMixin",
     "client.RegistryManagerTimingMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],

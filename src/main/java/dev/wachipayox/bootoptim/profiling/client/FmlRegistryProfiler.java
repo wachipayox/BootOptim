@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.LongAdder;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModLoadingContext;
 import net.neoforged.neoforge.registries.RegisterEvent;
 import org.slf4j.Logger;
 
@@ -28,6 +30,8 @@ public final class FmlRegistryProfiler {
     private static final ConcurrentMap<RegistryModKey, Totals> MOD_TOTALS = new ConcurrentHashMap<>();
     private static final LongAdder REGISTER_EVENT_NANOS = new LongAdder();
     private static final ThreadLocal<ArrayDeque<RegistryFrame>> ACTIVE_REGISTRIES =
+            ThreadLocal.withInitial(ArrayDeque::new);
+    private static final ThreadLocal<ArrayDeque<ModFrame>> ACTIVE_MOD_POSTS =
             ThreadLocal.withInitial(ArrayDeque::new);
 
     private static volatile long postRegisterEventsStartedNanos = -1L;
@@ -48,6 +52,7 @@ public final class FmlRegistryProfiler {
             MOD_TOTALS.clear();
             REGISTER_EVENT_NANOS.reset();
             ACTIVE_REGISTRIES.remove();
+            ACTIVE_MOD_POSTS.remove();
             postRegisterEventsStartedNanos = System.nanoTime();
         } catch (Throwable ignored) {
             // Diagnostic instrumentation must never affect startup.
@@ -84,25 +89,39 @@ public final class FmlRegistryProfiler {
         }
     }
 
-    /** Start a frequent per-container event-bus timing using only nanoTime. */
-    public static long beginModContainerPost() {
+    /**
+     * Observe the already-active ModContainer immediately before ModernFix calls ModContainer.acceptEvent.
+     * This method never mutates ModLoadingContext or invokes the event bus.
+     */
+    public static void beginActiveModContainerPost() {
         if (!ENABLED) {
-            return -1L;
-        }
-        try {
-            return System.nanoTime();
-        } catch (Throwable ignored) {
-            return -1L;
-        }
-    }
-
-    public static void endModContainerPost(RegisterEvent event, String modId, long startedNanos) {
-        if (!ENABLED || startedNanos < 0L) {
             return;
         }
         try {
-            long elapsed = nonNegativeDelta(startedNanos, System.nanoTime());
-            MOD_TOTALS.computeIfAbsent(new RegistryModKey(registryName(event), modId), ignored -> new Totals()).add(elapsed);
+            ArrayDeque<RegistryFrame> registries = ACTIVE_REGISTRIES.get();
+            if (registries.isEmpty()) {
+                return;
+            }
+            ModContainer active = ModLoadingContext.get().getActiveContainer();
+            ACTIVE_MOD_POSTS.get().push(new ModFrame(registries.peek().registry(), active.getModId(), System.nanoTime()));
+        } catch (Throwable ignored) {
+            // Diagnostic instrumentation must never affect startup.
+        }
+    }
+
+    /** Observe return from the same existing ModContainer.acceptEvent call. */
+    public static void endActiveModContainerPost() {
+        if (!ENABLED) {
+            return;
+        }
+        try {
+            ArrayDeque<ModFrame> stack = ACTIVE_MOD_POSTS.get();
+            if (stack.isEmpty()) {
+                return;
+            }
+            ModFrame frame = stack.pop();
+            long elapsed = nonNegativeDelta(frame.startedNanos(), System.nanoTime());
+            MOD_TOTALS.computeIfAbsent(new RegistryModKey(frame.registry(), frame.modId()), ignored -> new Totals()).add(elapsed);
         } catch (Throwable ignored) {
             // Diagnostic instrumentation must never affect startup.
         }
@@ -229,6 +248,9 @@ public final class FmlRegistryProfiler {
     }
 
     private record RegistryFrame(String registry, long startedNanos) {
+    }
+
+    private record ModFrame(String registry, String modId, long startedNanos) {
     }
 
     private record RegistryModKey(String registry, String modId) {
