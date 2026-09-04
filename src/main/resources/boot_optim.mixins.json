@@ -8,8 +8,6 @@
     "client.CommonModLoaderLifecycleTimingMixin",
     "client.FancyMenuPanoramaPreloadMixin",
     "client.GameDataRegistryTimingMixin",
-    "client.ModContainerRegisterTimingMixin",
-    "client.ModLoaderDiagnosticTimingMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.RegistryManagerTimingMixin",
