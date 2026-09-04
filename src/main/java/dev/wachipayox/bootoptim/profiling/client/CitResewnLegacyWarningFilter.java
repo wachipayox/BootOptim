@@ -8,6 +8,7 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Marker;
 import org.apache.logging.log4j.core.Filter;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.LoggerContext;
@@ -57,12 +58,50 @@ public final class CitResewnLegacyWarningFilter {
             Configuration selectedConfiguration = selectedContext.getConfiguration();
             Filter selectedFilter = new AbstractFilter() {
                 @Override
+                public Result filter(
+                        org.apache.logging.log4j.core.Logger logger,
+                        Level level,
+                        Marker marker,
+                        String message,
+                        Object... params) {
+                    return bootoptim$result(logger == null ? null : logger.getName(), level, message);
+                }
+
+                @Override
+                public Result filter(
+                        org.apache.logging.log4j.core.Logger logger,
+                        Level level,
+                        Marker marker,
+                        Object message,
+                        Throwable throwable) {
+                    return bootoptim$result(
+                            logger == null ? null : logger.getName(),
+                            level,
+                            message == null ? null : message.toString());
+                }
+
+                @Override
+                public Result filter(
+                        org.apache.logging.log4j.core.Logger logger,
+                        Level level,
+                        Marker marker,
+                        Message message,
+                        Throwable throwable) {
+                    return bootoptim$result(
+                            logger == null ? null : logger.getName(),
+                            level,
+                            bootoptim$messageText(message));
+                }
+
+                @Override
                 public Result filter(LogEvent event) {
-                    if (bootoptim$matches(event)) {
-                        SUPPRESSED.incrementAndGet();
-                        return Result.DENY;
+                    if (event == null) {
+                        return Result.NEUTRAL;
                     }
-                    return Result.NEUTRAL;
+                    return bootoptim$result(
+                            event.getLoggerName(),
+                            event.getLevel(),
+                            bootoptim$messageText(event.getMessage()));
                 }
             };
 
@@ -81,28 +120,31 @@ public final class CitResewnLegacyWarningFilter {
         }
     }
 
-    private static boolean bootoptim$matches(LogEvent event) {
-        if (event == null || event.getLevel() != Level.ERROR) {
-            return false;
+    private static Result bootoptim$result(String loggerName, Level level, String message) {
+        if (!bootoptim$matches(loggerName, level, message)) {
+            return Result.NEUTRAL;
         }
+        SUPPRESSED.incrementAndGet();
+        return Result.DENY;
+    }
 
-        String loggerName = event.getLoggerName();
-        if (loggerName == null || !loggerName.toLowerCase(Locale.ROOT).contains("citresewn")) {
-            return false;
-        }
+    private static boolean bootoptim$matches(String loggerName, Level level, String message) {
+        return level == Level.ERROR
+                && loggerName != null
+                && loggerName.toLowerCase(Locale.ROOT).contains("citresewn")
+                && message != null
+                && message.contains(MESSAGE_FRAGMENT);
+    }
 
-        Message message = event.getMessage();
+    private static String bootoptim$messageText(Message message) {
         if (message == null) {
-            return false;
+            return null;
         }
-
         String format = message.getFormat();
         if (format != null && format.contains(MESSAGE_FRAGMENT)) {
-            return true;
+            return format;
         }
-
-        String formatted = message.getFormattedMessage();
-        return formatted != null && formatted.contains(MESSAGE_FRAGMENT);
+        return message.getFormattedMessage();
     }
 
     private static void onScreenOpening(ScreenEvent.Opening event) {
