@@ -26,6 +26,7 @@ function Get-Entry([int]$Id) {
             RendererReloadPending = $null
             AttachBeginMs = $null
             AttachReadyMs = $null
+            AttachCompleteMs = $null
             FirstRenderMs = $null
         }
     }
@@ -51,7 +52,13 @@ foreach ($line in $lines) {
         continue
     }
 
-    if ($line -match 'BOOTOPTIM_RENDERER_WORLD_ENTRY status=first_render entry=(\d+) uptime_ms=(\d+) since_attach_begin_ms=(-?\d+) since_attach_ready_ms=(-?\d+)') {
+    if ($line -match 'BOOTOPTIM_RENDERER_WORLD_ENTRY status=attach_complete entry=(\d+) uptime_ms=(\d+) vanilla_attach_ms=(-?\d+) since_attach_begin_ms=(-?\d+)') {
+        $entry = Get-Entry ([int]$Matches[1])
+        $entry.AttachCompleteMs = [long]$Matches[2]
+        continue
+    }
+
+    if ($line -match 'BOOTOPTIM_RENDERER_WORLD_ENTRY status=first_render entry=(\d+) uptime_ms=(\d+) since_attach_begin_ms=(-?\d+) since_attach_ready_ms=(-?\d+) since_attach_complete_ms=(-?\d+)') {
         $entry = Get-Entry ([int]$Matches[1])
         $entry.FirstRenderMs = [long]$Matches[2]
         continue
@@ -86,11 +93,14 @@ $entryRows = @(
         $warmup = if ($null -ne $entry.AttachBeginMs -and $null -ne $entry.AttachReadyMs) {
             $entry.AttachReadyMs - $entry.AttachBeginMs
         } else { $null }
+        $vanillaAttach = if ($null -ne $entry.AttachReadyMs -and $null -ne $entry.AttachCompleteMs) {
+            $entry.AttachCompleteMs - $entry.AttachReadyMs
+        } else { $null }
         $attachToRender = if ($null -ne $entry.AttachBeginMs -and $null -ne $entry.FirstRenderMs) {
             $entry.FirstRenderMs - $entry.AttachBeginMs
         } else { $null }
-        $readyToRender = if ($null -ne $entry.AttachReadyMs -and $null -ne $entry.FirstRenderMs) {
-            $entry.FirstRenderMs - $entry.AttachReadyMs
+        $completeToRender = if ($null -ne $entry.AttachCompleteMs -and $null -ne $entry.FirstRenderMs) {
+            $entry.FirstRenderMs - $entry.AttachCompleteMs
         } else { $null }
 
         [pscustomobject]@{
@@ -99,11 +109,13 @@ $entryRows = @(
             MainMenuUptimeMs = $mainMenuMs
             AttachBeginUptimeMs = $entry.AttachBeginMs
             AttachReadyUptimeMs = $entry.AttachReadyMs
+            AttachCompleteUptimeMs = $entry.AttachCompleteMs
             FirstRenderUptimeMs = $entry.FirstRenderMs
             TitleToAttachMs = $titleToAttach
             WarmupMs = $warmup
+            VanillaAttachMs = $vanillaAttach
             AttachToFirstRenderMs = $attachToRender
-            ReadyToFirstRenderMs = $readyToRender
+            CompleteToFirstRenderMs = $completeToRender
         }
     }
 )
