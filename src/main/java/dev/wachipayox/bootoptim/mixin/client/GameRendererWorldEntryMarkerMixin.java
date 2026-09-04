@@ -8,15 +8,20 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Records the first real world render after each experimental world attachment. */
+/** Records the first real world render after each measured world attachment. */
 @Mixin(GameRenderer.class)
 abstract class GameRendererWorldEntryMarkerMixin {
     private static final boolean BOOTOPTIM$ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.experimentRendererFirstConsumerDefer", "false"));
 
+    private static final boolean BOOTOPTIM$WORLD_ENTRY_PROBE = Boolean.parseBoolean(
+            System.getProperty(
+                    "boot_optim.experimentRendererWorldEntryProbe",
+                    Boolean.toString(BOOTOPTIM$ENABLED)));
+
     @Inject(method = "renderLevel", at = @At("HEAD"), require = 1)
     private void bootoptim$markFirstWorldRender(DeltaTracker deltaTracker, CallbackInfo ci) {
-        if (BOOTOPTIM$ENABLED) {
+        if (BOOTOPTIM$WORLD_ENTRY_PROBE) {
             RendererWorldEntryProbe.markFirstRender();
         }
     }
