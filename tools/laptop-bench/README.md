@@ -56,21 +56,61 @@ The controller verifies access with:
 ssh -i "$env:USERPROFILE\.ssh\bootoptim-laptop-ed25519-v2" USER@LAPTOP_IP hostname
 ```
 
-## Deliberately deferred second step
+## Isolated Prism benchmark instance
 
-Minecraft needs a real logged-in graphical session. A generic service or an SSH
-child process cannot safely launch the benchmark because it would use Windows
-session 0 or an unknown launcher profile. After SSH works, inspect the laptop
-once to establish:
+`Clone-BootOptimBenchInstance.ps1` is the second, controller-dispatched step.
+It creates the disposable game directory at
+`C:\BootOptimBench\prism\instances\BootOptimBench\.minecraft` from the pack
+inputs needed at launch. It deliberately excludes saves, logs, `.bootoptim`,
+`.cache`, MCEF caches, launcher data, accounts, crash reports, and other mutable
+runtime outputs. It also refuses to overwrite a non-empty target.
 
-- the exact instance/launcher type and its Java launch command;
-- a dedicated benchmark copy of that instance, never the user's live one;
-- the paths to `latest.log` and `bootoptim-startup.log`;
-- the Java process PID returned by the launcher.
+Run it only after Prism portable has been installed and the live profile path
+has been read through SSH. Check `C:\BootOptimBench\state\instance-clone.json`
+for its terminal status before configuring or launching Prism.
 
-Only then install an interactive scheduled task that receives a job file,
-launches the exact game command, waits on that PID without log polling, and
-collects a result ZIP after BootOptim's existing title-screen auto-exit.
+`Configure-BootOptimPrismInstance.ps1` then writes the two minimal Prism
+metadata files. It pins Minecraft 1.21.1, NeoForge 21.1.248, the inspected Java
+25.0.4 runtime, 6 GiB maximum heap, and the user's G1 tuning. It intentionally
+does not carry the live profile's diagnostic
+`-Dboot_optim.profileLevelRendererReload=true` into a performance baseline. It
+does add BootOptim's low-overhead startup marker and title-screen auto-exit
+properties, which are required for unattended benchmark result collection.
+
+`Initialize-BootOptimPrismPortable.ps1` performs Prism's one-time portable
+configuration. It never copies a Microsoft credential. Prism 11 requires an
+owned Microsoft account to be signed in once through its own UI before it will
+launch an offline game session; that login remains in the isolated portable
+Prism directory and is never read or handled by these scripts. Every benchmark
+job subsequently launches with Prism's `--offline BootOptimBench` option.
+
+The portable `prismlauncher.cfg` keeps the inspected Java 25 runtime and sets
+Prism's Java-compatibility warning override in `[General]`. This is not a Java
+or OS change: it prevents Prism from replacing the pack's actual Java 25 with
+the Java 21 value advertised by 1.21.1 metadata.
+
+Before any graphical launch, `Test-BootOptimInteractiveSession.ps1` is run via
+a scheduled task with an **interactive-token** logon type. Its state record
+must show the logged-in desktop's session ID and `userInteractive: true`; SSH's
+session alone is never used to launch Minecraft.
+
+## Interactive benchmark runner
+
+`Invoke-BootOptimPrismBenchmark.ps1` is the action of a scheduled task with an
+**interactive-token** logon type. It starts only the isolated Prism instance,
+resolves its UUID from `instance.cfg` (Prism's CLI requires that UUID, not the
+display name), and launches it offline from the logged-in graphical session.
+It detects the newly created Java PID, waits on that process without polling
+game logs, then records the terminal BootOptim title-screen summary in
+`C:\BootOptimBench\results\RUN_ID.json`.
+
+It must not run from SSH/session 0, and it refuses to start if another Java
+process is already running in the benchmark desktop session.
+
+On a fresh portable Prism start it waits for the bounded pre-Java component
+resolution interval before issuing the CLI launch. That setup interval is not
+included in BootOptim's `main_menu` measurement; it exists solely because Prism
+does not queue launch requests received before its instance profile is ready.
 
 ## Benchmark hygiene
 
