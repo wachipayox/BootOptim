@@ -8,6 +8,7 @@
     "client.BlockStateModelLoaderIndexedVariantMixin",
     "client.EntityRenderDispatcherFirstConsumerDeferMixin",
     "client.FancyMenuPanoramaPreloadMixin",
+    "client.MinecraftRendererWorldWarmupMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
