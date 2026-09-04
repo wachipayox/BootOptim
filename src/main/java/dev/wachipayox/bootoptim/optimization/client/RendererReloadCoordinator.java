@@ -14,6 +14,17 @@ public final class RendererReloadCoordinator {
 
     private RendererReloadCoordinator() {}
 
+    /** Returns whether either dispatcher still has deferred startup reload work. Client-thread only. */
+    public static boolean hasPending() {
+        Minecraft minecraft = Minecraft.getInstance();
+        DeferredRendererReloadAccess blockEntities =
+                (DeferredRendererReloadAccess) (Object) minecraft.getBlockEntityRenderDispatcher();
+        DeferredRendererReloadAccess entities =
+                (DeferredRendererReloadAccess) (Object) minecraft.getEntityRenderDispatcher();
+        return blockEntities.bootoptim$hasPendingRendererReload()
+                || entities.bootoptim$hasPendingRendererReload();
+    }
+
     /**
      * Forces all pending renderer reload work before returning.
      *
