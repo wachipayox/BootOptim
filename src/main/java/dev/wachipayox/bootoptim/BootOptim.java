@@ -4,6 +4,7 @@ import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.CitResewnLegacyWarningFilter;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 
@@ -18,10 +19,10 @@ import net.neoforged.fml.loading.FMLEnvironment;
 public final class BootOptim {
     public static final String MOD_ID = "boot_optim";
 
-    public BootOptim() {
+    public BootOptim(IEventBus modEventBus) {
         StartupProfiler.markModEntrypoint();
         if (FMLEnvironment.dist == Dist.CLIENT) {
-            CitResewnLegacyWarningFilter.install();
+            CitResewnLegacyWarningFilter.install(modEventBus);
             if (StartupProfiler.isEnabled()) {
                 ClientStartupHooks.install();
             }
