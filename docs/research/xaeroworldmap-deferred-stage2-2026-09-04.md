@@ -1,56 +1,68 @@
 # Xaero World Map deferred Stage 2/2 — 2026-09-04
 
-Status: **ACTIVE DIAGNOSTIC / FIRST SMOKE INVALID FOR ATTRIBUTION / NO DEFER OR PRODUCTION CLAIM**
+Status: **ACTIVE DIAGNOSTIC / TWO ATTRIBUTION BOUNDARIES REJECTED / NO DEFER OR PRODUCTION CLAIM**
 
 Base: refreshed `agent/integration-current` @ `ad39b13824d71f6308050e8932f249dd18238923`.
 
 ## Why this lane exists
 
-A hosted exact-pack run (`33917611497`) exposed a mod-specific startup span that was not in the existing BootOptim research fronts:
+A hosted exact-pack run (`33917611497`) exposed a mod-specific startup span outside the existing BootOptim fronts:
 
 - exact artifact: Xaero's World Map `1.41.0` with XaeroLib `1.1.15`;
-- `20:45:57.056` — `Loading Xaero's World Map - Stage 1/2` on `Worker-ResourceReload-1`;
-- `20:45:59.460` — `Loading Xaero's World Map - Stage 2/2` on `Render thread`;
-- `20:45:59.467` — `New world map region cache hash code: ...`;
-- `20:46:00.415` — player-tracker registration and optional-mod checks complete;
-- `20:46:00.486` — NeoForge reports `Mod 'xaeroworldmap' took 1.026 s to run a deferred task.`
+- Stage 2/2 runs on `Render thread`;
+- NeoForge reported `Mod 'xaeroworldmap' took 1.026 s to run a deferred task.`
 
-FancyModLoader's `DeferredWorkQueue` runs each queued task synchronously through its supplied executor, sets that task owner's `ModContainer` active, executes `ti.task.run()`, clears the active container in `finally`, and only then emits the slow-task warning when the elapsed wall crosses one second.
+FancyModLoader's stock `DeferredWorkQueue` sets the queued task owner's `ModContainer` active, executes `ti.task.run()`, clears the owner in `finally`, then logs a warning only when the individual task exceeded one second.
 
-The stock `1.026 s` warning is therefore an inclusive wall measurement for one owner-tagged deferred runnable in that run. It is **not** a 1.026 s recoverable-TTMM claim.
+The stock 1.026 s is therefore inclusive wall for one owner-tagged synchronous deferred runnable in that run. It is **not** a recoverable-TTMM claim.
 
-## Ownership / source boundary
+## Ownership boundary
 
-The exact Xaero World Map artifact is not a repository controlled by the authenticated `wachipayox` account. Therefore:
+Xaero World Map is not a repository controlled by the authenticated `wachipayox` account. Do not propose a direct Xaero source edit as if the project owns it. Any BootOptim compatibility must be exact-version gated, fail-open, and semantics-preserving.
 
-- do not propose a direct Xaero edit as if this project owns it;
-- any BootOptim compatibility must be exact-version gated, fail-open, and semantics-preserving;
-- source-level conclusions must come from runtime stacks / inspected bytecode or public source that actually matches the runtime shape.
+## Rejected diagnostic #1 — Stage marker to slow-warning text
 
-## First diagnostic smoke — rejected attribution boundary
+The first PR #100 implementation started a 5 ms sampler from Xaero's `Stage 2/2` log and attempted to stop it by parsing NeoForge's slow-task warning.
 
-PR #100 initially used the Stage 2/2 log marker to start a 5 ms Render-thread sampler and attempted to stop it by parsing NeoForge's slow-task warning text.
-
-Exact-pack run `33924496490` reached title with zero BootOptim Mixin errors, but the profiler completed as:
+Exact-pack run `33924496490` reached title with zero BootOptim Mixin errors but completed:
 
 ```text
 BOOTOPTIM_XAERO_DEFERRED_PROFILE status=complete reason=timeout wall_ms=5003 samples=866
 ```
 
-That result is **invalid for Xaero deferred-task attribution**.
+No slow-task warning appeared in that instrumented run, so the sampler continued into unrelated later rendering/network work. Hundreds of samples were already in `glBlitFramebuffer`, with additional `Net.poll` samples. Those 5.003 s and their aggregate stacks are **discarded for attribution**.
 
-The sampler began at `22:15:35.128` when Stage 2/2 was logged. No `xaeroworldmap` slow-task warning appeared in this instrumented run, so the profiler ran to its five-second safety timeout. By then the sampled Render thread had moved into unrelated later work. Representative contaminated counts included hundreds of `glBlitFramebuffer` samples and dozens of `Net.poll` samples.
+Why the boundary is rejected:
 
-Consequences:
+- the warning is thresholded at one second and can legitimately disappear when the same task runs slightly faster;
+- warning/log formatting is not the runnable completion boundary;
+- a timeout necessarily mixes later work.
 
-- the 5.003 s window must not be described as Xaero task wall;
-- its aggregate `top_leaf` / `top_xaero` rows must not be used to choose an optimization mechanism;
-- absence of a warning is expected whenever the individual FML task falls below the one-second warning threshold, so warning text is intrinsically unsuitable as a precise end boundary;
-- log formatting / async logging behavior is an unnecessary dependency for this attribution.
+Do not reuse marker-to-warning parsing.
 
-This failed diagnostic is retained here so the same marker-to-warning boundary is not repeated.
+## Rejected diagnostic #2 — normal client mixin on FML owner setter
 
-## Corrected diagnostic boundary
+The next implementation removed all warning parsing and attempted to observe the existing `ModLoadingContext.setActiveContainer(owner)` / `setActiveContainer(null)` calls with a non-required client mixin. This would have been a suitable semantic boundary if transformable.
+
+Exact-pack run `33926828559` reached title successfully with:
+
+- main menu: `92.958 s`;
+- mod entrypoint: `31.239 s`;
+- reload -> FancyMenu finish: `43.687 s`;
+- BootOptim Mixin errors: `0`.
+
+However the profiler reported only:
+
+```text
+BOOTOPTIM_XAERO_DEFERRED_PROFILE status=installed boundary=fml_active_container ...
+BOOTOPTIM_XAERO_DEFERRED_PROFILE status=complete reason=title_without_observation ... samples=0
+```
+
+Xaero still logged Stage 2/2 on the Render thread, so this is not absence of the task. The ordinary mod/client mixin does not provide a usable interception point for this already-loader-side FML class in the exact launch.
+
+That mixin has been removed. Do not interpret this smoke as Xaero attribution.
+
+## Diagnostic #3 — early ModLauncher transform of DeferredWorkQueue
 
 Property remains:
 
@@ -58,53 +70,56 @@ Property remains:
 -Dboot_optim.profileXaeroDeferredTask=true
 ```
 
-The corrected diagnostic no longer installs a Log4j filter and no longer parses either Xaero or FML log text.
+BootOptim already has an `ITransformationService` in ModLauncher's SERVICE layer. The third diagnostic registers a property-gated transformer there, before the regular BootOptim mod constructor.
 
-### Stock FML boundary used
+### Structural target
 
-`DeferredWorkQueue` performs this stock sequence for each queued task:
+The transformer targets only:
 
-1. `ModLoadingContext.get().setActiveContainer(ti.owner)`;
-2. attaches exception handling to the task future;
-3. `ti.task.run()`;
-4. in `finally`, `ModLoadingContext.get().setActiveContainer(null)`.
+```text
+net/neoforged/fml/DeferredWorkQueue
+```
 
-PR #100 now observes the existing `ModLoadingContext.setActiveContainer(...)` calls. A client diagnostic mixin accepts a boundary only when:
+It does not depend on the compiler-generated lambda method name. Instead it scans the class tree and requires exactly one existing:
 
-- entering: the supplied container has mod id `xaeroworldmap`; and
-- leaving: the Xaero sampler is active on the current thread; and
-- in both cases the **direct caller class** is exactly `net.neoforged.fml.DeferredWorkQueue`.
+```text
+INVOKEINTERFACE java/lang/Runnable.run ()V
+```
 
-The direct-caller guard prevents unrelated FML/event-bus owner transitions from being mistaken for this task. It also prevents a nested owner change inside Xaero code from ending the sample unless that change itself is directly made by `DeferredWorkQueue`.
+Then, in that same method, it locates the existing `ModLoadingContext.setActiveContainer(null)` calls belonging to the compiled `finally` paths.
 
-The start boundary is immediately before FML assigns the active Xaero container. The end boundary is immediately before FML clears it in the `finally` reached after the runnable returns or throws. The measured interval therefore encloses the stock future-exception-hook setup plus the runnable, and excludes all later rendering/network work and the optional slow-task warning itself.
+If the expected structure is not present, it prints `BOOTOPTIM_XAERO_DEFERRED_TRANSFORM status=unmatched ...` and returns the stock class unchanged.
 
-### What is deliberately not changed
+### Boundary instrumentation
 
-The diagnostic does **not**:
+The transformer adds four public synthetic volatile diagnostic fields to `DeferredWorkQueue`:
 
-- wrap or replace the `Runnable`;
-- redirect `Runnable.run()`;
-- replace or wrap the executor;
-- reorder any deferred tasks;
-- alter FML owner state or `CompletableFuture` identity;
-- skip/cache/defer Xaero work;
-- parse warning text to determine completion;
-- touch Xaero config, cache, map data, resources, registries, files, or networking;
-- persist data between launches.
+- Xaero start nanos;
+- Xaero end nanos;
+- executing thread id;
+- boundary state.
 
-All injections remain `require=0` / non-required. If the FML class is not transformable at this point, the expected failure mode is no observation and a `title_without_observation` diagnostic, not a startup dependency.
+It inserts a balanced, zero-argument static marker call immediately before the existing `Runnable.run()` instruction and immediately before each existing owner-clear call in the same task method. The original Runnable reference/arguments remain on the operand stack and the existing invocation is left intact.
 
-## Stack sampler
+The start helper checks FML's already-active `ModContainer` and records a boundary only when its id is exactly `xaeroworldmap`. The end helper records `System.nanoTime()` only while the Xaero boundary is active on the same thread.
 
-When the FML owner boundary enters the Xaero deferred task, `XaeroDeferredTaskProfiler`:
+Both helper methods live on `DeferredWorkQueue` itself. No injected FML bytecode calls a BootOptim game-module class, avoiding a cross-module callback at the runnable boundary.
 
-1. records the exact executing thread;
-2. starts one daemon sampler at 5 ms;
-3. samples only that original thread;
-4. aggregates a top non-logging leaf frame and first `xaero.*` frame;
-5. stops sampling when the FML owner-clear boundary is observed;
-6. retains a 5 s timeout only as a fail-open **invalid diagnostic result**.
+This does **not**:
+
+- wrap, replace, redirect, or invoke the Runnable a second time;
+- wrap or replace the executor;
+- reorder the deferred queue;
+- alter FML owner state;
+- alter the task future;
+- parse any log message;
+- skip/cache/defer Xaero work.
+
+The early transformer is registered only while `boot_optim.profileXaeroDeferredTask=true`; production/property-off launches receive no transformer from this diagnostic.
+
+### Sampler
+
+The regular client profiler reflectively verifies that the four transformed fields exist. A daemon watcher reads only those fields. When boundary state becomes active it resolves the recorded thread id, samples that thread every 5 ms, and stops from the exact transformed end timestamp.
 
 Valid completion reason:
 
@@ -112,11 +127,17 @@ Valid completion reason:
 after_runnable_owner_clear
 ```
 
-`timeout`, `sampler_interrupted`, and `title_without_observation` are diagnostic failures and must not be interpreted as Xaero attribution.
+Invalid results include:
 
-Sampling itself adds small safepoint / stack-walk pressure, so the clean uninstrumented 1.026 s warning remains the better baseline for stock inclusive wall. The corrected smoke is primarily for source-level stack attribution and boundary validation.
+- transformed fields missing;
+- transform structure unmatched;
+- `title_without_observation`;
+- `boundary_stuck_timeout`;
+- zero/invalid timestamps.
 
-## Corrected exact-pack smoke request
+The timestamp is captured by injected bytecode at the stock boundary. Polling latency can miss a few early stack samples but cannot extend the reported wall past the runnable into later rendering.
+
+## Exact-pack gate
 
 ```text
 [exact-pack-ci]
@@ -124,54 +145,48 @@ exact-pack-mode: smoke
 exact-pack-smoke-jvm-arg: -Dboot_optim.profileXaeroDeferredTask=true
 ```
 
-Required mechanism checks before discussing an optimization:
+Accept attribution only if all are true:
 
-1. build/package succeeds and title is reached;
-2. zero BootOptim Mixin failures;
-3. profiler reports `status=sampling` with `owner=xaeroworldmap` on `Render thread`;
-4. completion reason is exactly `after_runnable_owner_clear`;
-5. wall is bounded to the individual deferred runnable rather than the 5 s timeout;
-6. samples are nonzero and `top_xaero` / `top_leaf` identify work inside that bounded interval.
+1. Build/package succeeds and title is reached.
+2. Zero BootOptim Mixin failures.
+3. Console contains `BOOTOPTIM_XAERO_DEFERRED_TRANSFORM status=applied` with one Runnable run and at least one owner-clear path.
+4. Profiler reports sampling `owner=xaeroworldmap` on `Render thread`.
+5. Completion reason is exactly `after_runnable_owner_clear`.
+6. Wall is bounded to the individual deferred task rather than a safety timeout.
+7. Samples are nonzero and identify work inside that bounded interval.
 
-If the owner boundary is not observed, fix instrumentation first. Do not fall back to parsing the slow-task warning.
+If the early transformer does not apply to the FML class, instrumentation must be fixed again. Do not fall back to warning parsing.
 
-This remains a diagnostic smoke, **not an A/B optimization gate**.
+This remains a **diagnostic smoke**, not an optimization A/B.
 
 ## Decision gate after valid attribution
 
-No mechanism is selected from the rejected first smoke. Only a valid owner-bounded smoke may justify one of these next steps.
+No optimization mechanism is selected from either rejected smoke.
 
-### CPU-heavy deterministic setup
+Only a valid owner-bounded run can justify source/bytecode follow-up. Interpret the bounded stacks by mechanism:
 
-If the bounded samples consistently identify pure deterministic setup, inspect the exact inputs and lifetime. A future compatibility may cache only immutable/launch-stable results with stock first calculation and explicit fail-open/version guards.
+- deterministic launch-stable CPU work: inspect narrowly scoped memoization with stock first calculation;
+- filesystem/config/cache work: separate CPU from blocking wall and require real Windows hardware for storage claims;
+- optional-mod/registry scans: cache only launch-stable state, never mutable world/session state;
+- remote/version checking: first prove it dominates the bounded task and establish every startup/later consumer before changing scheduling.
 
-### Config / filesystem / region-cache work
+### Deferral rule
 
-Separate blocking wall from CPU before proposing a cache. Any physical-storage claim requires a Windows laptop gate; hosted Linux/llvmpipe cannot establish disk/page-cache savings.
+No defer is proposed by PR #100.
 
-### Optional-mod / registry reflection
-
-If the bounded interval repeatedly scans launch-stable integration state, investigate a narrow once-per-launch memo only after confirming the data is not world/session mutable.
-
-### Network/version checking
-
-If a valid bounded run proves remote/version-check work dominates, first establish whether the result has any startup consumer. Moving or making that work non-blocking is only acceptable if failure semantics and later consumers remain stock-equivalent; the rejected 5 s run cannot establish this premise.
-
-### Work only needed after joining/using a map
-
-A defer is **not** proposed from this diagnostic. It may be considered only after source/stack evidence proves there is no title-screen consumer and a separate behavior/performance gate measures both:
+A future defer is considered only if bounded evidence proves the work has no title-screen consumer and a separate gate measures both:
 
 - TTMM / startup critical path; and
-- first singleplayer/multiplayer world readiness **and first Xaero map use**.
+- first singleplayer/multiplayer world readiness **plus first Xaero map use**.
 
 Moving a startup stall into world entry, first playable frame, or first map opening is not a success.
 
 ## Risks
 
-- `Thread.getStackTrace()` sampling adds diagnostic overhead; do not use the instrumented wall as a performance A/B.
-- The owner-boundary mixin targets FML internals. `require=0` makes method/transform drift fail open, and the smoke must prove observation before its samples are accepted.
-- External Xaero implementation details can change without source visibility, so any later compatibility needs exact artifact/version guards.
+- Stack sampling adds diagnostic overhead; do not use the instrumented smoke as a performance A/B.
+- The early transformer targets FML internals and must be structurally self-validating/fail-open.
+- External Xaero implementation details may change; any later compatibility needs exact artifact/version guards.
 
 ## Reopening / promotion criteria
 
-Do not implement a defer, cache, or network scheduling change from the historical 1.026 s warning or rejected 5 s sample. First obtain a corrected exact-pack run ending at `after_runnable_owner_clear`, identify a narrow mechanism inside that bounded runnable, then test the smallest semantics-preserving candidate. Any defer additionally requires first-world and first-map-use gating.
+Do not implement a cache, network scheduling change, or defer from the historical 1.026 s warning, the rejected 5 s sample, or the no-observation mixin smoke. First obtain an exact-pack run ending at `after_runnable_owner_clear`, then identify a concrete mechanism inside that bounded runnable. Any defer additionally requires first-world and first-map-use gating.
