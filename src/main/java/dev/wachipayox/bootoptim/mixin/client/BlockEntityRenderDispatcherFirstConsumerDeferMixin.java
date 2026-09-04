@@ -1,6 +1,8 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import com.mojang.logging.LogUtils;
+import dev.wachipayox.bootoptim.optimization.client.DeferredRendererReloadAccess;
+import dev.wachipayox.bootoptim.optimization.client.RendererReloadCoordinator;
 import java.util.Locale;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
@@ -17,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** Experimental first-consumer defer for the initial block-entity-renderer reconstruction. */
 @Mixin(BlockEntityRenderDispatcher.class)
-abstract class BlockEntityRenderDispatcherFirstConsumerDeferMixin {
+abstract class BlockEntityRenderDispatcherFirstConsumerDeferMixin implements DeferredRendererReloadAccess {
     @Unique
     private static final Logger BOOTOPTIM$LOGGER = LogUtils.getLogger();
 
@@ -61,18 +63,25 @@ abstract class BlockEntityRenderDispatcherFirstConsumerDeferMixin {
     @Inject(method = "getRenderer", at = @At("HEAD"), require = 1)
     private void bootoptim$forceBeforeRendererLookup(
             BlockEntity blockEntity, CallbackInfoReturnable<BlockEntityRenderer<?>> cir) {
-        this.bootoptim$forcePendingReload("getRenderer");
+        if (BOOTOPTIM$ENABLED) {
+            RendererReloadCoordinator.forcePending("block_entity:getRenderer");
+        }
     }
 
-    @Unique
-    private void bootoptim$forcePendingReload(String consumer) {
-        if (!BOOTOPTIM$ENABLED || this.bootoptim$pendingResourceManager == null) {
+    @Override
+    public boolean bootoptim$hasPendingRendererReload() {
+        return BOOTOPTIM$ENABLED && this.bootoptim$pendingResourceManager != null;
+    }
+
+    @Override
+    public void bootoptim$forcePendingRendererReload(String consumer) {
+        if (!BOOTOPTIM$ENABLED || this.bootoptim$pendingResourceManager == null || this.bootoptim$forcing) {
             return;
         }
 
         Minecraft minecraft = Minecraft.getInstance();
         if (!minecraft.isSameThread()) {
-            minecraft.executeBlocking(() -> this.bootoptim$forcePendingReload(consumer));
+            minecraft.executeBlocking(() -> this.bootoptim$forcePendingRendererReload(consumer));
             return;
         }
 
