@@ -13,20 +13,17 @@ Hosted exact-pack smoke `33911857477` reached main menu at `88.158 s` and showed
 - **7,920** `Using legacy nbt.display.Name` diagnostics;
 - **7,920 unique `.properties` paths**;
 - all from `file/Glowing Trim Armors v5.0.zip`;
-- all on `Worker-ResourceReload-1`;
-- approximately **1.76 MiB** of a `2.23 MiB` raw startup console;
-- warning burst visible from `19:37:44` through `19:37:47`;
-- `Loading item CIT models...` follows later at `19:37:52`;
-- `Linking baked models to item CITs...` follows at `19:38:03`.
+- all on a resource-reload worker;
+- approximately **1.76 MiB** of a `2.23 MiB` raw startup console.
 
 These timestamps establish workload size only. They are not a recoverable-wall or TTMM claim because CIT work overlaps the broader ModelManager/resource preparation path.
 
 ## Source-level logging route
 
-The exact visible event shape in `latest.log` is:
+The exact visible event shape is:
 
 ```text
-[Worker-ResourceReload-1/ERROR] [CITResewn/]: [citresewn] Using legacy nbt.display.Name ...
+[Worker-ResourceReload-*/ERROR] [CITResewn/]: [citresewn] Using legacy nbt.display.Name ...
 ```
 
 CITResewn 1.21.x centralizes this path in:
@@ -37,25 +34,47 @@ ConditionComponents.load(...)
   -> CITResewn.LOG.error("[citresewn] " + message)
 ```
 
-The semantic legacy conversion has already happened before `logWarnLoading` is called. Therefore cancelling only this emission helper for the exact legacy-name message is a narrow diagnostic ceiling: parsing, conversion, CIT construction, resource resolution and model behavior remain stock.
+The semantic legacy conversion has already happened before logging. A diagnostic may therefore suppress only the resulting logging event while leaving parsing, conversion, CIT construction, resource resolution and model behavior stock.
 
 ## Invalid A/B: `33924322432`
 
 **Do not interpret any candidate/control timing delta from this run.**
 
-All three candidates reached title but reported:
+All three candidates reached title but reported `suppressed=0`, while all 7,920 matching diagnostics remained visible. The candidate had installed a Log4j `Configuration.addFilter(...)` obtained from BootOptim's current context. The real event already had logger `CITResewn`, level `ERROR`, and the expected text, so broader matching was not the fix; the selected configuration was not on the effective CITResewn logging path.
+
+The campaign is invalid at the mechanism layer, independently of its wall-clock numbers.
+
+## Failed proof smoke: `33926596142`
+
+PR #97 was correctly changed to a one-run candidate smoke before another A/B. The new proof gate rejected the smoke, so no timing result is usable.
+
+Evidence from the artifact:
+
+- `BOOTOPTIM_CIT_LEGACY_WARNING_FILTER status=armed ...` was emitted by BootOptim;
+- all **7,920** legacy-name diagnostics remained visible;
+- completion reported `suppressed=0`;
+- Mixin had already logged:
 
 ```text
-BOOTOPTIM_CIT_LEGACY_WARNING_FILTER ... suppressed=0
+Error loading class: shcm/shsupercm/fabric/citresewn/CITResewn
+(java.lang.ClassNotFoundException: shcm.shsupercm.fabric.citresewn.CITResewn)
 ```
 
-while all 7,920 matching CITResewn diagnostics remained visible.
+The attempted `@Pseudo` mixin was therefore prepared too early. In this exact pack CITResewn is a Fabric mod loaded by **Sinytra Connector 2.0.0-beta.17+1.21.1**. Connector invokes Fabric `main` and `client` entrypoints during its early mod-loading phase, but BootOptim's normal Mixin configuration resolves optional targets before that Fabric class is visible. `@Pseudo` skips the missing class and is not retried later.
 
-The previous candidate installed a Log4j `Configuration.addFilter(...)` selected from BootOptim's context. That filter did not participate in the effective CITResewn logging route in the exact pack. Broadening logger-name/message matching would not fix the mechanism: the actual logger was already exactly `CITResewn` and the actual message already contained the expected text.
+Observed ordering in the failed smoke:
 
-The campaign is therefore invalid at the mechanism layer, independently of its wall-clock numbers.
+```text
+22:44:53.202 BootOptim mod entrypoint
+22:44:55.304 CITResewn Registering CIT Conditions
+22:44:55.332 CITResewn Registering CIT Types
+22:45:11.800 initial Reloading ResourceManager
+22:45:20.259 first legacy-name diagnostic
+```
 
-## Corrected diagnostic mechanism
+NeoForge 1.21.1 source also establishes that `FMLCommonSetupEvent` is dispatched from `ClientModLoader` during the initial reload, after mod gathering/initialization and before load completion. This supplies a later, Connector-safe installation point with several seconds of observed margin before the CIT diagnostic burst. The proof gate still treats any missed early diagnostics as failure.
+
+## Current corrected diagnostic mechanism
 
 Property remains:
 
@@ -63,35 +82,35 @@ Property remains:
 -Dboot_optim.experimentCitLegacyWarningFilter=true
 ```
 
-The candidate no longer installs a global/context Log4j filter. It uses an optional `@Pseudo` mixin targeting only:
+The ineffective CITResewn `@Pseudo` mixin has been removed.
+
+BootOptim now registers a mod-bus listener and waits until `FMLCommonSetupEvent`. At that point CITResewn has already created its Log4j logger in the exact pack. The diagnostic:
+
+1. obtains Log4j's core `Log4jContextFactory`;
+2. enumerates **all active core LoggerContexts**;
+3. selects contexts which already contain a logger named exactly `CITResewn`;
+4. requires exactly one match;
+5. attaches a filter directly to that concrete core logger instance.
+
+The direct logger filter denies only events satisfying both:
 
 ```text
-shcm.shsupercm.fabric.citresewn.CITResewn.logWarnLoading(String)
+level == ERROR
+message starts with "[citresewn] Using legacy nbt.display.Name"
 ```
 
-At method entry it cancels the call only when the argument begins exactly with:
+Everything else from CITResewn and every other logger stays visible. The filter disarms at first `TitleScreen`.
 
-```text
-Using legacy nbt.display.Name
-```
+This route deliberately avoids both failed assumptions:
 
-It counts each cancellation and disarms at the first `TitleScreen`.
-
-Consequences:
-
-- unrelated CITResewn warnings/errors still execute normally;
-- unrelated Log4j loggers are untouched;
-- CIT enumeration and ZIP access are untouched;
-- `.properties` decode/parse and legacy conversion are untouched;
-- condition/type construction is untouched;
-- item-CIT model loading/linking and baking are untouched;
-- this remains **diagnostic-only** and is not a production logging policy.
+- it does not use BootOptim's own `LoggerContext` as a proxy for CITResewn's context;
+- it does not require CITResewn's Fabric class to exist during BootOptim Mixin preparation.
 
 ## Mandatory proof gate
 
 No A/B is valid until an exact-pack candidate smoke proves the interception mechanism.
 
-When the diagnostic property is enabled, `scripts/exact-pack/run_startup.py` now rejects the run unless all conditions hold:
+When the diagnostic property is enabled, `scripts/exact-pack/run_startup.py` rejects the run unless all conditions hold:
 
 1. exactly one `BOOTOPTIM_CIT_LEGACY_WARNING_FILTER status=armed` marker;
 2. exactly one completion marker;
@@ -100,9 +119,9 @@ When the diagnostic property is enabled, `scripts/exact-pack/run_startup.py` now
 5. main-menu marker is reached;
 6. zero BootOptim Mixin failures are detected.
 
-The invalid `33924322432` candidate artifact is rejected by this gate rather than entering a performance summary.
+The runner therefore rejects both known broken mechanisms rather than allowing their wall times into an interpretable campaign.
 
-PR #97 is intentionally configured as a **single candidate smoke** while proof is pending:
+PR #97 remains intentionally configured as a **single candidate smoke** while proof is pending:
 
 ```text
 [exact-pack-ci]
@@ -129,7 +148,7 @@ Then H1 is judged by end-to-end critical-path metrics:
 - candidate mechanism markers and zero residual matching warnings;
 - zero BootOptim Mixin failures.
 
-A suppression count alone is never a performance result. If the valid 3x3 is tied/noisy/regressive, reject diagnostic logging pressure as an optimization target and do not promote this filter/mixin.
+A suppression count alone is never a performance result. If the valid 3x3 is tied/noisy/regressive, reject diagnostic logging pressure as an optimization target and do not promote this filter.
 
 ## Cache work explicitly deferred
 
@@ -139,14 +158,15 @@ A separate parser/IO decomposition can only be reconsidered after H1 has a valid
 
 ## Risks
 
-- **Diagnostic visibility:** the candidate intentionally hides these compatibility diagnostics, hence diagnostic-only status.
-- **Optional-target compatibility:** the `@Pseudo` hook must remain harmless when CITResewn is absent; normal Build/Startup CI must stay green.
-- **Match drift:** an upstream message change should fail the suppression-count gate instead of widening interception.
-- **Observer effect:** candidate/control share the same optional mixin class; only the JVM property changes cancellation behavior.
+- **Diagnostic visibility:** the candidate intentionally hides only the target compatibility diagnostics; this is why it remains diagnostic-only.
+- **Context selection:** zero or multiple matching `CITResewn` logger contexts fail closed for the experiment; the exact-pack gate then rejects the run.
+- **Installation race:** common setup runs concurrently with reload preparation. If any target diagnostic is emitted before attachment, the zero-visible gate rejects the smoke rather than treating partial suppression as proof.
+- **Match drift:** an upstream message or level change fails the suppression-count gate instead of broadening interception.
 - **False attribution:** even a valid suppression mechanism must still move TTMM/reload wall coherently before H1 has performance value.
 
 ## Current decision
 
-`33924322432`: **INVALID — NO DELTA INTERPRETATION**.
+- `33924322432`: **INVALID — NO DELTA INTERPRETATION**.
+- `33926596142`: **FAILED PROOF — PSEUDO MIXIN TARGET UNAVAILABLE EARLY; NO TIMING INTERPRETATION**.
 
-Next allowed action: **exact-pack candidate proof smoke only**. A/B is blocked until suppression is near 7,920 with zero residual matching diagnostics.
+Next allowed action: **exact-pack candidate proof smoke only**. A/B remains blocked until suppression is near 7,920 with zero residual matching diagnostics.
