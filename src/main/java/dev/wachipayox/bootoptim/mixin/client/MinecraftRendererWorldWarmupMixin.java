@@ -21,16 +21,25 @@ abstract class MinecraftRendererWorldWarmupMixin {
     private static final boolean BOOTOPTIM$WORLD_WARMUP = Boolean.parseBoolean(
             System.getProperty("boot_optim.experimentRendererWorldWarmup", "true"));
 
+    private static final boolean BOOTOPTIM$WORLD_ENTRY_PROBE = Boolean.parseBoolean(
+            System.getProperty(
+                    "boot_optim.experimentRendererWorldEntryProbe",
+                    Boolean.toString(BOOTOPTIM$ENABLED)));
+
     @Inject(method = "updateLevelInEngines", at = @At("HEAD"), require = 1)
     private void bootoptim$warmRenderersBeforeWorldAttachment(ClientLevel level, CallbackInfo ci) {
-        if (!BOOTOPTIM$ENABLED || level == null) {
+        if (level == null || (!BOOTOPTIM$ENABLED && !BOOTOPTIM$WORLD_ENTRY_PROBE)) {
             return;
         }
 
-        RendererWorldEntryProbe.beginAttach(RendererReloadCoordinator.hasPending());
-        if (BOOTOPTIM$WORLD_WARMUP) {
+        if (BOOTOPTIM$WORLD_ENTRY_PROBE) {
+            RendererWorldEntryProbe.beginAttach(RendererReloadCoordinator.hasPending());
+        }
+        if (BOOTOPTIM$ENABLED && BOOTOPTIM$WORLD_WARMUP) {
             RendererReloadCoordinator.forcePending("world_attach");
         }
-        RendererWorldEntryProbe.finishAttachWarmup();
+        if (BOOTOPTIM$WORLD_ENTRY_PROBE) {
+            RendererWorldEntryProbe.finishAttachWarmup();
+        }
     }
 }
