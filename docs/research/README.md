@@ -29,7 +29,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 ## Research index
 
 - [Hosted exact-pack startup CI](exact-pack-ci.md) — pinned exact software-pack fixture, Linux/Xvfb/llvmpipe surrogate boundaries, deterministic MCEF setup, PR-body A/B protocol, and real-hardware gate rules.
-- [Xaero World Map deferred Stage 2/2 — 2026-09-04](xaeroworldmap-deferred-stage2-2026-09-04.md) — active exact-pack attribution of a NeoForge-timed ~1.026 s synchronous Render-thread deferred task, using a no-semantic-change stack sampler before any cache/defer decision.
+- [Xaero World Map deferred Stage 2/2 — 2026-09-04](xaeroworldmap-deferred-stage2-2026-09-04.md) — rejected #100 attribution lane: warning parsing contaminated the window, normal and SERVICE-layer FML hooks were lifecycle-inaccessible, and the stock TaskInfo future cannot expose an exact execution-start transition without private-loader reflection or a different runnable hook. No Xaero optimization/defer was selected.
 - [Client model / ModelManager pipeline](model-pipeline.md) — historical #13/#14/#35/#36/#37/#47 evidence, the validated #55 blockstate matcher, and rejected shallow approaches.
 - [Deep ModelManager follow-up — 2026-08-31](model-pipeline-deep-2026-08-31.md) — 97.60% recursive bake-cache hit rate, exclusive bake-cost attribution, 10.86M blockstate variant tests, and the indexed-matching architectural hypothesis.
 - [Post-promotion ModelManager residuals](modelmanager-post56-residuals.md) — PR #57 exact-pack gate/cost distribution after production promotions, rejected generated-item span-topology cache, and the short-scope material-resolution hypothesis.
