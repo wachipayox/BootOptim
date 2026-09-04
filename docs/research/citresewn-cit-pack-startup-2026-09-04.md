@@ -20,16 +20,17 @@ The same raw console shows a previously untracked exact-pack asset workload from
 
 - initial `ReloadableResourceManager` reload starts at `19:37:37`;
 - first `Using legacy nbt.display.Name` diagnostic appears at `19:37:44`;
-- **7,920** such CITResewn ERROR events are emitted;
-- the last of that burst is at `19:37:52`;
+- **7,920** such CITResewn ERROR events are emitted, corresponding to **7,920 unique `.properties` resource paths**;
+- every one of those 7,920 events is attributed to `file/Glowing Trim Armors v5.0.zip` and `Worker-ResourceReload-1`;
+- second-level counts are 1,069 at `19:37:44`, 1,538 at `:45`, 2,025 at `:46`, and 3,288 at `:47`; there are no later legacy-name warnings in the run;
 - the 7,920 lines occupy about **1.76 MiB** of the `2.23 MiB` raw startup console;
-- CITResewn then logs `Loading item CIT models...` at `19:37:52`;
+- CITResewn next logs `Loading item CIT models...` at `19:37:52` — the roughly five-second gap after the warning burst is **not** attributed to logging by this research;
 - CITResewn logs `Linking baked models to item CITs...` at `19:38:03`;
 - stock atlas upload starts around `19:38:06`;
 - FancyMenu's ordered reload turn starts around `19:38:12`;
 - title/main-menu marker is at `19:38:16`.
 
-This is not yet a claim that CITResewn contributes eight or twenty-six seconds of recoverable wall time. The warning burst overlaps other preparation work. The relevant question is whether it delays the global preparation gate or consumes enough of the four-core runner's logging/heap/CPU budget to lengthen end-to-end reload and time-to-main-menu.
+This is not yet a claim that CITResewn contributes four, five, eleven, or twenty-six seconds of recoverable wall time. The warning burst and later CIT preparation overlap other work. The relevant question is whether the repeated diagnostics delay the global preparation gate or consume enough of the four-core runner's logging/heap/CPU budget to lengthen end-to-end reload and time-to-main-menu.
 
 The mechanism is materially different from the older BootOptim resource work:
 
@@ -41,7 +42,7 @@ The mechanism is materially different from the older BootOptim resource work:
 
 ### H1 — diagnostic logging pressure is material
 
-CITResewn emits 7,920 nearly identical ERROR events from resource-reload workers while the initial preparation is active. Even with asynchronous logging in the pack, the caller still creates/queues events and the process must format/write roughly 1.76 MiB of repeated console data during startup.
+CITResewn emits 7,920 nearly identical ERROR events from one resource-reload worker while the initial preparation is active. Even with asynchronous logging in the pack, the caller still creates/queues events and the process must eventually format/write roughly 1.76 MiB of repeated console data during startup.
 
 A narrow A/B can test this without touching resource semantics.
 
