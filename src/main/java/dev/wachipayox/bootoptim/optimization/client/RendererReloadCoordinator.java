@@ -9,6 +9,9 @@ import org.slf4j.Logger;
 public final class RendererReloadCoordinator {
     private static final Logger LOGGER = LogUtils.getLogger();
 
+    /** Accessed only on Minecraft's client thread after off-thread callers are marshalled there. */
+    private static boolean forcingAll;
+
     private RendererReloadCoordinator() {}
 
     /**
@@ -26,7 +29,12 @@ public final class RendererReloadCoordinator {
             return;
         }
 
-        long startNanos = System.nanoTime();
+        // A provider constructed by the stock reload may perform renderer lookups. In the eager
+        // original those lookups do not recursively launch another resource reload, so neither do we.
+        if (forcingAll) {
+            return;
+        }
+
         DeferredRendererReloadAccess blockEntities =
                 (DeferredRendererReloadAccess) (Object) minecraft.getBlockEntityRenderDispatcher();
         DeferredRendererReloadAccess entities =
@@ -38,23 +46,29 @@ public final class RendererReloadCoordinator {
             return;
         }
 
-        LOGGER.info(
-                "BOOTOPTIM_RENDERER_RELOAD_COORDINATOR status=forcing reason={} block_pending={} entity_pending={} thread={}",
-                reason,
-                blockPending,
-                entityPending,
-                Thread.currentThread().getName());
+        forcingAll = true;
+        long startNanos = System.nanoTime();
+        try {
+            LOGGER.info(
+                    "BOOTOPTIM_RENDERER_RELOAD_COORDINATOR status=forcing reason={} block_pending={} entity_pending={} thread={}",
+                    reason,
+                    blockPending,
+                    entityPending,
+                    Thread.currentThread().getName());
 
-        // Preserve Minecraft's initial reload listener registration order.
-        blockEntities.bootoptim$forcePendingRendererReload("coordinator:" + reason);
-        entities.bootoptim$forcePendingRendererReload("coordinator:" + reason);
+            // Preserve Minecraft's initial reload listener registration order.
+            blockEntities.bootoptim$forcePendingRendererReload("coordinator:" + reason);
+            entities.bootoptim$forcePendingRendererReload("coordinator:" + reason);
 
-        LOGGER.info(
-                "BOOTOPTIM_RENDERER_RELOAD_COORDINATOR status=complete reason={} total_ms={} block_pending={} entity_pending={} thread={}",
-                reason,
-                String.format(Locale.ROOT, "%.3f", (System.nanoTime() - startNanos) / 1_000_000.0D),
-                blockEntities.bootoptim$hasPendingRendererReload(),
-                entities.bootoptim$hasPendingRendererReload(),
-                Thread.currentThread().getName());
+            LOGGER.info(
+                    "BOOTOPTIM_RENDERER_RELOAD_COORDINATOR status=complete reason={} total_ms={} block_pending={} entity_pending={} thread={}",
+                    reason,
+                    String.format(Locale.ROOT, "%.3f", (System.nanoTime() - startNanos) / 1_000_000.0D),
+                    blockEntities.bootoptim$hasPendingRendererReload(),
+                    entities.bootoptim$hasPendingRendererReload(),
+                    Thread.currentThread().getName());
+        } finally {
+            forcingAll = false;
+        }
     }
 }
