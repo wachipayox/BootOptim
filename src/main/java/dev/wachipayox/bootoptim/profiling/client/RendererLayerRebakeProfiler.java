@@ -39,6 +39,12 @@ public final class RendererLayerRebakeProfiler {
         }
     }
 
+    public enum Phase {
+        BLOCK_ENTITY_CREATE,
+        ENTITY_CREATE,
+        PLAYER_CREATE
+    }
+
     public static void begin(Scope scope) {
         if (!ENABLED) {
             return;
@@ -63,9 +69,10 @@ public final class RendererLayerRebakeProfiler {
 
         long totalNanos = System.nanoTime() - state.scopeStartNanos;
         long totalCpuNanos = cpuDelta(state.scopeStartCpuNanos);
-        long otherNanos = Math.max(0L, totalNanos - state.layerBakeNanos);
         long repeatNanos = state.repeatLayerNanos;
         long firstNanos = Math.max(0L, state.layerBakeNanos - repeatNanos);
+        long createNanos = state.blockEntityCreateNanos + state.entityCreateNanos + state.playerCreateNanos;
+        long postCreateNanos = Math.max(0L, totalNanos - createNanos);
 
         List<Map.Entry<ModelLayerLocation, LayerStats>> top = new ArrayList<>(state.layers.entrySet());
         top.sort(Comparator.comparingLong((Map.Entry<ModelLayerLocation, LayerStats> entry) -> entry.getValue().nanos)
@@ -86,21 +93,54 @@ public final class RendererLayerRebakeProfiler {
         }
 
         LOGGER.info(
-                "BOOTOPTIM_RENDERER_LAYER_REBAKE scope={} total_ms={} cpu_ms={} layer_calls={} unique_layers={} repeat_calls={} layer_ms={} first_layer_ms={} repeat_layer_ms={} other_ms={} top_layers={} thread={}",
+                "BOOTOPTIM_RENDERER_LAYER_REBAKE scope={} total_ms={} cpu_ms={} block_entity_create_ms={} entity_create_ms={} player_create_ms={} post_create_ms={} layer_calls={} unique_layers={} repeat_calls={} layer_ms={} first_layer_ms={} repeat_layer_ms={} top_layers={} thread={}",
                 scope.marker,
                 formatNanos(totalNanos),
                 formatCpuNanos(totalCpuNanos),
+                formatNanos(state.blockEntityCreateNanos),
+                formatNanos(state.entityCreateNanos),
+                formatNanos(state.playerCreateNanos),
+                formatNanos(postCreateNanos),
                 state.layerCalls,
                 state.layers.size(),
                 state.repeatLayerCalls,
                 formatNanos(state.layerBakeNanos),
                 formatNanos(firstNanos),
                 formatNanos(repeatNanos),
-                formatNanos(otherNanos),
                 topLayers.length() == 0 ? "none" : topLayers.toString(),
                 Thread.currentThread().getName());
 
         state.clear();
+    }
+
+    public static void beginPhase(Phase phase) {
+        if (!ENABLED) {
+            return;
+        }
+        State state = STATE.get();
+        if (state.scope == null || state.activePhase != null) {
+            return;
+        }
+        state.activePhase = phase;
+        state.activePhaseStartNanos = System.nanoTime();
+    }
+
+    public static void endPhase(Phase phase) {
+        if (!ENABLED) {
+            return;
+        }
+        State state = STATE.get();
+        if (state.scope == null || state.activePhase != phase || state.activePhaseStartNanos == 0L) {
+            return;
+        }
+        long elapsed = System.nanoTime() - state.activePhaseStartNanos;
+        switch (phase) {
+            case BLOCK_ENTITY_CREATE -> state.blockEntityCreateNanos += elapsed;
+            case ENTITY_CREATE -> state.entityCreateNanos += elapsed;
+            case PLAYER_CREATE -> state.playerCreateNanos += elapsed;
+        }
+        state.activePhase = null;
+        state.activePhaseStartNanos = 0L;
     }
 
     public static void beginLayer(ModelLayerLocation layer) {
@@ -169,6 +209,11 @@ public final class RendererLayerRebakeProfiler {
         private Scope scope;
         private long scopeStartNanos;
         private long scopeStartCpuNanos;
+        private long blockEntityCreateNanos;
+        private long entityCreateNanos;
+        private long playerCreateNanos;
+        private Phase activePhase;
+        private long activePhaseStartNanos;
         private long layerBakeNanos;
         private long repeatLayerNanos;
         private int layerCalls;
@@ -186,6 +231,11 @@ public final class RendererLayerRebakeProfiler {
             this.scope = null;
             this.scopeStartNanos = 0L;
             this.scopeStartCpuNanos = -1L;
+            this.blockEntityCreateNanos = 0L;
+            this.entityCreateNanos = 0L;
+            this.playerCreateNanos = 0L;
+            this.activePhase = null;
+            this.activePhaseStartNanos = 0L;
             this.layerBakeNanos = 0L;
             this.repeatLayerNanos = 0L;
             this.layerCalls = 0;
