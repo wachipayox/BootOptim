@@ -32,6 +32,8 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 - [Full-resource laptop variance](laptop-fullpack-variance-2026-09-05.md) — validated workload, control/candidate/control timing partitions, and the fixed-configuration causal diagnostic gate; no physical MCEF win established.
 
+- [FancyMenu usable-menu / resource-preload boundary — 2026-09-05](fancymenu-usable-menu-resource-boundary-2026-09-05.md) — exact 3.9.0 bytecode proves panorama/slideshow/native-video consumers and title audio can tolerate not-ready resources, but `ResourcePreLoader.preLoadAll` exposes no safe continuation that preserves ordered start/wait/timeout/error semantics; BootOptim runtime defer rejected.
+
 - [Laptop resource-selection audit](laptop-resource-selection-audit-2026-09-05.md) — retained laptop runs omitted external ZIPs; correct the workload contract before exact-pack performance claims.
 - [VoxelShaper limited safe-domain closure — 2026-09-05](voxelshaper-safe-domain-2026-09-05.md) — **REJECTED #110**: `<=2` boxes is strict-safe but owns only 0.097% of measured stock fold CPU; the broader epsilon-stable domain covered about one quarter of stock fold CPU but failed strict equivalence with two natural and one exact-dyadic adversarial counterexample. Coverage is not TTMM savings; no A/B or laptop run was justified.
 
