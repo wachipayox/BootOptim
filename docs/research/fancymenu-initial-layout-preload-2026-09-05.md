@@ -68,18 +68,47 @@ The log reported:
 ```
 
 This is a mechanism/safety smoke, not an end-to-end timing result: it used the
-development profile, not the full exact-pack fixture, and no laptop run has
-been performed. The local final-profile JAR was replaced for later testing;
-the previous JAR is preserved beside it with the suffix
-`.pre-active-layout.bak`.
+development profile, not the full exact-pack fixture. The local final-profile
+JAR was replaced for later testing; the previous JAR is preserved beside it
+with the suffix `.pre-active-layout.bak`.
+
+## Physical laptop gate (2026-09-05)
+
+The candidate was exercised on the exact-pack laptop profile through Prism,
+using candidate SHA-256
+`B418F49257CE8BCCBB9C010C13147DB0656FF540FCFA81A8AF59408DEBC79390`.
+
+| run | `preload_resources` state | option | total to menu | preload → reload finished | filter result | disposition |
+| --- | --- | --- | ---: | ---: | --- | --- |
+| active-layout-001 | full list (22 background + 2 ordinary sources) | true | 373.017 s | 1.005 s | kept 1, skipped 21 | mechanism-valid candidate run |
+| control-001 | list was not held identical after staging | false | 449.962 s | 26.852 s | no filter | **invalid A/B** |
+| active-layout-002 | empty list | true | 393.516 s | 0.251 s | kept 1, skipped 0 | **invalid for the intended pack** |
+| active-layout-003 | full list (1163-character serialized value) | true | 1272.745 s | 3.301 s | kept 1, skipped 21 | mechanism-valid; timing contaminated |
+
+Run 003 started after Prism/JVM preparation had left a Java process alive for
+about 16 minutes before the BootOptim report began, so its total startup time
+cannot be compared with the earlier runs. It nevertheless proves two useful
+properties on the slow hardware: the full configured list is read without
+being erased, and the selected-layout filter executes through resource reload
+to the main menu. The options file still contained the complete serialized
+list after the process exited. The candidate JAR was then moved to the remote
+preservation directory, the original JAR was restored with its known SHA-256
+`8E1C68F2C91AED02057209252BBE221BF3B019C4E82FB20FE35809BAC2C08DB8`, and the
+option was reset to `false`.
+
+The 449.962 s control must not be used as evidence of a regression: the
+source-list state was not held constant. The empty-list candidate is likewise
+not a pack test. No paired, clean candidate/control A/B exists yet, and the
+candidate is therefore not promoted.
 
 ## Decision and next gate
 
 Keep this as an **ACTIVE** candidate. Do not promote it to BootOptim yet and
-do not claim a time-to-main-menu gain from the source smoke alone. The next
-gate is a paired exact-pack run with the fork JAR and the option enabled,
-followed by the physical laptop comparison when the user signals that the
-laptop may be started. Record total time-to-main-menu, reload-to-FancyMenu,
-panorama/slideshow preload duration, selected layout identity and any first-use
-visual hitch. If the candidate produces no coherent wall-time improvement or
-changes the selected layout, revert to the saved JAR and disable the option.
+do not claim a time-to-main-menu gain from these unpaired laptop runs. The next
+gate is a clean paired exact-pack run with the same full serialized list for
+control and candidate, preferably using a detached runner that records the
+launcher/JVM preparation separately. Record total time-to-main-menu,
+reload-to-FancyMenu, panorama/slideshow preload duration, selected layout
+identity and any first-use visual hitch. If the candidate produces no coherent
+wall-time improvement or changes the selected layout, revert to the saved JAR
+and disable the option.
