@@ -8,8 +8,7 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin",
-    "client.VoxelShaperExactReuseProfilerMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
     "defaultRequire": 0
