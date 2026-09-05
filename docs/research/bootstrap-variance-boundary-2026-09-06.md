@@ -19,9 +19,9 @@ snapshots.
 The physical logs have informally called the large interval “ModernFix bootstrap.”
 That wording is misleading. In ModernFix's public 1.21.1 source, the
 `feature.measure_time.BootstrapMixin` injects a `Stopwatch` into
-`net.minecraft.server.Bootstrap.bootStrap()`: it starts after the first write to
-`Bootstrap.isBootstrapped` and stops at method return, then logs `Vanilla bootstrap
-took ... milliseconds`.
+`net.minecraft.server.Bootstrap.bootStrap()`: it starts at the first `PUTSTATIC`
+of `Bootstrap.isBootstrapped` and stops at method return, then logs `Vanilla
+bootstrap took ... milliseconds`.
 
 Modrinth identifies the exact pack version as `5.27.14+mc1.21.1` for NeoForge
 1.21.1. GitHub history for the 1.21.1 `BootstrapMixin.java` path shows no later
@@ -140,10 +140,11 @@ Property, default off:
 -Dboot_optim.bootstrapVarianceDiagnostic=true
 ```
 
-The diagnostic adds only HEAD/RETURN callbacks to stock
-`Bootstrap.bootStrap()`. It does not redirect/cancel the method, enumerate files
-or classes, sample periodically, start JFR, force GC, change executors, or log per
-class/file. It takes exactly two aggregate snapshots.
+The diagnostic adds only a callback at the same first `PUTSTATIC
+Bootstrap.isBootstrapped` injection point used by ModernFix plus a `RETURN`
+callback. It does not redirect/cancel the method, enumerate files or classes,
+sample periodically, start JFR, force GC, change executors, or log per class/file.
+It takes exactly two aggregate snapshots.
 
 The measured target wall starts after management-bean setup and the first snapshot
 and stops before the final snapshot. `probe_setup_ms` is emitted separately so a
