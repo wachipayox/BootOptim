@@ -9,7 +9,11 @@
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin",
-    "client.VoxelShaperIndexedJoinVerifierMixin"
+    "client.VoxelShaperIndexedJoinVerifierMixin",
+    "client.accessor.ArrayVoxelShapeInvoker",
+    "client.accessor.CubeVoxelShapeInvoker",
+    "client.accessor.ShapesInvoker",
+    "client.accessor.VoxelShapeAccessor"
   ],
   "injectors": {
     "defaultRequire": 0
