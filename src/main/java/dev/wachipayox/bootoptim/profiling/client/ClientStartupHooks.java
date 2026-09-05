@@ -27,6 +27,7 @@ public final class ClientStartupHooks {
             return;
         }
 
+        VoxelShaperIndexedJoinVerifier.onMainMenu();
         if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
