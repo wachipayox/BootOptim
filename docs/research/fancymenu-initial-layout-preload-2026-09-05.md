@@ -1,8 +1,8 @@
 # FancyMenu initial-layout resource preload — 2026-09-05
 
-Status: **ACTIVE** candidate in the user's `FancyMenu 3.9.0-wedit` fork. This
-is not yet a BootOptim production optimization and is not listed in
-`docs/optimizations/`.
+Status: **RETAINED in the user's FancyMenu fork**. This is a direct-mod
+optimization rather than a BootOptim production optimization, so it is not
+listed in `docs/optimizations/`.
 
 ## Target and observed configuration
 
@@ -125,12 +125,13 @@ candidate/control launch.
 
 ## Decision and next gate
 
-Keep this as an **ACTIVE** candidate. Do not promote it to BootOptim yet and
-do not claim a time-to-main-menu gain from these unpaired laptop runs. The next
-gate is a clean paired exact-pack run with the same full serialized list for
-control and candidate, preferably using a detached runner that records the
-launcher/JVM preparation separately. Record total time-to-main-menu,
-reload-to-FancyMenu, panorama/slideshow preload duration, selected layout
-identity and any first-use visual hitch. If the candidate produces no coherent
-wall-time improvement or changes the selected layout, revert to the saved JAR
-and disable the option.
+## Final disposition
+
+The user accepted this optimization for the controlled `FancyMenu` fork after
+the clean physical control-002/candidate-006 pair. Keep commits
+`0bb403aff` (implementation) and `c3f79f7e4` (fork documentation) on branch
+`codex/active-layout-preload`. The candidate remains opt-in by default and
+must be carried as the matching `FancyMenu 3.9.0-wedit` build; BootOptim should
+not duplicate the implementation with a mixin. The laptop is restored to the
+original JAR and the option is disabled, while the fork branch is ready for
+the next packaging/release decision.
