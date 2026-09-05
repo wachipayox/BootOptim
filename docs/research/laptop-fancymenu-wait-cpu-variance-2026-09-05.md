@@ -23,6 +23,9 @@ Run ID: `variance-fixed-021` on the Windows laptop benchmark session.
 - the JAR was restored to the pre-run production benchmark SHA
   `C0B20FA7874B6837297B78320910EBE755A250F8278F3BFA8246C0B3A80A5E25` after
   the process exited.
+- the post-run resource-selection checker matched all 15 expected entries in
+  the reference order, reported one reload, and returned `valid=true` (this
+  validates selection only, not the complete benchmark).
 
 The diagnostic adds only three aggregate snapshots (preload entry, preload
 return, first title), the existing low-cardinality wait-family timers, and the
