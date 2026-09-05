@@ -1,10 +1,10 @@
 # MoreCulling reload-local translucency reuse — 2026-09-05
 
-Status: **ACTIVE CANDIDATE / HOSTED VALIDATION PENDING**
+Status: **ACTIVE CANDIDATE / HOSTED A/B PENDING**
 
 Diagnostic precursor: PR #108, branch `codex/diagnostic-moreculling-startup`.
 
-Candidate branch: `codex/moreculling-translucency-cache`, forked from `agent/integration-current` at `2fd0f62748b7a65aca24bcdbad43aba5d4b469d9`.
+Candidate PR: #119, branch `codex/moreculling-translucency-cache`, originally forked from `agent/integration-current` at `2fd0f62748b7a65aca24bcdbad43aba5d4b469d9` and validated through the current PR merge base.
 
 This candidate is deliberately narrower than MoreCulling's model caches. It does not change model hooks, culling shapes, resource order, callbacks, sprites, mipmaps, animation, rendering, or gameplay behavior. It only reuses the exact boolean returned by MoreCulling 1.0.8's private `SpriteUtils.doesHaveTranslucency(NativeImage, List, int, int, int, int)` when the same `NativeImage` object and exact bounds recur during one resource-reload generation and `orMatch == null`.
 
@@ -29,9 +29,11 @@ Exact pack identity work in PR #108 established that the renamed pack JAR is Mor
 
 For `orMatch == null`, `SpriteUtils.doesHaveTranslucency` has no callback or hidden state. It checks `image.format().hasAlpha()` and scans the supplied integer rectangle until `image.getLuminanceOrAlpha(x, y) != -1`; that exact comparison is the translucency threshold. The result therefore depends only on the addressed bytes of that `NativeImage`, its format, and the exact bounds.
 
-MoreCulling's `TextureAtlasSprite_opacityMixin` obtains the image through `SpriteContentsAccessor.originalImage`; it explicitly calls this the unmipmapped image. Minecraft 1.21.1 exposes `SpriteContents.originalImage` as `private final`. Mipmap storage is a separate `byMipLevel` array. Animated interpolation owns a separate `NativeImage[] activeFrame`; frame ticking/upload changes GPU upload content and/or the interpolation buffer, not the `originalImage` reference used by MoreCulling's scan.
+MoreCulling's `TextureAtlasSprite_opacityMixin` obtains the image through `SpriteContentsAccessor.originalImage`; it explicitly calls this the unmipmapped image. Minecraft 1.21.1 exposes `SpriteContents.originalImage` as `private final`. Mipmap storage is a separate `byMipLevel` array; mip generation retains level zero and creates distinct images for additional levels. Animated interpolation owns a separate `NativeImage[] activeFrame`; frame ticking/upload changes GPU upload content and/or the interpolation buffer, not the `originalImage` reference used by MoreCulling's scan.
 
 `NativeImage` itself is mutable, so object identity alone is not safe for arbitrary lifetime. Safety comes from the cache lifetime: it is created/cleared at each `ReloadableResourceManager.createReload`, is usable only while that `ReloadInstance` is incomplete, and is cleared again from `ReloadInstance.done()`. Resource reload apply work is the lifecycle in which MoreCulling rebuilds these caches; the candidate retains no image/result after completion and is inactive during gameplay. A late completion from an older generation cannot clear a newer generation because completion carries a generation token.
+
+The same image-stability premise already exists inside MoreCulling 1.0.8: `BakedQuad_cacheMixin` memoizes sprite translucency until its explicit reset. The candidate does not authorize arbitrary third-party mutation; it keeps reuse within the same resource generation for which MoreCulling already treats sprite opacity as cacheable.
 
 No reuse is allowed for non-null `orMatch`, ResourceLocation, sprite name, model identity, quad count, mipmap, or cross-reload identity.
 
@@ -61,13 +63,27 @@ At reload completion one aggregate mechanism line reports hits, misses, stores, 
 
 The mutation test models cross-generation mutation. It does not assert that arbitrary mutation is safe inside an active generation; the source/lifecycle proof above is the precondition that excludes such mutation while MoreCulling's reload listener is consuming the atlas data.
 
+## Hosted pre-A/B gates
+
+Candidate code head `8d84c239752b859667901d62f72fedea3786f708`:
+
+- Build `33981523735`: PASS. The cache harness passes and the packaged bootstrap validates.
+- Startup `33981523739`: PASS with the feature default-off.
+- Exact-pack smoke `33981523741`, artifact `9973949612`: PASS with `-Dboot_optim.moreCullingTranslucencyCache=true`.
+- smoke TTMM: `95,122 ms`; reload-to-FancyMenu finish: `44,383 ms`. These are one-run sanity values, not performance evidence.
+- resource selection: `valid=true`, all ten external ZIPs exactly match expected order, one effective reload.
+- blocks atlas: `8192x8192x2`; BootOptim Mixin errors: `0`.
+- cache marker: `hits=451707 misses=150713 stores=4096 saturated=146617 layered_bypass=0 entries=4096 failed_open=false reload_failure=none`.
+
+The smoke proves the bounded path is live and fail-open was not needed. It does not prove a TTMM gain.
+
 ## Gate
 
 Required sequence:
 
-1. Build + normal Startup CI.
-2. Exact-pack smoke with the candidate explicitly enabled; preserve the #103 ten-pack/order/fallback gate, atlas contract, main menu, and zero Mixin errors.
-3. Only after a clean smoke, hosted same-branch 3x3 candidate/control A/B.
+1. Build + normal Startup CI. **Passed.**
+2. Exact-pack smoke with the candidate explicitly enabled; preserve the #103 ten-pack/order/fallback gate, atlas contract, main menu, and zero Mixin errors. **Passed.**
+3. Hosted same-branch 3x3 candidate/control A/B. **Requested in PR #119.**
 4. Judge TTMM and reload-to-FancyMenu together with cache hit/saturation markers. The `395.731 ms` repeat wall is a direct diagnostic ceiling, not promised TTMM savings.
 5. Do not request laptop unless hosted end-to-end is positive and the remaining question is plausibly hardware-sensitive.
 
