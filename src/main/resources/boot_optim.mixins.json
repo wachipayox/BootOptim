@@ -11,7 +11,8 @@
     "client.ModelBakeryReloadBoundaryMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.ModelManagerReloadBoundaryMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.FilePackResourcesProfilerMixin"
   ],
   "injectors": {
     "defaultRequire": 0
