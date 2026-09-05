@@ -41,5 +41,16 @@ Validation of the checker: it accepts the hosted control options+log and rejects
 the original laptop 016 options+log for both selection and effective reload.
 The isolated laptop selection was restored from the hosted reference, after
 checking that all ten ZIPs exist and all unrelated options remain identical.
-The original options were backed up. Runtime validation of the restored selection
-is still pending; restoring a file alone is not a passing startup run.
+The original options were backed up. Restored-selection smoke 017 then reached
+the main menu at 422.797 s. The checker passed against the hosted reference for
+both saved options and the effective reload. The log contains 7,920 legacy CIT
+warnings, the 8192x8192x2 block atlas, and MCEF's deferred marker. Effective JVM
+flags were captured separately (defer=true, exitOnTitle=true, Xmx6144m). This is
+a successful resource-contract smoke, not an A/B result or visual/gameplay proof.
+The laptop was subsequently rebooted by the user; logs were recovered afterwards.
+
+The hosted runner now snapshots fixture options before launch and applies the
+same checker after execution, before creating a successful result.json. Its
+reference and JSON report are uploaded with diagnostics. A resource fallback
+invalidates the run even if an earlier reload or the main-menu marker looked
+healthy. No instrumentation is added to Minecraft's measured execution.
