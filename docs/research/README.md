@@ -29,6 +29,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 ## Research index
 
 - [Laptop resource-selection audit](laptop-resource-selection-audit-2026-09-05.md) — retained laptop runs omitted external ZIPs; correct the workload contract before exact-pack performance claims.
+- [FancyMenu preload wait CPU attribution — 2026-09-05](fancymenu-wait-cpu-2026-09-05.md) — active diagnostic: separate current-thread CPU from inclusive wall for FancyMenu's stock ordinary/slideshow/panorama preload waits without replacing them.
 
 - [Hosted exact-pack startup CI](exact-pack-ci.md) — pinned exact software-pack fixture, Linux/Xvfb/llvmpipe surrogate boundaries, deterministic MCEF setup, PR-body A/B protocol, and real-hardware gate rules.
 - [Client model / ModelManager pipeline](model-pipeline.md) — historical #13/#14/#35/#36/#37/#47 evidence, the validated #55 blockstate matcher, and rejected shallow approaches.
