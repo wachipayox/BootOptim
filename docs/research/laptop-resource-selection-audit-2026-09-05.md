@@ -54,3 +54,13 @@ same checker after execution, before creating a successful result.json. Its
 reference and JSON report are uploaded with diagnostics. A resource fallback
 invalidates the run even if an earlier reload or the main-menu marker looked
 healthy. No instrumentation is added to Minecraft's measured execution.
+
+## Localized clock parsing
+
+The laptop logs use `[05Sept2026 ...]`. The hosted summarizer originally required
+exactly three ASCII month letters, silently leaving clock-derived intervals null
+for these logs (the explicit startup uptime still parsed correctly). Its clock
+parser now accepts localized alphabetic month names and an optional trailing dot.
+Regression tests preserve hosted bare clocks, three-letter dates, milliseconds,
+missing timestamps and midnight rollover. On smoke017, reload to FancyMenu
+FINISHED is 225.190 s; this is elapsed wall, not summed listener CPU.
