@@ -140,16 +140,21 @@ Property, default off:
 -Dboot_optim.bootstrapVarianceDiagnostic=true
 ```
 
-The diagnostic adds only a callback at the same first `PUTSTATIC
-Bootstrap.isBootstrapped` injection point used by ModernFix plus a `RETURN`
-callback. It does not redirect/cancel the method, enumerate files or classes,
-sample periodically, start JFR, force GC, change executors, or log per class/file.
-It takes exactly two aggregate snapshots.
+The diagnostic uses three non-cancelling callbacks but still takes only two
+measurement snapshots. At method `HEAD` it prepares and caches the MXBean handles,
+so their potentially expensive first-use initialization happens before ModernFix
+starts its stopwatch. At the same first `PUTSTATIC Bootstrap.isBootstrapped`
+injection point used by ModernFix it captures the start snapshot, and at `RETURN`
+it captures the end snapshot. It does not redirect/cancel the method, enumerate
+files or classes, sample periodically, start JFR, force GC, change executors, or
+log per class/file.
 
-The measured target wall starts after management-bean setup and the first snapshot
-and stops before the final snapshot. `probe_setup_ms` is emitted separately so a
-slow first MXBean initialization cannot contaminate the Bootstrap wall being
-attributed.
+The measured target wall starts after the first snapshot and stops before the final
+snapshot. `probe_setup_ms` reports the HEAD management-handle setup separately.
+That setup is diagnostic overhead on total process startup and therefore this build
+must not be used for a TTMM performance claim; its purpose is causal attribution.
+Moving setup before the ModernFix stopwatch prevents first-use MXBean initialization
+from being misread as target Bootstrap work.
 
 Marker fields:
 
