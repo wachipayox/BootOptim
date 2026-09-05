@@ -102,8 +102,8 @@ option was reset to `false`.
 
 The 449.962 s control must not be used as evidence of a regression: the
 source-list state was not held constant. The empty-list candidate is likewise
-not a pack test. No paired, clean candidate/control A/B exists yet, and the
-candidate is therefore not promoted.
+not a pack test. These early attempts were not enough to promote the
+candidate; the later control-002/candidate-006 pair is the first clean pair.
 
 The later clean control/candidate pair makes the mechanism materially more
 credible. Control 002 reached `main_menu` at 388.441 s (`mod_entrypoint`
