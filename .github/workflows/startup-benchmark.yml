@@ -100,7 +100,7 @@ jobs:
           grep -q 'BOOTOPTIM_RESOURCE_PHYSICAL kind=summary' startup-benchmark.log
           grep -Eq 'BOOTOPTIM_RESOURCE_PHYSICAL stage=enumeration\.wall metric_kind=wall' startup-benchmark.log
           grep -Eq 'BOOTOPTIM_RESOURCE_PHYSICAL stage=resource\.open_supplier metric_kind=task_sum' startup-benchmark.log
-          grep -Eq 'BOOTOPTIM_RESOURCE_PHYSICAL stage=resource\.read_bytes metric_kind=task_sum' startup-benchmark.log
+          grep -Eq 'BOOTOPTIM_RESOURCE_PHYSICAL stage=resource\.read_bytes metric_kind=count' startup-benchmark.log
           ! grep -Eq 'BOOTOPTIM_RESOURCE_PHYSICAL .*phase=outside_model_context' startup-benchmark.log
 
           config='run-benchmark/config/boot_optim.properties'
