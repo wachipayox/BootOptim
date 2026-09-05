@@ -29,6 +29,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 ## Research index
 
 - [Hosted exact-pack startup CI](exact-pack-ci.md) — pinned exact software-pack fixture, Linux/Xvfb/llvmpipe surrogate boundaries, deterministic MCEF setup, PR-body A/B protocol, and real-hardware gate rules.
+- [CITResewn legacy custom-name resource-pack migration — 2026-09-05](citresewn-resource-pack-migration-2026-09-05.md) — active hash-pinned experiment replacing only `nbt.display.Name` keys in an ephemeral copy of `Glowing Trim Armors v5.0.zip`, with symmetric control repack, exact payload-reversal gates, hosted smoke/A-B protocol, and physical visual validation still required.
 - [Client model / ModelManager pipeline](model-pipeline.md) — historical #13/#14/#35/#36/#37/#47 evidence, the validated #55 blockstate matcher, and rejected shallow approaches.
 - [Deep ModelManager follow-up — 2026-08-31](model-pipeline-deep-2026-08-31.md) — 97.60% recursive bake-cache hit rate, exclusive bake-cost attribution, 10.86M blockstate variant tests, and the indexed-matching architectural hypothesis.
 - [Post-promotion ModelManager residuals](modelmanager-post56-residuals.md) — PR #57 exact-pack gate/cost distribution after production promotions, rejected generated-item span-topology cache, and the short-scope material-resolution hypothesis.
