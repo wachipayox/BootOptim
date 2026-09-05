@@ -1,7 +1,6 @@
 package dev.wachipayox.bootoptim.profiling.client;
 
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -27,8 +26,11 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
-            Minecraft.getInstance().stop();
+        boolean firstTitle = StartupProfiler.markMainMenu();
+        if (firstTitle) PreloadVarianceProbe.title();
+        if (firstTitle && StartupProfiler.shouldExitOnTitle()) {
+            // Isolated benchmark harness only; avoids the known native-loop stop hang.
+            System.exit(0);
         }
     }
 }

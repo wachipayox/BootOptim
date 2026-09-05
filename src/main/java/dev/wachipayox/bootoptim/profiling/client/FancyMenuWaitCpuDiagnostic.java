@@ -65,6 +65,7 @@ public final class FancyMenuWaitCpuDiagnostic {
         }
 
         cpuTimeAvailable = enableCurrentThreadCpuTime();
+        PreloadVarianceProbe.begin();
         preloadCpuStartNanos = currentThreadCpuTime();
         if (preloadCpuStartNanos < 0L) {
             cpuTimeAvailable = false;
@@ -157,6 +158,7 @@ public final class FancyMenuWaitCpuDiagnostic {
         long preloadCpuNanos = cpuTimeAvailable && !cpuMeasurementFailed
                 ? Math.max(0L, preloadCpuEndNanos - preloadCpuStartNanos)
                 : -1L;
+        PreloadVarianceProbe.end();
         LOGGER.info(
                 "BOOTOPTIM_FANCYMENU_WAIT_CPU status={} wait_calls={} nested_waits={} preload_wall_ms={} preload_cpu_ms={} ordinary_calls={} ordinary_wall_ms={} ordinary_cpu_ms={} slideshow_calls={} slideshow_wall_ms={} slideshow_cpu_ms={} panorama_calls={} panorama_wall_ms={} panorama_cpu_ms={}",
                 status,
