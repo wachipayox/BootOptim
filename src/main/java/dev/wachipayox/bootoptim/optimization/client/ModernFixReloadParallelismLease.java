@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.optimization.client;
 
 import com.mojang.logging.LogUtils;
+import java.lang.reflect.Method;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -46,6 +47,23 @@ public final class ModernFixReloadParallelismLease {
             reportSkip(modernFixVersion == null ? "modernfix_absent" : "modernfix_version_" + modernFixVersion);
             return null;
         }
+
+        Object modernFixExecutor;
+        try {
+            Class<?> modernFixClass = Class.forName(
+                    "org.embeddedt.modernfix.ModernFix",
+                    false,
+                    ModernFixReloadParallelismLease.class.getClassLoader());
+            Method accessor = modernFixClass.getMethod("resourceReloadExecutor");
+            modernFixExecutor = accessor.invoke(null);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
+            reportSkip("modernfix_executor_probe_failed_" + failure.getClass().getSimpleName());
+            return null;
+        }
+        if (modernFixExecutor != executor) {
+            reportSkip("prepare_executor_not_modernfix_resource_executor");
+            return null;
+        }
         if (!(executor instanceof ForkJoinPool pool)) {
             reportSkip("prepare_executor_not_forkjoinpool");
             return null;
@@ -77,13 +95,13 @@ public final class ModernFixReloadParallelismLease {
             if (returnedPrevious != previousParallelism || observed != targetParallelism) {
                 try {
                     pool.setParallelism(previousParallelism);
-                } catch (RuntimeException ignored) {
-                    // The final marker below records failure; never substitute another executor.
+                } catch (RuntimeException | LinkageError ignored) {
+                    // Fail open: do not substitute or rebuild the executor if restoration itself fails.
                 }
                 reportSkip("set_parallelism_mismatch_prev_" + returnedPrevious + "_observed_" + observed);
                 return null;
             }
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | LinkageError failure) {
             reportSkip("set_parallelism_failed_" + failure.getClass().getSimpleName());
             return null;
         }
@@ -124,7 +142,7 @@ public final class ModernFixReloadParallelismLease {
             try {
                 pool.setParallelism(previousParallelism);
                 restored = pool.getParallelism() == previousParallelism;
-            } catch (RuntimeException failure) {
+            } catch (RuntimeException | LinkageError failure) {
                 restoreFailure = failure.getClass().getSimpleName();
             }
 
