@@ -20,7 +20,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Test benchmark resource contract
-        run: python3 -m unittest discover -s tools/laptop-bench -p test_resource_selection.py -v
+        run: python3 -m unittest discover -s tools/laptop-bench -p 'test_*.py' -v
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
