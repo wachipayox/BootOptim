@@ -5,9 +5,13 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.CommonModLoaderLifecycleTimingMixin",
     "client.FancyMenuPanoramaPreloadMixin",
+    "client.GameDataRegistryTimingMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
+    "client.ModernFixRegistryEventProgressTimingMixin",
+    "client.RegistryManagerTimingMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
