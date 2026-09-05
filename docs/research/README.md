@@ -28,6 +28,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 ## Research index
 
+- [FancyMenu cooperative preload wait — 2026-09-05](fancymenu-cooperative-wait-2026-09-05.md) — active default-off experiment: replace only the five stock preload busy-spin call sites with a bounded cooperative wait while preserving predicate/deadline/interruption semantics and exact-stock fail-open.
 - [Full-resource laptop variance](laptop-fullpack-variance-2026-09-05.md) — validated workload, control/candidate/control timing partitions, and the fixed-configuration causal diagnostic gate; no physical MCEF win established.
 
 - [Laptop resource-selection audit](laptop-resource-selection-audit-2026-09-05.md) — retained laptop runs omitted external ZIPs; correct the workload contract before exact-pack performance claims.

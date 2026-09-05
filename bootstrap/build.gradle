@@ -22,6 +22,8 @@ dependencies {
     // The regular NeoForge mod remains isolated from ModLauncher's SERVICE layer and is loaded from JarJar.
     jarJar project(':')
 
+    // Reuse the regular mod's pure-Java cooperative-wait state machine in deterministic JUnit tests.
+    testImplementation project(':')
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -46,6 +48,8 @@ tasks.named('jar', Jar).configure {
 // developers do not accidentally pick the inner regular-mod jar from build/libs.
 rootProject.tasks.named('build').configure {
     dependsOn tasks.named('jarJar')
+    // Root Build CI must execute the deterministic cooperative-wait contract tests too.
+    dependsOn tasks.named('test')
 }
 
 tasks.named('test', Test).configure {

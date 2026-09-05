@@ -14,6 +14,11 @@ BootOptim researches, measures, and optimizes Minecraft/NeoForge startup perform
 [[mixins]]
 config="boot_optim.mixins.json"
 
+# Default-off experiment config. Its plugin declines the cooperative-wait mixin unless the explicit
+# experiment property is true, so stock/control FancyMenu wait bytecode is not wrapped.
+[[mixins]]
+config="boot_optim.experiments.mixins.json"
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"
