@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.bootstrap;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,11 +32,14 @@ public final class StartupDiagnostics {
             var config = BootstrapStartupConfig.state();
             Path log = config.logPath();
             try {
+                var runtime = ManagementFactory.getRuntimeMXBean();
                 Files.createDirectories(log.getParent());
                 Files.writeString(
                         log,
                         "BootOptim startup report\n"
                                 + "started=" + Instant.now() + "\n"
+                                + "jvm_started=" + Instant.ofEpochMilli(runtime.getStartTime()) + "\n"
+                                + "jvm_uptime_at_report_ms=" + runtime.getUptime() + "\n"
                                 + "version=" + BootOptimRuntimeInfo.version() + "\n"
                                 + "java=" + Runtime.version() + "\n"
                                 + "config=" + config.configPath() + "\n"
