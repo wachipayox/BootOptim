@@ -415,6 +415,7 @@ jobs:
           python scripts/exact-pack/validate_cit_resource_migration.py \
             --mode '${{ matrix.fixture_variant }}' \
             --report cit-resource-pack-report.json \
+            --result result.json \
             --latest run-pack-benchmark/logs/latest.log \
             --console exact-pack-console.log
 
