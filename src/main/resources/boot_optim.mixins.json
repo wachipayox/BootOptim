@@ -12,7 +12,6 @@
     "client.VoxelShaperIndexedJoinVerifierMixin",
     "client.accessor.ArrayVoxelShapeInvoker",
     "client.accessor.CubeVoxelShapeInvoker",
-    "client.accessor.ShapesInvoker",
     "client.accessor.VoxelShapeAccessor"
   ],
   "injectors": {
