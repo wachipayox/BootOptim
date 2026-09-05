@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.profiling;
 
 import com.mojang.logging.LogUtils;
+import dev.wachipayox.bootoptim.profiling.client.MoreCullingStartupDiagnostics;
 import java.lang.management.ManagementFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
@@ -43,6 +44,7 @@ public final class StartupProfiler {
         }
 
         long uptimeMs = uptimeMs();
+        MoreCullingStartupDiagnostics.reportAtMainMenu();
         // Finish the on-disk report before emitting the console marker used by CI to terminate the client.
         if (REPORT_ENABLED) {
             StartupReport.phase("main_menu", uptimeMs);
