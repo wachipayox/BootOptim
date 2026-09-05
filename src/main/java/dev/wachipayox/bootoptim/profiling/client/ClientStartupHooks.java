@@ -27,7 +27,11 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        boolean firstMainMenu = StartupProfiler.markMainMenu();
+        // Heavy safe-domain replay/verifier work deliberately starts only after the
+        // semantic TTMM timestamp so it cannot make the measured startup look faster.
+        VoxelShaperSafeDomainDiagnostic.onMainMenu();
+        if (firstMainMenu && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
     }
