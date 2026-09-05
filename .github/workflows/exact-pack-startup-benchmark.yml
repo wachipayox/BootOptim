@@ -39,6 +39,14 @@ on:
         required: false
         default: ''
         type: string
+      fixture_transform:
+        description: Optional ephemeral fixture transform
+        required: false
+        default: none
+        type: choice
+        options:
+          - none
+          - cit-resource-migration
 
 permissions:
   contents: read
@@ -70,6 +78,7 @@ jobs:
       DISPATCH_SMOKE_ARGS: ${{ inputs.smoke_jvm_args || '' }}
       DISPATCH_CANDIDATE_ARGS: ${{ inputs.candidate_jvm_args || '' }}
       DISPATCH_CONTROL_ARGS: ${{ inputs.control_jvm_args || '' }}
+      DISPATCH_FIXTURE_TRANSFORM: ${{ inputs.fixture_transform || '' }}
     steps:
       - name: Build benchmark matrix
         id: plan
@@ -92,6 +101,7 @@ jobs:
               smoke_args = os.environ.get('DISPATCH_SMOKE_ARGS', '').strip()
               candidate_args = os.environ.get('DISPATCH_CANDIDATE_ARGS', '').strip()
               control_args = os.environ.get('DISPATCH_CONTROL_ARGS', '').strip()
+              fixture_transform = os.environ.get('DISPATCH_FIXTURE_TRANSFORM', '').strip().lower()
           else:
               mode_values = directive('exact-pack-mode')
               mode = (mode_values[-1] if mode_values else 'smoke').strip().lower()
@@ -100,7 +110,13 @@ jobs:
               smoke_args = '\n'.join(directive('exact-pack-smoke-jvm-arg')).strip()
               candidate_args = '\n'.join(directive('exact-pack-candidate-jvm-arg')).strip()
               control_args = '\n'.join(directive('exact-pack-control-jvm-arg')).strip()
+              fixture_values = directive('exact-pack-fixture-transform')
+              fixture_transform = (fixture_values[-1] if fixture_values else '').strip().lower()
 
+          if fixture_transform == 'none':
+              fixture_transform = ''
+          if fixture_transform not in {'', 'cit-resource-migration'}:
+              raise SystemExit(f'Unsupported exact-pack fixture transform: {fixture_transform}')
           if mode not in {'smoke', 'ab'}:
               raise SystemExit(f'Unsupported exact-pack mode: {mode}')
           try:
@@ -112,13 +128,31 @@ jobs:
 
           include = []
           if mode == 'smoke':
-              include.append({'variant': 'smoke', 'iteration': 1, 'jvm_args': smoke_args})
+              include.append({
+                  'variant': 'smoke',
+                  'iteration': 1,
+                  'jvm_args': smoke_args,
+                  'fixture_transform': fixture_transform,
+                  'fixture_variant': 'candidate' if fixture_transform == 'cit-resource-migration' else 'none',
+              })
           else:
-              if candidate_args == control_args:
-                  raise SystemExit('A/B mode requires candidate and control JVM args to differ.')
+              if candidate_args == control_args and not fixture_transform:
+                  raise SystemExit('A/B mode requires candidate/control JVM args to differ unless an isolated fixture transform is selected.')
               for iteration in range(1, repetitions + 1):
-                  include.append({'variant': 'control', 'iteration': iteration, 'jvm_args': control_args})
-                  include.append({'variant': 'candidate', 'iteration': iteration, 'jvm_args': candidate_args})
+                  include.append({
+                      'variant': 'control',
+                      'iteration': iteration,
+                      'jvm_args': control_args,
+                      'fixture_transform': fixture_transform,
+                      'fixture_variant': 'control' if fixture_transform == 'cit-resource-migration' else 'none',
+                  })
+                  include.append({
+                      'variant': 'candidate',
+                      'iteration': iteration,
+                      'jvm_args': candidate_args,
+                      'fixture_transform': fixture_transform,
+                      'fixture_variant': 'candidate' if fixture_transform == 'cit-resource-migration' else 'none',
+                  })
 
           matrix = json.dumps({'include': include}, separators=(',', ':'))
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
@@ -295,6 +329,11 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Test CIT resource-pack migration helper
+        if: matrix.fixture_transform == 'cit-resource-migration'
+        shell: bash
+        run: python scripts/exact-pack/test_migrate_cit_resource_pack.py
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -347,6 +386,20 @@ jobs:
             --extract .exact-pack-run \
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 
+      - name: Build ephemeral CIT resource-pack variant
+        if: matrix.fixture_transform == 'cit-resource-migration'
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$BOOTOPTIM_PACK_DIR/resourcepacks/Glowing Trim Armors v5.0.zip"
+          staged="$BOOTOPTIM_PACK_DIR/resourcepacks/.bootoptim-glowing-trim-armors.zip"
+          python scripts/exact-pack/migrate_cit_resource_pack.py \
+            --input "$target" \
+            --output "$staged" \
+            --mode '${{ matrix.fixture_variant }}' \
+            --report cit-resource-pack-report.json
+          mv -f "$staged" "$target"
+
       - name: Launch exact pack to main menu
         shell: bash
         run: |
@@ -355,6 +408,16 @@ jobs:
             --iteration ${{ matrix.iteration }} \
             --timeout 1200
 
+      - name: Validate CIT resource-pack migration gate
+        if: matrix.fixture_transform == 'cit-resource-migration'
+        shell: bash
+        run: |
+          python scripts/exact-pack/validate_cit_resource_migration.py \
+            --mode '${{ matrix.fixture_variant }}' \
+            --report cit-resource-pack-report.json \
+            --latest run-pack-benchmark/logs/latest.log \
+            --console exact-pack-console.log
+
       - name: Upload exact-pack run diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -362,6 +425,7 @@ jobs:
           name: exact-pack-result-${{ matrix.variant }}-${{ matrix.iteration }}
           path: |
             result.json
+            cit-resource-pack-report.json
             exact-pack-console.log
             exact-pack-thread-dump.log
             xvfb.log
