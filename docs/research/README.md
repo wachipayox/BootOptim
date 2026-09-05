@@ -28,6 +28,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 ## Research index
 
+- [Optional-resource / early-menu ownership audit — 2026-09-05](optional-resource-early-menu-audit-2026-09-05.md) — **LIMITED / NO-GO**: exact pack has 22 mutually-exclusive FancyMenu random backgrounds but 3.9.0 preloads from a flat source registry before choosing one layout; reopen only with a FancyMenu-owned provenance-aware selection/preload token. Exact title also renders 12 player entities and 6 items, so broad renderer/model/atlas defer is not world-only.
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
 - [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
