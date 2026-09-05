@@ -17,6 +17,16 @@ import java.util.Set;
 public final class EarlyStartupProbeService implements ITransformationService {
     private static final String PROFILE_PROPERTY = "boot_optim.profileStartup";
     private static final String BENCHMARK_PROPERTY = "boot_optim.benchmark.exitOnTitle";
+
+    // This branch produces a deliberately diagnostic campaign artifact. Make it self-contained so a
+    // scarce remote-machine run cannot be wasted by forgetting a JVM argument. An explicit false still
+    // provides an emergency way to disable the campaign without changing the JAR.
+    static {
+        if (System.getProperty(PROFILE_PROPERTY) == null) {
+            System.setProperty(PROFILE_PROPERTY, "true");
+        }
+    }
+
     private static final boolean ENABLED = Boolean.getBoolean(PROFILE_PROPERTY)
             || Boolean.getBoolean(BENCHMARK_PROPERTY);
 
@@ -38,7 +48,12 @@ public final class EarlyStartupProbeService implements ITransformationService {
         Path gameDirectory = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).orElse(fallback);
         boolean authoritative = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).isPresent();
 
+        // Resolve the authoritative startup paths first, then begin the campaign capture before FML
+        // discovery and the expensive transformation/model phases.
         var config = BootstrapStartupConfig.initialize(gameDirectory);
+        StartupFlightRecorder.start(config.gameDirectory());
+        CampaignSystemSampler.start();
+
         StartupDiagnostics.initialize();
         StartupDiagnostics.event(
                 "STARTUP_PATH",

@@ -8,7 +8,17 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.SimpleReloadInstanceCriticalPathMixin",
+    "client.ModelManagerReloadSubphaseMixin",
+    "client.AtlasSetReloadSubphaseMixin",
+    "client.ModelBakeryCampaignSubphaseMixin",
+    "client.ElementsModelCampaignProfilingMixin",
+    "client.DirectGeneratedItemBakerCampaignProfilingMixin",
+    "client.ModelManagerResourceDecompositionMixin",
+    "client.SpriteSourceListResourceDecompositionMixin",
+    "client.SpriteLoaderResourceDecompositionMixin",
+    "client.FallbackResourceManagerResourceDecompositionMixin"
   ],
   "injectors": {
     "defaultRequire": 0
