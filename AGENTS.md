@@ -116,3 +116,15 @@ These are reminders, not a substitute for reading the ledger:
 ## Working style
 
 Investigate root cause first, then implement. Keep diagnostic and production mechanisms separate. Record confirmed cause, hypotheses, measurements, residual risks, and whether runtime behavior was actually validated. Significant architectural wins are preferred, but medium/small improvements can be retained when their safety/maintenance cost is low or the project explicitly chooses to keep them.
+
+## Local relay coordination with external agents
+
+When the user has enabled the local relay workflow, the primary Codex agent must maintain the ignored `.agent-coordination/` directory. It is operational memory, never a Git artifact.
+
+- Read `.agent-coordination/COORDINACION.md` before delegating or replying to a relay result. Update it immediately after assigning, receiving, redirecting, closing, or superseding an agent task.
+- Start every new relay agent from `.agent-coordination/PLANTILLA_PROMPT.md`. Fill in the concrete subsystem, current integration SHA/branch, relevant PRs/docs, established measurements, non-goals, decision gate, and expected response. Agents do **not** have this local workspace or this conversation; provide GitHub URLs and all decision-relevant context in their prompt.
+- Each agent folder contains `contexto.md` (durable compact conversation/status), `prompt.txt` (the next exact text for the user to relay), and an optional `res.txt` (the agent's latest reply). After reading `res.txt`, incorporate the facts/decision into `contexto.md` and `COORDINACION.md`, then remove `res.txt` so it cannot be processed twice.
+- Do not overwrite or repurpose an active agent's `prompt.txt`. Create a new numbered agent for a new bounded task. Reuse an existing agent only when its currently assigned investigation is complete and the next task is a direct continuation.
+- Before asking the user to relay any new/changed prompt, write the files first and issue a Windows notification naming exactly the agents to send. Do not stop local investigation while those agents work.
+- Keep relay tasks bounded and evidence-oriented. They may research, create branches and use GitHub Actions, but must not assume unpushed local changes, laptop state, private files, or authorization beyond the prompt.
+- On completion, record the resulting PR/commit, evidence and disposition in both coordination memory and the project research ledger as appropriate; delete an agent folder only when it will not be reused.
