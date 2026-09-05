@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.LongAdder;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.BooleanOp;
-import net.minecraft.world.phys.shapes.BootOptimVoxelShapeIndexedJoin;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.fml.ModList;
@@ -42,11 +41,8 @@ public final class VoxelShaperIndexedJoinVerifier {
     private VoxelShaperIndexedJoinVerifier() {}
 
     public static VoxelShape fold(VoxelShape accumulator, VoxelShape rotatedBox) {
-        if (!ENABLED || !checkVersionGate()) {
-            return Shapes.or(accumulator, rotatedBox);
-        }
+        if (!ENABLED || !checkVersionGate()) return Shapes.or(accumulator, rotatedBox);
         FOLDS.increment();
-
         long stockCpu = cpuNow();
         long stockWall = System.nanoTime();
         VoxelShape stock = Shapes.or(accumulator, rotatedBox);
@@ -57,7 +53,7 @@ public final class VoxelShaperIndexedJoinVerifier {
         try {
             long candidateCpu = cpuNow();
             long candidateWall = System.nanoTime();
-            candidate = BootOptimVoxelShapeIndexedJoin.or(accumulator, rotatedBox);
+            candidate = VoxelShapeIndexedJoinCandidate.or(accumulator, rotatedBox);
             CANDIDATE_WALL.add(System.nanoTime() - candidateWall);
             addCpu(CANDIDATE_CPU, candidateCpu);
         } catch (Throwable throwable) {
@@ -71,9 +67,8 @@ public final class VoxelShaperIndexedJoinVerifier {
         String mismatch = compare(stock, candidate);
         COMPARE_WALL.add(System.nanoTime() - compareWall);
         addCpu(COMPARE_CPU, compareCpu);
-        if (mismatch == null) {
-            MATCHES.increment();
-        } else {
+        if (mismatch == null) MATCHES.increment();
+        else {
             MISMATCHES.increment();
             rememberMismatch(mismatch);
         }
@@ -108,7 +103,7 @@ public final class VoxelShaperIndexedJoinVerifier {
             VoxelShape candidate = Shapes.empty();
             for (VoxelShape box : stream) {
                 stock = Shapes.or(stock, box);
-                candidate = BootOptimVoxelShapeIndexedJoin.or(candidate, box);
+                candidate = VoxelShapeIndexedJoinCandidate.or(candidate, box);
                 cases++;
                 if (compare(stock, candidate) == null) matches++; else mismatches++;
             }
@@ -125,17 +120,13 @@ public final class VoxelShaperIndexedJoinVerifier {
             DoubleList b = candidate.getCoords(axis);
             if (a.size() != b.size()) return "coord_count_" + axis.getName();
             for (int i = 0; i < a.size(); i++) {
-                if (Double.doubleToLongBits(a.getDouble(i)) != Double.doubleToLongBits(b.getDouble(i))) {
-                    return "coord_bits_" + axis.getName() + "_" + i;
-                }
+                if (Double.doubleToLongBits(a.getDouble(i)) != Double.doubleToLongBits(b.getDouble(i))) return "coord_bits_" + axis.getName() + "_" + i;
             }
         }
         List<AABB> a = stock.toAabbs();
         List<AABB> b = candidate.toAabbs();
         if (a.size() != b.size()) return "box_count";
-        for (int i = 0; i < a.size(); i++) {
-            if (!sameAabb(a.get(i), b.get(i))) return "box_bits_" + i;
-        }
+        for (int i = 0; i < a.size(); i++) if (!sameAabb(a.get(i), b.get(i))) return "box_bits_" + i;
         return null;
     }
 
@@ -161,8 +152,7 @@ public final class VoxelShaperIndexedJoinVerifier {
     }
 
     private static long cpuNow() {
-        return THREAD_BEAN.isCurrentThreadCpuTimeSupported() && THREAD_BEAN.isThreadCpuTimeEnabled()
-                ? THREAD_BEAN.getCurrentThreadCpuTime() : -1L;
+        return THREAD_BEAN.isCurrentThreadCpuTimeSupported() && THREAD_BEAN.isThreadCpuTimeEnabled() ? THREAD_BEAN.getCurrentThreadCpuTime() : -1L;
     }
 
     private static void addCpu(LongAdder adder, long start) {
