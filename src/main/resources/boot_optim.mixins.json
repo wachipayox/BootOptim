@@ -4,7 +4,10 @@
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "client.BlockEntityRenderDispatcherEmfAsmScopeMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.EmfAsmParserCompileTimingMixin",
+    "client.EntityRenderDispatcherEmfAsmScopeMixin",
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
