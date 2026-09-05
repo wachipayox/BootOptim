@@ -1,6 +1,5 @@
 package net.minecraft.world.phys.shapes;
 
-import it.unimi.dsi.fastutil.doubles.DoubleList;
 import net.minecraft.core.Direction;
 
 /**
@@ -17,7 +16,7 @@ public final class BootOptimVoxelShapeIndexedJoin {
 
     public static VoxelShape or(VoxelShape first, VoxelShape second) {
         if (first == second) {
-            return first;
+            return first.optimize();
         }
         if (first.isEmpty()) {
             return second.optimize();
