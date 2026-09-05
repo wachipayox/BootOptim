@@ -34,6 +34,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 - [Indexed blockstate variant matching](blockstate-indexed-matching.md) — PR #55 exact-pack validation of the indexed replacement for the 1.21.1 O(variants × possible states) candidate scan, including 110,053 stock-equivalent variants with zero mismatches.
 - [Production optimizations](production-optimizations.md) — startup optimizations that crossed the evidence bar and are intended to live in integration.
 - [Mixin / ModLauncher transformation pipeline](mixin-pipeline.md) — #41/#42/#43/#46/#48 evidence, including the rejected generic side-load cache, confirmed-but-irrelevant ClassInfo negative-cache bug, and rejected external ASM writer-tail target.
+- [FilePackResources ZIP enumeration — 2026-09-06](file-pack-resources-enumeration-2026-09-06.md) — diagnostic-only attribution of vanilla external ZIP namespace/resource enumeration after ModernFix's BETA-gated index was proven inactive.
 
 ## Project rule
 
