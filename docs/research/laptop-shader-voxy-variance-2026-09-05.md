@@ -27,6 +27,14 @@ is a noisy diagnostic cohort and cannot be compared causally with runs 017–021
 the probe is reported after the title marker and does not turn the run into an
 A/B.
 
+The coarse, non-overlapping log partition was: JVM→mod entrypoint 179.752 s,
+mod entrypoint→reload 71.248 s, reload→blocks atlas 132.642 s,
+atlas→preload 41.905 s, FancyMenu preload 26.413 s,
+preload→FancyMenu `resource reload: FINISHED` 12.002 s, and that marker→title
+13.470 s. These are log-clock partitions, not attribution of any one mod and
+not proof that a listener is serial; they show that the shader/Voxy probes are
+orders of magnitude below the large reload and post-preload variance surfaces.
+
 ## Measurements
 
 The diagnostic markers were:
