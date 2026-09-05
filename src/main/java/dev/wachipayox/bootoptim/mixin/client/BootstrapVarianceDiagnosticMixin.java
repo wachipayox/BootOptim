@@ -11,6 +11,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Diagnostic-only observer aligned to ModernFix's vanilla-bootstrap stopwatch boundary. */
 @Mixin(Bootstrap.class)
 abstract class BootstrapVarianceDiagnosticMixin {
+    @Inject(method = "bootStrap", at = @At("HEAD"), require = 0)
+    private static void bootoptim$bootstrapVariancePrepare(CallbackInfo ci) {
+        BootstrapVarianceDiagnostic.prepare();
+    }
+
     @Inject(
             method = "bootStrap",
             at = @At(
