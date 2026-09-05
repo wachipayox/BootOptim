@@ -79,6 +79,29 @@ different cache/scheduling state. It does establish a mechanism ceiling and
 justifies a property-gated candidate with the stock completion → failure →
 deadline order, explicit interruption handling, and a hosted semantic gate.
 
+## Cross-run tail decomposition
+
+The archived production logs also show why the wait wall time must not be
+treated as the whole FancyMenu tail. These elapsed intervals start at the
+`BOOTOPTIM_FANCYMENU_PANORAMA_PRELOAD` marker and end at the named event:
+
+| Run | Sound reload detected | Forced native-video reload | FancyMenu resource reload finished | Main-menu marker |
+| --- | ---: | ---: | ---: | ---: |
+| 017 | 0.439 s | 4.217 s | 17.186 s | 37.435 s |
+| 018 | 0.001 s | 0.326 s | 4.641 s | 8.210 s |
+| 019 | 0.283 s | 4.705 s | 14.823 s | 27.729 s |
+| 020 | 0.140 s | 8.448 s | 13.741 s | 19.419 s |
+| 021 | 0.001 s | 0.549 s | 2.042 s | 4.047 s |
+
+These are log-clock observations, not isolated CPU measurements or a causal
+A/B. They establish a separate variance surface: after the preload wait
+returns, the native-video/audio reload and the remaining resource reload can
+consume roughly 2–17 s before the reload-finished marker, with a further 2–20 s
+before the title marker in the older runs. A cooperative wait candidate
+therefore needs both a critical-path A/B and a tail marker; saving owner CPU
+alone is insufficient. Run 021 is not directly comparable to 017–020 because
+it carries probes and a different cache/scheduling state.
+
 The same log still reports six deterministic GLSL compiler errors (OpenGL 4.2
 software compatibility path rejecting 4.3–4.6/compute), nine sampler/uniform
 warnings, one Voxy config `AccessDeniedException`, and 7,920 CIT warnings. Their
