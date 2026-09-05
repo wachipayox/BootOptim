@@ -1,0 +1,15 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "dev.wachipayox.bootoptim.mixin.diagnostic",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "dev.wachipayox.bootoptim.mixin.diagnostic.PostFancyMenuTailMixinPlugin",
+  "client": [
+    "FancyMenuPostTailMixin",
+    "SimpleReloadInstancePostTailMixin",
+    "WindowPostTailMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
