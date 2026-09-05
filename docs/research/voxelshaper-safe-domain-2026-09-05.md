@@ -1,131 +1,203 @@
 # VoxelShaper limited safe-domain investigation — 2026-09-05
 
-Status: **ACTIVE DIAGNOSTIC / DO NOT MERGE**
+Status: **REJECTED / DOCUMENTATION ONLY**
 
-Branch: `codex/research-voxelshaper-safe-domain`
+PR: [#110](https://github.com/wachipayox/BootOptim/pull/110)
 
-Base: refreshed `agent/integration-current` at `792d06ec008c5ebae3681dd94f7aeee2c8e5f2a2`.
+Branch: `codex/research-voxelshaper-safe-domain`.
 
-This work deliberately does **not** reopen the generic delayed-optimize construction rejected by PR #106. It asks whether a source-level precondition can prove strict stock representation equivalence for a limited subset of the exact Ponder 1.0.82 `VoxelShaper.rotatedCopy` inputs, and how much stock fold CPU actually belongs to that subset.
+The branch began from `agent/integration-current` at `792d06ec008c5ebae3681dd94f7aeee2c8e5f2a2`. During closure integration advanced to `d29a6bad6358c7ff78dadbc5e85bd753c0ad2a54`; the final PR diff is aligned to that current integration state.
 
-## Prior evidence
+This investigation did **not** retry rejected PR #106 as a production candidate. It asked a narrower question: can a source-level precondition admit a subset of exact Ponder 1.0.82 `VoxelShaper.rotatedCopy` calls for which delaying intermediate `optimize()` is strictly stock-representation-equivalent, and is enough measured stock fold CPU located in that subset to matter?
 
-PR #105 localized active CPU inside exact-pack `minecraft:block` registration to the Ponder/Catnip chain `VoxelShaper.rotatedCopy -> Shapes.or -> Shapes.join -> VoxelShape.optimize -> Shapes.joinUnoptimized -> BitSetDiscreteVoxelShape.join -> LithiumDoublePairList.forMergedIndexes`. Its 7.168 s target-thread CPU is attribution evidence, not a savings estimate.
+Final answer: **no shippable domain was found**.
 
-PR #106 preserved Ponder's already-created rotated-box stream but replaced every stock per-box `Shapes.or` with `joinUnoptimized` plus one final `optimize`. Its natural exact-pack verifier found 12,553 strict matches and 87 mismatches over 12,640 calls. The candidate was rejected before A/B. The first mismatch labels identify the comparator stage only; they do not establish a cause. The same PR's generic guard also had two source-review defects (a disjoint-grid upper-bound underestimate and non-reentrant single ThreadLocal state), neither of which explained the observed 87 mismatches because no runtime fallback occurred.
+- Calls with at most two rotated boxes survived strict verification, but owned only `5.790 ms / 5,980.679 ms = 0.097%` of measured stock fold CPU. Reject on economic ceiling.
+- The broader `EPSILON_STABLE` domain covered a materially larger fraction of measured stock fold CPU, but failed strict equivalence with two real-pack eligible counterexamples and one deterministic adversarial eligible counterexample. Reject on semantics.
+- No candidate/control A/B and no physical laptop run are justified.
+- No diagnostic or behavior-changing code from this investigation is retained.
 
-This branch uses neither generic candidate mode nor that grid-size guard.
+## Prior evidence and source mechanism
 
-## Exact source mechanism
+PR #105 localized active CPU inside exact-pack `minecraft:block` registration to:
 
-Runtime versions:
+`VoxelShaper.rotatedCopy -> Shapes.or -> Shapes.join -> VoxelShape.optimize -> Shapes.joinUnoptimized -> BitSetDiscreteVoxelShape.join -> LithiumDoublePairList.forMergedIndexes`.
 
-- Create `6.0.10`, Ponder `1.0.82`;
-- Ponder source `VoxelShaper.java` / `VecHelper.java` at `c3e5a41380203e1dd1e2431c494ec491a51965a5`;
+Its ~7.168 s target-thread CPU was attribution evidence, not a savings estimate.
+
+PR #106 preserved the already-created rotated-box stream but accumulated with `joinUnoptimized(..., OR)` and called `optimize()` once at the end. Its exact-pack verifier observed `12,640` calls / `29,055` boxes, `12,553` strict matches and `87` mismatches. That mechanism was rejected before A/B.
+
+Exact runtime/source versions used here:
+
+- Create `6.0.10`;
+- Ponder `1.0.82`, source commit `c3e5a41380203e1dd1e2431c494ec491a51965a5`;
+- Minecraft `1.21.1` `Shapes`, `VoxelShape`, `BitSetDiscreteVoxelShape`;
 - Lithium `0.15.3+mc1.21.1`, source commit `09d115dc18acc978b281107e9d02e5d043a0c20f`.
 
-`VoxelShaper.rotatedCopy` enumerates stock source boxes exactly once, applies Ponder's existing X/Y/Z `VecHelper.rotate` arithmetic, creates each rotated shape with `Block.box`, then folds it with `Shapes.or`.
+Stock `Shapes.or(a,b)` reaches `Shapes.join(a,b,OR) = joinUnoptimized(...).optimize()`. Stock can therefore greedily decompose/rebuild the accumulator after every box. Final-only construction carries a different discrete-grid/decomposition history to its last `optimize()`.
 
-Minecraft 1.21.1 `Shapes.box/create` first applies the `EPSILON=1e-7` empty test. `findBits` recognizes only unit-cube endpoint pairs that lie within epsilon of uniform grids of resolution 1, 2, 4 or 8. Such a box becomes `CubeVoxelShape`; otherwise it becomes an `ArrayVoxelShape` retaining the supplied endpoint doubles. `Shapes.join` is `joinUnoptimized(...).optimize()`.
+Strict equivalence checked, in order: empty state, XOR geometry, exact bounds bits, exact X/Y/Z coordinate counts/bits, exact ordered `toAabbs()` bits, and concrete shape class. Passing XOR/bounds is not sufficient for BootOptim's semantic contract.
 
-`VoxelShape.optimize()` greedily enumerates the occupied boxes of the current discrete shape and rebuilds them via `Shapes.joinUnoptimized`. `BitSetDiscreteVoxelShape.forAllBoxes(..., true)` scans in a fixed y/x/z order, extends a contiguous z strip, then matching x strips, then matching x-z rectangles in y, clearing each emitted prism before continuing.
+## Domain A — at most two rotated boxes
 
-Lithium replaces vanilla `IndirectMerger` with `LithiumDoublePairList`. Its merge compares coordinates using `1e-7` and coalesces points within that epsilon. This is the key reason that merely observing geometrically equal unions is not enough for arbitrary float-derived coordinates.
+For one stock-created rotated box `b`, `Shapes.or(empty,b)` is `b.optimize()`. The input was just created by stock `Block.box -> Shapes.box`; optimizing that single prism enumerates the same bounds and reconstructs the same stock shape from the same doubles. For two boxes, the first accumulator is therefore strictly the same first shape, so stock and delayed construction feed identical operands into the second union/final optimize.
 
-## Proposed precondition, before exact-pack measurement
+Hosted exact-pack attribution:
 
-The diagnostic classifies a non-zero `rotatedCopy` call as eligible only in either of two source-proven domains.
+- natural non-zero calls: `12,640`;
+- small-count calls: `12,036`;
+- strict matches: `12,036 / 12,036`;
+- strict mismatches: `0`;
+- eligible stock fold CPU: **`5.790 ms`**;
+- total stock fold CPU: **`5,980.679 ms`**;
+- eligible CPU share: **`0.097%`**.
 
-### Domain A: at most two stock-created rotated boxes
+This is stock-fold current-thread CPU attribution, not demonstrated TTMM savings. No candidate replaced stock and no performance A/B ran.
 
-This domain does not constrain the coordinate values.
+Decision: **REJECTED — economically immaterial.** Call count was misleading: the expensive CPU was concentrated in larger-box calls.
 
-For one rotated box `b`, stock computes:
+Evidence: Exact Pack #187, run `33975479303`, artifact `9972231465`.
 
-`Shapes.or(empty, b) = joinUnoptimized(empty, b).optimize() = b.optimize()`.
+## Domain B — `EPSILON_STABLE`
 
-Because `b` is the direct result of stock `Block.box -> Shapes.box`, `b.optimize()` enumerates that single box's exact bounds and calls the same `Shapes.box` on the same double values. Empty, cube and array representations therefore reconstruct strictly identically.
+For 3+ boxes the diagnostic admitted only finite effective coordinates, rejected any two distinct same-axis cuts within `Shapes.EPSILON = 1e-7`, and rejected non-exact values inside the `findBits` snap neighborhood. It never rounded or normalized coordinates.
 
-For two boxes, the first stock accumulator is thus strictly identical to the first box. Both stock and delayed construction then feed strictly identical operands to the second `joinUnoptimized` and perform the same final `optimize`. Hence the final class, coordinate lists, ordered decomposition and geometry are identical.
+The proposed proof claimed that, without epsilon collisions or snap ambiguity, intermediate grids could differ only by exact refinement/coarsening and `BitSetDiscreteVoxelShape.forAllBoxes(..., true)` would preserve the same greedy physical decomposition. The exact-pack and adversarial evidence falsified that last claim.
 
-### Domain B: three or more boxes, and every actual rotated box is exactly `CubeVoxelShape`
+Validation smoke #192 (`33977469417`, artifact `9972796933`) measured:
 
-The guard observes the already-created Ponder `rotatedBox`; it does not inspect source asset IDs and does not round or normalize any coordinate.
+- eligible stock fold CPU: **`1,436.191 ms`**;
+- total measured stock fold CPU: **`5,670.007 ms`**;
+- eligible CPU share: **`25.33%`**;
+- natural eligible strict mismatches: **`2`**;
+- adversarial eligible strict mismatches: **`1`**.
 
-At this exact callsite, a `CubeVoxelShape` can only be the result of the immediately preceding stock `Block.box -> Shapes.box`. Therefore `Shapes.findBits` has already established that each effective axis lies on a stock uniform dyadic grid of resolution at most 8. After stock construction, all effective coordinates are exact multiples of `1/8` (or a coarser nested grid) inside the unit cube.
+The **25.33% is only guard coverage / a pre-correctness CPU ceiling. It is not valid savings, recoverable CPU, or TTMM opportunity.** Correctness failed before any candidate or A/B could exist.
 
-Consequences:
+The final evidence rerun #196 reproduced `12,215` eligible calls, `12,213` matches, the same 2 natural mismatches and 1 adversarial mismatch. Its measured eligible share was `24.782%` (`1,155.085 / 4,661.029 ms`), showing normal diagnostic run-to-run variation. In that run guard CPU was `20.561 ms`, bounded capture CPU `10.413 ms`, and candidate replay CPU `80.679 ms`; replay/compare occurred only after the semantic TTMM timestamp.
 
-1. distinct effective coordinates are separated by at least `1/8`, far larger than `EPSILON=1e-7`;
-2. equal dyadic coordinates have identical double representations;
-3. Lithium's epsilon merge cannot collapse two distinct physical cuts or choose between near-but-different representatives in this domain;
-4. every intermediate coordinate grid is therefore an exact refinement/coarsening of the same 1/8 physical lattice, never an epsilon-shifted lattice.
+## Hosted evidence and exact-pack contract
 
-For the same union geometry, `BitSetDiscreteVoxelShape.forAllBoxes(..., true)` is invariant under such pure refinement. The first occupied physical position is unchanged; inserted cuts inside a filled run cannot terminate its z extension, x-strip extension or y-rectangle extension. The emitted maximal physical prism therefore has the same physical bounds. Clearing that prism preserves the refinement relation, so induction gives the same ordered physical box sequence. `VoxelShape.optimize()` then feeds that same ordered bound sequence into deterministic `Shapes.box` / `joinUnoptimized`, yielding the same strict final representation.
+Evidence commit `93af543dd9bc8a6c97881e96dc42fd332e3b9303`:
 
-This is a falsifiable proof claim, not a pack whitelist. Any eligible strict mismatch invalidates the domain and closes it.
+- Build #1465 PASS;
+- Startup #412 PASS;
+- Exact Pack #193 PASS, run `33977905971`;
+- artifact `9972917895`, digest `sha256:cd03c4d031d3e7c11ee0a102c51d3cf6764a23df28277c732ad0f60bf85ba938`;
+- atlas `8192 x 8192 x 2`, main menu reached, zero BootOptim Mixin errors, resource contract valid.
 
-### Deliberately rejected by the guard
+Audit found one mechanical evidence-only bug: the new targeted dumper existed but was not invoked, so #193 could not emit the requested targeted rows. This did not alter the guard or any semantic result.
 
-For 3+ boxes, any actual stock-created rotated box that is not exactly `CubeVoxelShape` is rejected. That includes the general float-derived `ArrayVoxelShape` case where two coordinate streams can contain distinct values inside the merger epsilon and intermediate optimize can change which representative survives. Numeric proximity to a dyadic value is not accepted: stock `Shapes.box` itself must already have canonicalized the box.
+Commit `b507c753323afc8e0e04f87e6d679a14823e76b8` added only the missing post-TTMM invocation. Final corrected gate:
 
-## Diagnostic design
+- Build #1483 PASS;
+- Startup #414 PASS;
+- Exact Pack #196 PASS, run `33978305847`;
+- result artifact `9973025541`, digest `sha256:f06b56d31f5a83d7c79aa6cd42fe8e03884a0e70745141f4f96bf8027d0733b6`;
+- summary artifact `9973028562`;
+- pinned fixture SHA-256 `7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639`;
+- one effective reload, all ten external ZIP packs retained in expected order, no fallback;
+- atlas `8192 x 8192 x 2`;
+- `bootoptim_mixin_errors = 0`;
+- main menu reached.
 
-Property:
+The one-run `main_menu_ms = 75,036` is diagnostic smoke sanity only, not an optimization comparison.
 
-```text
--Dboot_optim.profileVoxelShaperSafeDomain=true
-```
+## Natural eligible counterexample 1 — call 136
 
-The optional `@Pseudo` mixin is version-gated to Create `6.0.10` and Ponder `1.0.82(+suffix)` and all injections are fail-open.
+Marker: `boxes=9`, `reason=coord_count_y`, `guard_failure=none`, rotation `(0,-90,0)`, first divergent prefix `7`.
 
-During real startup:
+Already-rotated boxes:
 
-- Ponder executes `forAllBoxes`, all rotations and `Block.box` exactly once;
-- each stock `Shapes.or` executes exactly once and is always returned;
-- only that stock fold body gets its own wall/current-thread-CPU timer;
-- the domain guard/class check and bounded reference capture run after the stock-fold timer;
-- no candidate shape algebra runs before the main-menu timestamp;
-- per-call state uses a ThreadLocal stack, so nested `rotatedCopy` does not destroy an outer context;
-- capture is bounded to 512 boxes/call, 16,384 calls and 50,000 boxes globally, with explicit dropped counters;
-- zero-rotation calls retain stock source identity and are counted separately.
+1. `(0,0,0 -> 1,1/4,1)`
+2. `(0,0,3/16 -> 1,1/8,13/16)`
+3. `(0,0,13/16 -> 1,1/8,1)`
+4. `(0,1/8,0 -> 1,1/4,3/16)`
+5. `(0,1/8,3/16 -> 1,1/4,13/16)`
+6. `(0,1/8,13/16 -> 1,1/4,1)`
+7. `(1/16,1/4,3/16 -> 15/16,7/8,13/16)`
+8. `(1/16,1/2,3/16 -> 15/16,3/4,13/16)`
+9. `(1/16,3/4,3/16 -> 15/16,7/8,13/16)`
 
-After the semantic main-menu timestamp, the diagnostic replays captured boxes with the #106 delayed construction solely as a verifier. It checks, in order: empty state, XOR geometry, exact bounds bits, exact X/Y/Z coordinate counts/bits, exact ordered `toAabbs()` bits, and exact concrete shape class. Stock remains the runtime result.
+Stock final Y grid:
 
-For the first four mismatches only, post-TTMM logging records numeric source boxes, rotation bits, rotated-box bounds, stock/candidate coordinate grids and ordered AABBs. It also reconstructs stock and delayed prefixes to identify the first prefix at which `delayed.optimize()` ceases to be strictly identical. No asset path, registry ID, pack filename or private resource content is logged.
+`[0,1/8,1/4,3/8,1/2,5/8,3/4,7/8,1]`
 
-## CPU / wall accounting
+Final-only Y grid:
 
-The summary separates:
+`[0,1/8,1/4,1/2,3/4,7/8,1]`
 
-- total stock fold CPU/wall;
-- eligible stock fold CPU/wall;
-- rejected stock fold CPU/wall;
-- eligible stock CPU/wall share;
-- measured guard CPU/wall (outside the stock-fold timer);
-- total per-call CPU as an observer-effect context metric;
-- post-TTMM candidate fold/final-optimize/strict-comparison CPU and wall.
+Every input cut is exact dyadic. The first divergence appears after box 7: stock's repeated optimization history retains `3/8` and `5/8`; final-only does not. XOR geometry and bounds had already passed before `coord_count_y` failed.
 
-The candidate replay numbers are not TTMM savings. They run after title and exist only to quantify the construction's internal cost after the correctness/coverage split. The stock eligible share is the relevant CPU ceiling for deciding whether a later candidate is worth an A/B.
+## Natural eligible counterexample 2 — call 818
 
-## Adversarial gate
+Marker: `boxes=36`, `reason=coord_count_x`, `guard_failure=none`, rotation `(0,-90,0)`, first divergent prefix `31`.
 
-After TTMM the same strict comparator covers:
+The 36-box stream is deterministic in artifact `9973025541`; its distinctive guard-admitted non-dyadic X bounds include exact doubles `0x1.554fdf3b645a2p-2` (~`0.33331250000000001`) and `0x1.355810624dd2fp-1` (~`0.60418749999999999`), alongside 1/16-grid cuts. Representative boxes around the first non-dyadic transitions include:
 
-- zero, one and two boxes with deliberately noncanonical/outside-unit values (must stay eligible under the <=2 proof);
-- disjoint, adjacent, overlapping, containing and slab/cross patterns built from exact 1/8-grid stock `Shapes.box` values;
-- 512 deterministic 3-12-box sequences drawn from a stock-confirmed `CubeVoxelShape` pool;
-- 3+ examples containing near-dyadic, arbitrary decimal and just-outside-unit boxes that must be rejected unless stock `Shapes.box` actually canonicalized them.
+- `(1/16,5/8,0 -> 0.33331250000000001,7/8,5/16)`;
+- `(1/16,5/8,1/4 -> 0.33331250000000001,3/4,5/16)`;
+- `(1/16,3/4,0 -> 0.60418749999999999,7/8,1/4)`;
+- `(1/16,3/4,3/4 -> 0.60418749999999999,7/8,1)`;
+- `(0.33331250000000001,7/8,0 -> 7/8,1,1)`;
+- `(0.60418749999999999,1,0 -> 7/8,9/8,1)`.
 
-The run reports guard-expectation and setup failures separately from verifier mismatches.
+Stock final X grid:
 
-## Gate
+`[0,1/16,1/8,1/4,5/16,0x1.554fdf3b645a2p-2,3/8,1/2,0x1.355810624dd2fp-1,5/8,11/16,3/4,7/8,1]`
 
-1. Build/package and normal Startup CI must pass.
-2. Hosted exact-pack smoke runs with the diagnostic property above and must retain the exact fixture/resource-selection contract.
-3. Continue only if there are zero strict mismatches for eligible natural calls, zero eligible adversarial mismatches, zero guard/setup/identity failures, zero capture drops, and eligible stock CPU is materially large enough to justify a later behavior-changing experiment.
-4. If eligible correctness fails, preserve the bounded numeric counterexample and close the domain.
-5. If correctness passes but eligible CPU is immaterial, close without A/B.
-6. Only after both correctness and material coverage pass should a separate reviewed candidate be considered. No laptop or hosted candidate/control A/B is requested by this diagnostic PR.
+Final-only X grid:
 
-No production optimization is present on this branch.
+`[0,1/16,1/4,5/16,0x1.554fdf3b645a2p-2,1/2,0x1.355810624dd2fp-1,11/16,3/4,7/8,1]`
+
+Final-only omits stock cuts `1/8`, `3/8`, and `5/8`. No guard condition fired, so epsilon separation plus snap stability is insufficient.
+
+## Deterministic adversarial eligible counterexample — case 49
+
+This is the strongest closure evidence because all six boxes use exact dyadic coordinates.
+
+Marker: `boxes=6`, `reason=coord_count_x`, first divergent prefix `5`.
+
+Input boxes:
+
+1. `(1/4,0,0 -> 1/2,1,1)`
+2. `(1/8,0,1/8 -> 3/8,1,3/8)`
+3. `(0,0,0 -> 1/2,1/2,1/2)`
+4. `(1/16,3/16,5/16 -> 9/16,11/16,15/16)`
+5. `(1/2,1/2,1/2 -> 1,1,1)`
+6. `(1/4,0,1/4 -> 3/4,1,3/4)`
+
+Stock final X grid:
+
+`[0,1/16,1/8,1/4,3/8,1/2,9/16,3/4,1]`
+
+Final-only X grid:
+
+`[0,1/16,1/8,1/4,3/8,1/2,9/16,5/8,3/4,7/8,1]`
+
+The first divergence appears after box 5. Final-only retains additional `5/8` and `7/8` X cuts despite exact, widely separated inputs. Therefore the proposed refinement invariant is false independently of Lithium near-epsilon representative selection: **the greedy `VoxelShape.optimize()` / `forAllBoxes(..., true)` reconstruction is history-sensitive for strict representation.**
+
+Some rejected #106 failures did involve near-epsilon representative differences, but that mechanism is not necessary for these #110 failures and must not be used to explain them away.
+
+## CPU / wall interpretation
+
+The diagnostic separated real stock fold CPU/wall, guard/capture overhead, and post-TTMM candidate replay/comparison.
+
+- `0.097%` is a stock-fold CPU share for the strict-safe small domain, not an end-to-end saving.
+- `25.33%` is CPU coverage of a domain that later failed correctness, not recoverable CPU and not TTMM savings.
+- Candidate replay after title is verifier cost, not startup improvement.
+- No candidate/control A/B exists, so no critical-path or TTMM benefit was demonstrated.
+- Hosted llvmpipe absolute wall time is not a laptop baseline.
+
+## Final decision
+
+**CLOSE THIS FRONT.**
+
+1. `<=2` boxes: correctness survives, economics do not (`0.097%` measured stock-fold CPU).
+2. `EPSILON_STABLE`: CPU coverage looked material, correctness does not (2 natural + 1 adversarial eligible strict mismatches).
+3. The exact-dyadic adversarial case disproves the key refinement/decomposition invariance premise.
+4. Do not relax the guard, round/normalize coordinates, blacklist observed failures, whitelist pack IDs, change Lithium/Palladium/ToadLib flags, or retry #106.
+5. No hosted A/B and no physical laptop run are requested.
+6. The final PR retains only durable research documentation; all diagnostic mixin/profiler/evidence-dump code is removed.
+
+Reopen only for a **materially different construction premise** that proves strict stock representation equivalence for every admitted input before performance testing. A lower threshold or another numeric guard is not a new premise.
