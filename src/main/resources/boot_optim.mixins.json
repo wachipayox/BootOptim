@@ -4,11 +4,18 @@
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "client.BitSetDiscreteVoxelShapeProfilingMixin",
+    "client.BlockShapeTableProfilingMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.CrossCollisionBlockVoxelShapeProfilingMixin",
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+    "client.ModelManagerVoxelShapePhaseMixin",
+    "client.ShapesVoxelShapeProfilingMixin",
+    "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.VoxelShapeProfilerPrintMixin",
+    "client.WallBlockVoxelShapeProfilingMixin"
   ],
   "injectors": {
     "defaultRequire": 0

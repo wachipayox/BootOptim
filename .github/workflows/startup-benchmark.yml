@@ -92,6 +92,26 @@ jobs:
           early_marker="$(grep 'BOOTOPTIM_STARTUP phase=transformation_service_construct' startup-benchmark.log | tail -n 1 || true)"
           test -n "$early_marker"
 
+          # Diagnostic gate: CI must prove the profiler emits each attribution layer before an exact-pack run is requested.
+          shape_summary="$(grep 'BOOTOPTIM_VOXEL_SHAPES event=summary' startup-benchmark.log | tail -n 1 || true)"
+          shape_phase="$(grep 'BOOTOPTIM_VOXEL_SHAPES kind=phase .*join_calls_exact=[1-9]' startup-benchmark.log | head -n 1 || true)"
+          shape_site="$(grep 'BOOTOPTIM_VOXEL_SHAPES kind=site .*operation=join' startup-benchmark.log | head -n 1 || true)"
+          shape_bitset="$(grep 'BOOTOPTIM_VOXEL_SHAPES kind=site .*operation=bitset_ctor' startup-benchmark.log | head -n 1 || true)"
+          shape_source="$(grep -E 'BOOTOPTIM_VOXEL_SHAPES kind=source .*source=(wall_make_shapes|cross_collision_make_shapes|block_state_shape_table)' startup-benchmark.log | head -n 1 || true)"
+          shape_interpretation="$(grep 'BOOTOPTIM_VOXEL_SHAPES event=interpretation' startup-benchmark.log | tail -n 1 || true)"
+          test -n "$shape_summary"
+          test -n "$shape_phase"
+          test -n "$shape_site"
+          test -n "$shape_bitset"
+          test -n "$shape_source"
+          test -n "$shape_interpretation"
+          echo "$shape_summary"
+          echo "$shape_phase"
+          echo "$shape_site"
+          echo "$shape_bitset"
+          echo "$shape_source"
+          echo "$shape_interpretation"
+
           config='run-benchmark/config/boot_optim.properties'
           report='run-benchmark/logs/bootoptim-startup.log'
           test -f "$config"
@@ -111,8 +131,11 @@ jobs:
             echo
             echo "\`$early_marker\`"
             echo "\`$marker\`"
+            echo "\`$shape_summary\`"
+            echo "\`$shape_source\`"
+            echo "\`$shape_site\`"
             echo
-            echo 'Startup diagnostics validated.'
+            echo 'Startup diagnostics and voxel-shape attribution validated.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark diagnostics

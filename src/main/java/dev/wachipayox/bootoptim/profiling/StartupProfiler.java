@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.profiling;
 
 import com.mojang.logging.LogUtils;
+import dev.wachipayox.bootoptim.profiling.client.VoxelShapeStartupProfiler;
 import java.lang.management.ManagementFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
@@ -22,10 +23,11 @@ public final class StartupProfiler {
     }
 
     public static boolean isEnabled() {
-        return PROFILING_ENABLED || REPORT_ENABLED;
+        return PROFILING_ENABLED || REPORT_ENABLED || VoxelShapeStartupProfiler.enabled();
     }
 
     public static void markModEntrypoint() {
+        VoxelShapeStartupProfiler.markModEntrypoint();
         if (REPORT_ENABLED) {
             StartupReport.phase("mod_entrypoint", uptimeMs());
         }
