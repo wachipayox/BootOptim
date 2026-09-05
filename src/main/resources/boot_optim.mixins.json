@@ -8,7 +8,11 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.ModelManagerResourcePhysicalMixin",
+    "client.ResourceOpenPhysicalMixin",
+    "client.PathPackResourcesPhysicalMixin",
+    "client.FilePackResourcesPhysicalMixin"
   ],
   "injectors": {
     "defaultRequire": 0

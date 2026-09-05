@@ -27,7 +27,12 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        boolean firstMainMenu = StartupProfiler.markMainMenu();
+        if (firstMainMenu) {
+            // Dump only after the semantic main-menu marker so profiler reporting cannot inflate time-to-menu.
+            ResourceOpenPhysicalProfiler.dump();
+        }
+        if (firstMainMenu && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
     }
