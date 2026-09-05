@@ -1,0 +1,103 @@
+name: MoreCulling Fixture Identity
+
+on:
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - '.github/workflows/moreculling-fixture-identity.yml'
+      - 'scripts/exact-pack/inspect_moreculling_fixture.py'
+
+permissions:
+  contents: read
+
+env:
+  EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+  EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+  EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+  EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd90497a4d-linux
+
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Restore exact-pack ZIP
+        id: pack-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .exact-pack-cache/bootoptim-exact-pack.zip
+          key: ${{ env.EXACT_PACK_CACHE_KEY }}
+
+      - name: Download pinned exact-pack release asset on cache miss
+        if: steps.pack-cache.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .exact-pack-cache
+          gh release download "$EXACT_PACK_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$EXACT_PACK_ASSET" \
+            --dir .exact-pack-cache \
+            --clobber
+
+      - name: Verify pinned fixture and extract only MoreCulling
+        shell: python
+        run: |
+          import hashlib
+          import pathlib
+          import shutil
+          import zipfile
+
+          archive = pathlib.Path('.exact-pack-cache/bootoptim-exact-pack.zip')
+          expected = '${{ env.EXACT_PACK_SHA256 }}'
+          digest = hashlib.sha256()
+          with archive.open('rb') as stream:
+              for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                  digest.update(chunk)
+          actual = digest.hexdigest()
+          if actual != expected:
+              raise SystemExit(f'fixture SHA mismatch expected={expected} actual={actual}')
+
+          with zipfile.ZipFile(archive) as outer:
+              matches = [
+                  name for name in outer.namelist()
+                  if name.casefold().endswith('.jar')
+                  and 'moreculling' in ''.join(ch for ch in pathlib.PurePosixPath(name).name.casefold() if ch.isalnum())
+              ]
+              if len(matches) != 1:
+                  raise SystemExit(f'expected one MoreCulling JAR, found {matches!r}')
+              entry = matches[0]
+              target_dir = pathlib.Path('.moreculling-fixture/mods')
+              target_dir.mkdir(parents=True, exist_ok=True)
+              target = target_dir / pathlib.PurePosixPath(entry).name
+              with outer.open(entry) as source, target.open('wb') as destination:
+                  shutil.copyfileobj(source, destination)
+              print(f'extracted={entry} target={target}')
+
+      - name: Inspect exact MoreCulling metadata
+        shell: bash
+        run: |
+          python scripts/exact-pack/inspect_moreculling_fixture.py \
+            --pack .moreculling-fixture \
+            --output moreculling-fixture.json
+          cat moreculling-fixture.json
+
+      - name: Upload MoreCulling identity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moreculling-fixture-identity
+          path: moreculling-fixture.json
+          if-no-files-found: ignore
+          retention-days: 14
