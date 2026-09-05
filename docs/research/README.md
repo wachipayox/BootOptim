@@ -30,6 +30,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
+- [Fixed laptop FancyMenu wait-CPU evidence — 2026-09-05](laptop-fancymenu-wait-cpu-variance-2026-09-05.md) — full-pack physical diagnostic proving material current-thread CPU in stock FancyMenu waits on the 2C4T software-renderer laptop; candidate remains gated by semantic and hosted A/B tests.
 - [Full-resource laptop variance](laptop-fullpack-variance-2026-09-05.md) — validated workload, control/candidate/control timing partitions, and the fixed-configuration causal diagnostic gate; no physical MCEF win established.
 
 - [FancyMenu usable-menu / resource-preload boundary — 2026-09-05](fancymenu-usable-menu-resource-boundary-2026-09-05.md) — exact 3.9.0 bytecode proves panorama/slideshow/native-video consumers and title audio can tolerate not-ready resources, but `ResourcePreLoader.preLoadAll` exposes no safe continuation that preserves ordered start/wait/timeout/error semantics; BootOptim runtime defer rejected.
