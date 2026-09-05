@@ -84,6 +84,10 @@ using candidate SHA-256
 | control-001 | list was not held identical after staging | false | 449.962 s | 26.852 s | no filter | **invalid A/B** |
 | active-layout-002 | empty list | true | 393.516 s | 0.251 s | kept 1, skipped 0 | **invalid for the intended pack** |
 | active-layout-003 | full list (1163-character serialized value) | true | 1272.745 s | 3.301 s | kept 1, skipped 21 | mechanism-valid; timing contaminated |
+| control-002 | full list at launch | false | 388.441 s | 46.555 s | no filter | clean control |
+| active-layout-004 | original and candidate JAR both present | intended true | 505.130 s | 0.326 s | no filter | **invalid: original JAR won** |
+| active-layout-005 | empty list after control-002 | true | 357.966 s | 2.416 s | no filter | **invalid for the intended pack** |
+| active-layout-006 | full list, candidate JAR only | true | 335.574 s | 3.731 s | kept 1, skipped 21 | clean candidate |
 
 Run 003 started after Prism/JVM preparation had left a Java process alive for
 about 16 minutes before the BootOptim report began, so its total startup time
@@ -100,6 +104,24 @@ The 449.962 s control must not be used as evidence of a regression: the
 source-list state was not held constant. The empty-list candidate is likewise
 not a pack test. No paired, clean candidate/control A/B exists yet, and the
 candidate is therefore not promoted.
+
+The later clean control/candidate pair makes the mechanism materially more
+credible. Control 002 reached `main_menu` at 388.441 s (`mod_entrypoint`
+128.860 s); the isolated full-list candidate 006 reached it at 335.574 s
+(`mod_entrypoint` 122.774 s). The candidate therefore saved 52.867 s overall,
+with 46.781 s of the difference after `mod_entrypoint`. The reload interval
+from the FancyMenu preload marker to `Minecraft resource reload: FINISHED` was
+46.555 s for the control and 3.731 s for the candidate. This is still one
+control/candidate pair on a noisy machine, but the effect is much larger than
+the observed within-phase noise and the filter marker proves that the intended
+full list was active.
+
+Two staging mistakes were also found and recorded here because they can
+otherwise masquerade as variance: run 004 left both FancyMenu JARs in `mods`
+and loaded the original, while run 005 followed a control that had already
+reset the serialized list to empty. The runner must enforce exactly one
+FancyMenu JAR and restore the full serialized line immediately before every
+candidate/control launch.
 
 ## Decision and next gate
 
