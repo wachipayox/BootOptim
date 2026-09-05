@@ -21,6 +21,8 @@ public final class VoxelShaperIndexedJoinVerifier {
     private static final ThreadMXBean THREAD_BEAN = ManagementFactory.getThreadMXBean();
     private static final boolean ENABLED = Boolean.getBoolean("boot_optim.voxelShaperIndexedJoinVerifier");
     private static final LongAdder FOLDS = new LongAdder();
+    private static final LongAdder SUPPORTED = new LongAdder();
+    private static final LongAdder UNSUPPORTED = new LongAdder();
     private static final LongAdder MATCHES = new LongAdder();
     private static final LongAdder MISMATCHES = new LongAdder();
     private static final LongAdder FAILURES = new LongAdder();
@@ -56,6 +58,10 @@ public final class VoxelShaperIndexedJoinVerifier {
             candidate = VoxelShapeIndexedJoinCandidate.or(accumulator, rotatedBox);
             CANDIDATE_WALL.add(System.nanoTime() - candidateWall);
             addCpu(CANDIDATE_CPU, candidateCpu);
+            SUPPORTED.increment();
+        } catch (VoxelShapeIndexedJoinCandidate.UnsupportedMergeException unsupported) {
+            UNSUPPORTED.increment();
+            return stock;
         } catch (Throwable throwable) {
             FAILURES.increment();
             rememberFailure(throwable);
@@ -82,10 +88,12 @@ public final class VoxelShaperIndexedJoinVerifier {
         long stockCpu = STOCK_CPU.sum();
         long candidateCpu = CANDIDATE_CPU.sum();
         double cpuRatio = stockCpu == 0 ? 0.0 : candidateCpu * 100.0 / stockCpu;
-        LOGGER.info("BOOTOPTIM_VOXELSHAPER_INDEXED_JOIN status=complete create_version={} ponder_version={} folds={} matches={} mismatches={} failures={} stock_wall_ms={} stock_cpu_ms={} candidate_wall_ms={} candidate_cpu_ms={} candidate_cpu_pct_of_stock={} compare_wall_ms={} compare_cpu_ms={} self_cases={} self_matches={} self_mismatches={} first_mismatch={} first_failure={} stock_always_returned=true",
-                createVersion, ponderVersion, FOLDS.sum(), MATCHES.sum(), MISMATCHES.sum(), FAILURES.sum(),
-                millis(STOCK_WALL.sum()), millis(stockCpu), millis(CANDIDATE_WALL.sum()), millis(candidateCpu), format(cpuRatio),
-                millis(COMPARE_WALL.sum()), millis(COMPARE_CPU.sum()), self.cases, self.matches, self.mismatches,
+        double coverage = FOLDS.sum() == 0 ? 0.0 : SUPPORTED.sum() * 100.0 / FOLDS.sum();
+        LOGGER.info("BOOTOPTIM_VOXELSHAPER_INDEXED_JOIN status=complete create_version={} ponder_version={} folds={} supported={} unsupported={} coverage_pct={} matches={} mismatches={} failures={} stock_wall_ms={} stock_cpu_ms={} candidate_wall_ms={} candidate_cpu_ms={} candidate_cpu_pct_of_stock={} compare_wall_ms={} compare_cpu_ms={} self_cases={} self_supported={} self_matches={} self_mismatches={} first_mismatch={} first_failure={} stock_always_returned=true",
+                createVersion, ponderVersion, FOLDS.sum(), SUPPORTED.sum(), UNSUPPORTED.sum(), format(coverage),
+                MATCHES.sum(), MISMATCHES.sum(), FAILURES.sum(), millis(STOCK_WALL.sum()), millis(stockCpu),
+                millis(CANDIDATE_WALL.sum()), millis(candidateCpu), format(cpuRatio), millis(COMPARE_WALL.sum()),
+                millis(COMPARE_CPU.sum()), self.cases, self.supported, self.matches, self.mismatches,
                 firstMismatch, firstFailure);
     }
 
@@ -96,6 +104,7 @@ public final class VoxelShaperIndexedJoinVerifier {
                 List.of(Shapes.box(0, 0, 0, 0.5, 0.5, 1), Shapes.box(0.5, 0.25, 0, 1, 0.75, 1), Shapes.box(0.25, 0, 0.25, 0.75, 1, 0.75), Shapes.box(0, 0.75, 0, 1, 1, 1))
         );
         int cases = 0;
+        int supported = 0;
         int matches = 0;
         int mismatches = 0;
         for (List<VoxelShape> stream : streams) {
@@ -103,12 +112,17 @@ public final class VoxelShaperIndexedJoinVerifier {
             VoxelShape candidate = Shapes.empty();
             for (VoxelShape box : stream) {
                 stock = Shapes.or(stock, box);
-                candidate = VoxelShapeIndexedJoinCandidate.or(candidate, box);
                 cases++;
-                if (compare(stock, candidate) == null) matches++; else mismatches++;
+                try {
+                    candidate = VoxelShapeIndexedJoinCandidate.or(candidate, box);
+                    supported++;
+                    if (compare(stock, candidate) == null) matches++; else mismatches++;
+                } catch (VoxelShapeIndexedJoinCandidate.UnsupportedMergeException unsupported) {
+                    candidate = stock;
+                }
             }
         }
-        return new SelfTestResult(cases, matches, mismatches);
+        return new SelfTestResult(cases, supported, matches, mismatches);
     }
 
     private static String compare(VoxelShape stock, VoxelShape candidate) {
@@ -171,5 +185,5 @@ public final class VoxelShaperIndexedJoinVerifier {
 
     private static String millis(long nanos) { return format(nanos / 1_000_000.0); }
     private static String format(double value) { return String.format(Locale.ROOT, "%.3f", value); }
-    private record SelfTestResult(int cases, int matches, int mismatches) {}
+    private record SelfTestResult(int cases, int supported, int matches, int mismatches) {}
 }
