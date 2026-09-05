@@ -3,6 +3,7 @@ package dev.wachipayox.bootoptim.profiling.client;
 import com.mojang.logging.LogUtils;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.resources.Resource;
 import org.slf4j.Logger;
 
@@ -39,10 +40,11 @@ public final class ResourceOpenPhysicalProfiler {
 
     public static void enter(String phase, ResourceLocation id, Resource resource) {
         if (!enabled()) return;
+        PackIdentity pack = packIdentity(resource);
         CONTEXT.set(new Context(
                 phase,
                 id == null ? "unknown" : id.toString(),
-                resource == null ? null : new PackIdentity(resource.sourcePackId(), resource.source().getClass().getName())));
+                pack));
     }
 
     public static void enterEnumeration(String phase) {
@@ -54,8 +56,22 @@ public final class ResourceOpenPhysicalProfiler {
         if (!enabled() || resource == null) return;
         Context context = CONTEXT.get();
         if (context != null) {
-            CONTEXT.set(new Context(context.phase(), context.resourceId(),
-                    new PackIdentity(resource.sourcePackId(), resource.source().getClass().getName())));
+            PackIdentity pack = packIdentity(resource);
+            if (pack != null) {
+                CONTEXT.set(new Context(context.phase(), context.resourceId(), pack));
+            }
+        }
+    }
+
+    /** Returns null when the resource has no usable pack source; diagnostics must fail open. */
+    private static PackIdentity packIdentity(Resource resource) {
+        if (resource == null) return null;
+        try {
+            PackResources source = resource.source();
+            if (source == null) return null;
+            return new PackIdentity(resource.sourcePackId(), source.getClass().getName());
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 
@@ -137,7 +153,9 @@ public final class ResourceOpenPhysicalProfiler {
                 .forEach(entry -> {
                     Key key = entry.getKey();
                     Stats stats = entry.getValue();
-                    String metricKind = "enumeration.wall".equals(key.stage()) ? "wall" : "task_sum";
+                    String metricKind = "enumeration.wall".equals(key.stage())
+                            ? "wall"
+                            : ("resource.read_bytes".equals(key.stage()) ? "count" : "task_sum");
                     LOGGER.info(
                             "BOOTOPTIM_RESOURCE_PHYSICAL stage={} metric_kind={} phase={} pack={} source={} calls={} elapsed_ms={} bytes={} avg_us={}",
                             key.stage(), metricKind, key.phase(), key.packId(), key.sourceClass(), stats.calls(), nanosToMs(stats.nanos()),
@@ -202,7 +220,6 @@ public final class ResourceOpenPhysicalProfiler {
     private static final class MeasuredInputStream extends FilterInputStream {
         private final String phase;
         private final PackIdentity pack;
-        private long readNanos;
         private long bytes;
         private long calls;
         private boolean recorded;
@@ -215,28 +232,18 @@ public final class ResourceOpenPhysicalProfiler {
 
         @Override
         public int read() throws IOException {
-            long started = System.nanoTime();
-            try {
-                int value = super.read();
-                if (value >= 0) bytes++;
-                return value;
-            } finally {
-                readNanos += System.nanoTime() - started;
-                calls++;
-            }
+            int value = super.read();
+            if (value >= 0) bytes++;
+            calls++;
+            return value;
         }
 
         @Override
         public int read(byte[] b, int off, int len) throws IOException {
-            long started = System.nanoTime();
-            try {
-                int read = super.read(b, off, len);
-                if (read > 0) bytes += read;
-                return read;
-            } finally {
-                readNanos += System.nanoTime() - started;
-                calls++;
-            }
+            int read = super.read(b, off, len);
+            if (read > 0) bytes += read;
+            calls++;
+            return read;
         }
 
         @Override
@@ -246,7 +253,9 @@ public final class ResourceOpenPhysicalProfiler {
             } finally {
                 if (!recorded) {
                     recorded = true;
-                    record("resource.read_bytes", phase, pack, readNanos, calls, bytes);
+                    // Use JFR FileRead for I/O timing. Per-read nanoTime probes add observer cost and
+                    // are especially noisy on the constrained physical laptop.
+                    record("resource.read_bytes", phase, pack, 0L, calls, bytes);
                 }
             }
         }

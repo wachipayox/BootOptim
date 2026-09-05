@@ -24,7 +24,7 @@ abstract class ResourceOpenPhysicalMixin {
 
     @Inject(method = "open", at = @At("HEAD"), require = 0)
     private void bootoptim$startOpen(CallbackInfoReturnable<InputStream> cir) {
-        if (!ResourceOpenPhysicalProfiler.enabled()) return;
+        if (!ResourceOpenPhysicalProfiler.enabled() || this.source == null) return;
         bootoptim$openToken.set(ResourceOpenPhysicalProfiler.beginResourceOpen(
                 this.source.packId(), this.source.getClass().getName()));
     }
@@ -40,7 +40,7 @@ abstract class ResourceOpenPhysicalMixin {
 
     @Inject(method = "openAsReader", at = @At("HEAD"), require = 0)
     private void bootoptim$startReader(CallbackInfoReturnable<BufferedReader> cir) {
-        if (!ResourceOpenPhysicalProfiler.enabled()) return;
+        if (!ResourceOpenPhysicalProfiler.enabled() || this.source == null) return;
         bootoptim$readerToken.set(ResourceOpenPhysicalProfiler.beginReaderOpen(
                 this.source.packId(), this.source.getClass().getName()));
     }

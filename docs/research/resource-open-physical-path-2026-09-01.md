@@ -484,3 +484,9 @@ Before any production PathPackResources index, establish the effective exact-pac
 - Minecraft 1.21.1 mapped APIs: `Resource`, `PathPackResources`, `FilePackResources`, `MultiPackResourceManager`, `FallbackResourceManager`.
 - SecureJarHandler source: `cpw.mods.niofs.union.UnionFileSystem` / `UnionFileSystemProvider`.
 - JDK ZipFS: `jdk.nio.zipfs.ZipFileSystem` entry lookup, `EntryInputStream`, and `InflaterInputStream` path.
+
+## Context-safe follow-up diagnostic
+
+The physical failure exposed a second requirement for any repeat: `Resource.source` is not guaranteed to be usable for every resource callback. The repaired diagnostic branch therefore checks the ModelManager context before reading source identity and treats a null or exceptional source as fail-open. It also removes `System.nanoTime()` from every `InputStream.read`; read counts and logical bytes remain optional counters, while filesystem timing is delegated to JFR `jdk.FileRead` events. The `resource.read_bytes` row is consequently a count metric, not elapsed time.
+
+This repair is diagnostic-only. It does not cache resources, alter selection, change listener ordering, or move render work. It must first pass build/startup and a hosted exact-pack smoke with the enabled resource-pack selection. Only a measured `exclusive_input_gate_tail` at the ModelManager preparation boundary can justify a later physical run.
