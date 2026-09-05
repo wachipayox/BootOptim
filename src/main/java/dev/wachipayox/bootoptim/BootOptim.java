@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim;
 
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
+import dev.wachipayox.bootoptim.profiling.client.PostFancyMenuTailProfiler;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -19,7 +20,8 @@ public final class BootOptim {
 
     public BootOptim() {
         StartupProfiler.markModEntrypoint();
-        if (StartupProfiler.isEnabled() && FMLEnvironment.dist == Dist.CLIENT) {
+        if ((StartupProfiler.isEnabled() || PostFancyMenuTailProfiler.isEnabled())
+                && FMLEnvironment.dist == Dist.CLIENT) {
             ClientStartupHooks.install();
         }
     }
