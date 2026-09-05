@@ -5,18 +5,22 @@ from pathlib import Path
 
 PACK_TOKEN = "file/Glowing Trim Armors v5.0.zip"
 LEGACY_LOG = "Using legacy nbt.display.Name"
+PACK_FALLBACK_LOG = "Caught error loading resourcepacks, removing all selected resourcepacks"
 EXPECTED_RULES = 7920
+EXPECTED_ATLAS = (8192, 8192, 2)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", required=True, choices=("control", "candidate"))
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--result", required=True, type=Path)
     parser.add_argument("--latest", required=True, type=Path)
     parser.add_argument("--console", required=True, type=Path)
     args = parser.parse_args()
 
     report = json.loads(args.report.read_text(encoding="utf-8"))
+    result = json.loads(args.result.read_text(encoding="utf-8"))
     latest = args.latest.read_text(encoding="utf-8", errors="replace")
     console = args.console.read_text(encoding="utf-8", errors="replace")
 
@@ -39,10 +43,36 @@ def main() -> None:
     if missing:
         raise SystemExit(f"CIT resource-pack integrity invariant failed: {missing}")
 
+    if PACK_FALLBACK_LOG in latest or PACK_FALLBACK_LOG in console:
+        raise SystemExit("Minecraft removed the selected resource packs after a reload failure; run is not exact-pack interpretable")
+
     reload_lines = [line for line in latest.splitlines() if "Reloading ResourceManager:" in line]
-    pack_lines = [line for line in reload_lines if PACK_TOKEN in line]
-    if not pack_lines:
-        raise SystemExit(f"Target pack is absent from Reloading ResourceManager: {PACK_TOKEN}")
+    if not reload_lines:
+        raise SystemExit("No Reloading ResourceManager line was captured")
+    if PACK_TOKEN not in reload_lines[-1]:
+        raise SystemExit(
+            "Target pack is absent from the final Reloading ResourceManager state: "
+            f"target={PACK_TOKEN} final={reload_lines[-1]}"
+        )
+
+    reload_wall = result.get("reload_to_fancymenu_finish_ms")
+    panorama = result.get("fancymenu_panorama_ms")
+    if not isinstance(reload_wall, (int, float)) or reload_wall <= 0:
+        raise SystemExit(f"Missing/invalid reload→FancyMenu wall time: {reload_wall!r}")
+    if not isinstance(panorama, (int, float)) or panorama <= 0:
+        raise SystemExit(f"Missing/invalid FancyMenu panorama timing: {panorama!r}")
+
+    atlas = (
+        result.get("blocks_atlas_width"),
+        result.get("blocks_atlas_height"),
+        result.get("blocks_atlas_levels"),
+    )
+    if atlas != EXPECTED_ATLAS:
+        raise SystemExit(f"Exact-pack blocks atlas invariant changed: actual={atlas} expected={EXPECTED_ATLAS}")
+    if result.get("bootoptim_mixin_errors") != 0:
+        raise SystemExit(f"BootOptim Mixin errors present: {result.get('bootoptim_mixin_errors')}")
+    if not isinstance(result.get("main_menu_ms"), (int, float)) or result["main_menu_ms"] <= 0:
+        raise SystemExit(f"Missing/invalid main-menu timing: {result.get('main_menu_ms')!r}")
 
     latest_legacy = latest.count(LEGACY_LOG)
     console_legacy = console.count(LEGACY_LOG)
@@ -79,8 +109,9 @@ def main() -> None:
 
     print(
         "BOOTOPTIM_CIT_RESOURCE_MIGRATION_GATE "
-        f"mode={args.mode} pack_present=true rules={EXPECTED_RULES} "
+        f"mode={args.mode} pack_present_final=true packs_not_removed=true rules={EXPECTED_RULES} "
         f"legacy_latest={latest_legacy} legacy_console={console_legacy} "
+        f"reload_to_fancymenu_ms={reload_wall} atlas={atlas[0]}x{atlas[1]}x{atlas[2]} "
         f"output_sha256={output.get('sha256')} reverse_exact=true"
     )
 
