@@ -362,6 +362,8 @@ jobs:
           name: exact-pack-result-${{ matrix.variant }}-${{ matrix.iteration }}
           path: |
             result.json
+            resource-selection-check.json
+            resource-selection-reference.txt
             exact-pack-console.log
             exact-pack-thread-dump.log
             xvfb.log

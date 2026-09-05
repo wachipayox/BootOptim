@@ -121,8 +121,17 @@ def main() -> None:
     result_json = root / "result.json"
     latest_log = root / "run-pack-benchmark" / "logs" / "latest.log"
     startup_log = root / "run-pack-benchmark" / "logs" / "bootoptim-startup.log"
-    for path in (console_log, thread_dump, result_json):
+    selection_report = root / "resource-selection-check.json"
+    selection_reference = root / "resource-selection-reference.txt"
+    for path in (console_log, thread_dump, result_json, selection_report, selection_reference):
         path.unlink(missing_ok=True)
+
+    # Snapshot the fixture contract before launch; never derive expectations from
+    # options that Minecraft may have rewritten after a failed resource reload.
+    fixture_root = os.environ.get("BOOTOPTIM_PACK_DIR", "").strip()
+    if not fixture_root:
+        raise SystemExit("BOOTOPTIM_PACK_DIR is required for resource contract validation.")
+    selection_reference.write_bytes((Path(fixture_root) / "options.txt").read_bytes())
 
     mirror_server = None
     process = None
@@ -180,6 +189,17 @@ def main() -> None:
         )
         if any(pattern in latest_text for pattern in mixin_failures):
             raise SystemExit("BootOptim Mixin failure detected in exact-pack latest.log.")
+
+        with selection_report.open("w", encoding="utf-8") as report:
+            resource_check = subprocess.run(
+                [sys.executable, "tools/laptop-bench/check_resource_selection.py",
+                 "--reference", str(selection_reference),
+                 "--options", str(root / "run-pack-benchmark" / "options.txt"),
+                 "--log", str(latest_log)],
+                cwd=root, stdout=report, check=False,
+            )
+        if resource_check.returncode != 0:
+            raise SystemExit("Exact-pack resource contract failed; see resource-selection-check.json.")
 
         summary = subprocess.run(
             [
