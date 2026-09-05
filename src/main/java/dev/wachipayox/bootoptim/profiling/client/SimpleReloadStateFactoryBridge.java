@@ -1,0 +1,34 @@
+package dev.wachipayox.bootoptim.profiling.client;
+
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import net.minecraft.server.packs.resources.PreparableReloadListener;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.SimpleReloadInstance;
+import net.minecraft.util.Unit;
+
+/** Java visibility bridge for the protected 1.21.1 SimpleReloadInstance.StateFactory type. */
+public abstract class SimpleReloadStateFactoryBridge<S> extends SimpleReloadInstance<S> {
+    private SimpleReloadStateFactoryBridge(
+            Executor prepareExecutor,
+            Executor applyExecutor,
+            ResourceManager resourceManager,
+            List<PreparableReloadListener> listeners,
+            StateFactory<S> stateFactory,
+            CompletableFuture<Unit> initialStage) {
+        super(prepareExecutor, applyExecutor, resourceManager, listeners, stateFactory, initialStage);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <S> CompletableFuture<S> create(
+            Object rawFactory,
+            PreparableReloadListener.PreparationBarrier barrier,
+            ResourceManager resourceManager,
+            PreparableReloadListener listener,
+            Executor prepareExecutor,
+            Executor applyExecutor) {
+        StateFactory<S> factory = (StateFactory<S>) rawFactory;
+        return factory.create(barrier, resourceManager, listener, prepareExecutor, applyExecutor);
+    }
+}
