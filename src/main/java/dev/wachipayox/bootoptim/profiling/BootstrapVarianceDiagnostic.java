@@ -15,8 +15,8 @@ import java.util.Locale;
  *
  * <p>The probe is opt-in and takes exactly two aggregate JVM/process snapshots. It does not sample,
  * enumerate files/classes, change executors, force GC, or alter bootstrap behavior. Management-bean
- * lookup is deliberately performed before the measured start timestamp and its setup wall is reported
- * separately so first-use management initialization is not mistaken for vanilla bootstrap time.</p>
+ * lookup is prepared at method HEAD, before ModernFix's measured field-write boundary, and its setup
+ * wall is reported separately so first-use management initialization cannot contaminate that target.</p>
  */
 public final class BootstrapVarianceDiagnostic {
     public static final String ENABLE_PROPERTY = "boot_optim.bootstrapVarianceDiagnostic";
@@ -31,8 +31,9 @@ public final class BootstrapVarianceDiagnostic {
     private BootstrapVarianceDiagnostic() {
     }
 
-    public static synchronized void begin() {
-        if (!Boolean.getBoolean(ENABLE_PROPERTY) || startSnapshot != null || failure != null || finished) {
+    /** Prepare management handles before ModernFix starts its vanilla-bootstrap stopwatch. */
+    public static synchronized void prepare() {
+        if (!Boolean.getBoolean(ENABLE_PROPERTY) || handles != null || failure != null || finished) {
             return;
         }
 
@@ -40,14 +41,26 @@ public final class BootstrapVarianceDiagnostic {
             long setupStart = System.nanoTime();
             handles = MetricHandles.create();
             setupWallMs = (System.nanoTime() - setupStart) / 1_000_000.0D;
+        } catch (Throwable throwable) {
+            disable(throwable.getClass().getName());
+        }
+    }
+
+    public static synchronized void begin() {
+        if (!Boolean.getBoolean(ENABLE_PROPERTY) || startSnapshot != null || failure != null || finished) {
+            return;
+        }
+        if (handles == null) {
+            disable("not_prepared");
+            return;
+        }
+
+        try {
             startSnapshot = Snapshot.capture(handles);
-            // Start after the snapshot so the reported target wall excludes probe setup/capture overhead.
+            // Start after the snapshot so the reported target wall excludes start-capture overhead.
             startNanos = System.nanoTime();
         } catch (Throwable throwable) {
-            failure = throwable.getClass().getName();
-            System.out.printf(
-                    "BOOTOPTIM_BOOTSTRAP_VARIANCE status=disabled reason=%s%n",
-                    token(failure));
+            disable(throwable.getClass().getName());
         }
     }
 
@@ -91,6 +104,13 @@ public final class BootstrapVarianceDiagnostic {
                     "BOOTOPTIM_BOOTSTRAP_VARIANCE status=failed reason=%s%n",
                     token(failure));
         }
+    }
+
+    private static void disable(String reason) {
+        failure = reason;
+        System.out.printf(
+                "BOOTOPTIM_BOOTSTRAP_VARIANCE status=disabled reason=%s%n",
+                token(reason));
     }
 
     private static double deltaNanosMs(long end, long start) {
