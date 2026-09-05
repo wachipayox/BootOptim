@@ -27,7 +27,11 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        boolean firstTitle = StartupProfiler.markMainMenu();
+        if (firstTitle) {
+            ShaderVoxyVarianceDiagnostic.reportAtTitle();
+        }
+        if (firstTitle && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
     }

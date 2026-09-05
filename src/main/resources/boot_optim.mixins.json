@@ -6,9 +6,14 @@
   "client": [
     "client.BlockStateModelLoaderIndexedVariantMixin",
     "client.FancyMenuPanoramaPreloadMixin",
+    "client.FancyMenuPhaseDiagnosticMixin",
+    "client.FlywheelGlslProbeDiagnosticMixin",
+    "client.GlDebugShaderCompilerDiagnosticMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.VoxyCapabilitiesDiagnosticMixin",
+    "client.VoxyConfigSaveDiagnosticMixin"
   ],
   "injectors": {
     "defaultRequire": 0

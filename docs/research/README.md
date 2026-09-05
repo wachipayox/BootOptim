@@ -28,6 +28,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 ## Research index
 
+- [Shader / Voxy startup variance — 2026-09-05](shader-voxy-variance-2026-09-05.md) — attributes the four early GLSL failures to Flywheel's descending capability probe, identifies Voxy's two 4.30 compute probes as the later source-level match, separates the nine uniform warnings, and adds a no-behavior-change physical diagnostic gate.
 - [Full-resource laptop variance](laptop-fullpack-variance-2026-09-05.md) — validated workload, control/candidate/control timing partitions, and the fixed-configuration causal diagnostic gate; no physical MCEF win established.
 
 - [Laptop resource-selection audit](laptop-resource-selection-audit-2026-09-05.md) — retained laptop runs omitted external ZIPs; correct the workload contract before exact-pack performance claims.
