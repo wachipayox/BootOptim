@@ -30,6 +30,8 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 - [Full-resource laptop variance](laptop-fullpack-variance-2026-09-05.md) — validated workload, control/candidate/control timing partitions, and the fixed-configuration causal diagnostic gate; no physical MCEF win established.
 
+- [FancyMenu usable-menu / resource-preload boundary — 2026-09-05](fancymenu-usable-menu-resource-boundary-2026-09-05.md) — exact 3.9.0 bytecode proves panorama/slideshow/native-video consumers and title audio can tolerate not-ready resources, but `ResourcePreLoader.preLoadAll` exposes no safe continuation that preserves ordered start/wait/timeout/error semantics; BootOptim runtime defer rejected.
+
 - [Laptop resource-selection audit](laptop-resource-selection-audit-2026-09-05.md) — retained laptop runs omitted external ZIPs; correct the workload contract before exact-pack performance claims.
 
 - [Hosted exact-pack startup CI](exact-pack-ci.md) — pinned exact software-pack fixture, Linux/Xvfb/llvmpipe surrogate boundaries, deterministic MCEF setup, PR-body A/B protocol, and real-hardware gate rules.
