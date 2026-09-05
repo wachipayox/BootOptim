@@ -28,7 +28,13 @@ abstract class SimpleReloadInstanceModernFixLeaseMixin<S> {
     @Unique
     private ModernFixReloadParallelismLease.Lease bootoptim$modernFixReloadLease;
 
-    @Inject(method = "<init>", at = @At("HEAD"), require = 0)
+    @Inject(
+            method = "<init>",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Ljava/lang/Object;<init>()V",
+                    shift = At.Shift.AFTER),
+            require = 0)
     private void bootoptim$acquireModernFixReloadLease(
             Executor prepareExecutor,
             Executor applyExecutor,
