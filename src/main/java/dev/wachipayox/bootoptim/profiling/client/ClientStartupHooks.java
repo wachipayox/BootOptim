@@ -31,6 +31,9 @@ public final class ClientStartupHooks {
         // Heavy safe-domain replay/verifier work deliberately starts only after the
         // semantic TTMM timestamp so it cannot make the measured startup look faster.
         VoxelShaperSafeDomainDiagnostic.onMainMenu();
+        // Evidence-only replay for the already-failed domains. This also runs after the
+        // TTMM marker and never changes the guard or the stock runtime result.
+        VoxelShaperSafeDomainEvidenceDump.onMainMenu();
         if (firstMainMenu && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
