@@ -1,0 +1,234 @@
+name: Bootstrap Variance Diagnostic Smoke
+
+on:
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - 'src/**'
+      - 'bootstrap/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/bootstrap-variance-diagnostic-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  exact-pack-smoke:
+    if: github.head_ref == 'agent/diagnostic-bootstrap-variance-boundary'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+      EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+      EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+      EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd90497a4d-linux
+      MCEF_JAVA_CEF_COMMIT: a78e832f9f13c2c688caea3d04d8b84fcd238d94
+      MCEF_PLATFORM: linux_amd64
+      DISPLAY: ':99'
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+      GALLIUM_DRIVER: llvmpipe
+      MESA_GL_VERSION_OVERRIDE: '4.6'
+      MESA_GLSL_VERSION_OVERRIDE: '460'
+      BOOTOPTIM_MCEF_MIRROR_PORT: '18765'
+      BOOTOPTIM_PACK_JAVA_VERSION: '25'
+      BOOTOPTIM_PACK_BASE_JVM_ARGS: |-
+        -Xmx6G
+        -XX:+UnlockExperimentalVMOptions
+        -XX:+UseG1GC
+        -XX:G1NewSizePercent=20
+        -XX:G1ReservePercent=20
+        -XX:MaxGCPauseMillis=50
+        -XX:G1HeapRegionSize=32M
+        -XX:ActiveProcessorCount=4
+        -Dmcef.java.cef.commit=a78e832f9f13c2c688caea3d04d8b84fcd238d94
+      BOOTOPTIM_PACK_EXTRA_JVM_ARGS: -Dboot_optim.bootstrapVarianceDiagnostic=true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install software display and CEF runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            xvfb mesa-utils libgl1-mesa-dri libglx-mesa0 \
+            libgtk-3-0 libnss3 libnspr4 libxss1 libasound2 \
+            libatk1.0-0 libatk-bridge2.0-0 libdrm2 libgbm1 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 \
+            libxfixes3 libx11-xcb1 libxshmfence1 libcups2 \
+            libatspi2.0-0 libpango-1.0-0 libpangocairo-1.0-0 \
+            fonts-liberation
+
+      - name: Start Xvfb and verify llvmpipe OpenGL
+        shell: bash
+        run: |
+          set -euo pipefail
+          Xvfb "$DISPLAY" -screen 0 1280x720x24 -nolisten tcp > xvfb.log 2>&1 &
+          echo $! > xvfb.pid
+          sleep 2
+          glxinfo -B | tee glxinfo.txt
+          grep -qi 'llvmpipe' glxinfo.txt
+
+      - name: Setup compile JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Remember JDK 21 path
+        shell: bash
+        run: echo "BOOTOPTIM_JDK21=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Setup reference runtime Oracle JDK 25.0.4
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25.0.4'
+          distribution: oracle
+
+      - name: Remember JDK 25 path
+        shell: bash
+        run: echo "BOOTOPTIM_JDK25=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Pin Gradle toolchain discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.gradle"
+          echo "org.gradle.java.installations.paths=$BOOTOPTIM_JDK21,$BOOTOPTIM_JDK25" >> "$HOME/.gradle/gradle.properties"
+
+      - name: Restore exact-pack ZIP cache
+        id: pack-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .exact-pack-cache/bootoptim-exact-pack.zip
+          key: ${{ env.EXACT_PACK_CACHE_KEY }}
+
+      - name: Download pinned exact-pack release asset on cache miss
+        if: steps.pack-cache.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .exact-pack-cache
+          gh release download "$EXACT_PACK_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$EXACT_PACK_ASSET" \
+            --dir .exact-pack-cache \
+            --clobber
+
+      - name: Verify exact-pack fixture SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          path=.exact-pack-cache/bootoptim-exact-pack.zip
+          test -f "$path"
+          actual=$(sha256sum "$path" | awk '{print $1}')
+          test "$actual" = "$EXACT_PACK_SHA256"
+          echo "Exact-pack fixture SHA-256 verified: $actual"
+
+      - name: Download and verify pinned Linux JCEF directly
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .mcef-jcef
+          mkdir -p .mcef-jcef
+          base="https://mcef-download.cinemamod.com/java-cef-builds/$MCEF_JAVA_CEF_COMMIT"
+          checksum=.mcef-jcef/${MCEF_PLATFORM}.tar.gz.sha256
+          archive=.mcef-jcef/${MCEF_PLATFORM}.tar.gz
+          curl --fail --location --retry 5 --retry-all-errors \
+            "$base/${MCEF_PLATFORM}.tar.gz.sha256" -o "$checksum"
+          curl --fail --location --retry 5 --retry-all-errors \
+            "$base/${MCEF_PLATFORM}.tar.gz" -o "$archive"
+          expected=$(tr -d '\r' < "$checksum" | awk 'NR==1 {print $1}')
+          actual=$(sha256sum "$archive" | awk '{print $1}')
+          test -n "$expected"
+          test "$actual" = "$expected"
+          tar -xzf "$archive" -C .mcef-jcef
+          rm -f "$archive"
+          test -f ".mcef-jcef/$MCEF_PLATFORM/jcef_helper"
+          echo "Pinned JCEF verified: commit=$MCEF_JAVA_CEF_COMMIT platform=$MCEF_PLATFORM sha256=$actual"
+
+      - name: Stage deterministic MCEF development libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/mcef-libraries .mcef-mirror
+          mkdir -p build/mcef-libraries
+          cp -a .mcef-jcef/. build/mcef-libraries/
+          chmod +x "build/mcef-libraries/$MCEF_PLATFORM/jcef_helper"
+          mirror_root="$PWD/.mcef-mirror"
+          mirror_dir="$mirror_root/java-cef-builds/$MCEF_JAVA_CEF_COMMIT"
+          mkdir -p "$mirror_dir"
+          cp ".mcef-jcef/${MCEF_PLATFORM}.tar.gz.sha256" "$mirror_dir/${MCEF_PLATFORM}.tar.gz.sha256"
+          echo "BOOTOPTIM_MCEF_MIRROR_ROOT=$mirror_root" >> "$GITHUB_ENV"
+
+      - name: Verify and extract exact-pack fixture
+        shell: bash
+        run: |
+          python scripts/exact-pack/prepare_fixture.py \
+            --zip .exact-pack-cache/bootoptim-exact-pack.zip \
+            --sha256 "$EXACT_PACK_SHA256" \
+            --extract .exact-pack-run \
+            --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
+
+      - name: Launch exact pack with bootstrap variance probe
+        shell: bash
+        run: |
+          python scripts/exact-pack/run_startup.py \
+            --variant bootstrap-variance-smoke \
+            --iteration 1 \
+            --timeout 1200
+
+      - name: Validate diagnostic marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker=$(grep 'BOOTOPTIM_BOOTSTRAP_VARIANCE status=ok' exact-pack-console.log | tail -n 1 || true)
+          test -n "$marker" || {
+            echo 'Bootstrap variance diagnostic did not emit status=ok.' >&2
+            grep 'BOOTOPTIM_BOOTSTRAP_VARIANCE' exact-pack-console.log || true
+            exit 1
+          }
+          echo "$marker"
+          if grep -q 'BOOTOPTIM_BOOTSTRAP_VARIANCE status=\(failed\|disabled\)' exact-pack-console.log; then
+            echo 'Bootstrap variance diagnostic emitted a failed/disabled marker.' >&2
+            exit 1
+          fi
+
+      - name: Upload diagnostic smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-variance-diagnostic-smoke
+          path: |
+            result.json
+            exact-pack-console.log
+            exact-pack-thread-dump.log
+            xvfb.log
+            glxinfo.txt
+            resource-selection-check.json
+            resource-selection-reference.txt
+            run-pack-benchmark/logs/latest.log
+            run-pack-benchmark/logs/bootoptim-startup.log
+            run-pack-benchmark/config/boot_optim.properties
+            run-pack-benchmark/config/fml.toml
+            run-pack-benchmark/config/mcef/mcef.properties
+            run-pack-benchmark/options.txt
+          if-no-files-found: ignore
+          retention-days: 14
