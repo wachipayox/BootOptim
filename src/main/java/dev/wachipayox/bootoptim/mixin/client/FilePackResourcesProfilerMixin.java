@@ -15,6 +15,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 abstract class FilePackResourcesProfilerMixin {
     @Inject(method = "getNamespaces", at = @At("HEAD"), require = 0)
     private void bootoptim$beginNamespaces(PackType packType, CallbackInfoReturnable<java.util.Set<String>> cir) {
+        if (!FilePackResourcesProfiler.isEnabled()) {
+            return;
+        }
         FilePackResourcesProfiler.begin("get_namespaces", packType, bootoptim$packId());
     }
 
@@ -22,6 +25,9 @@ abstract class FilePackResourcesProfilerMixin {
     private void bootoptim$finishNamespaces(
             PackType packType,
             CallbackInfoReturnable<java.util.Set<String>> cir) {
+        if (!FilePackResourcesProfiler.isEnabled()) {
+            return;
+        }
         FilePackResourcesProfiler.finish(
                 "get_namespaces", packType, bootoptim$packId(), cir.getReturnValue() == null ? 0 : cir.getReturnValue().size());
     }
@@ -33,6 +39,9 @@ abstract class FilePackResourcesProfilerMixin {
             String path,
             PackResources.ResourceOutput output,
             CallbackInfo ci) {
+        if (!FilePackResourcesProfiler.isEnabled()) {
+            return;
+        }
         FilePackResourcesProfiler.begin("list_resources", packType, bootoptim$packId());
     }
 
@@ -43,6 +52,9 @@ abstract class FilePackResourcesProfilerMixin {
             String path,
             PackResources.ResourceOutput output,
             CallbackInfo ci) {
+        if (!FilePackResourcesProfiler.isEnabled()) {
+            return;
+        }
         FilePackResourcesProfiler.finish("list_resources", packType, bootoptim$packId(), 0);
     }
 
