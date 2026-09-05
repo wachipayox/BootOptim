@@ -8,6 +8,8 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
+    "client.MoreCullingTranslucencyCacheMixin",
+    "client.ReloadableResourceManagerMoreCullingCacheMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {

@@ -37,6 +37,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 - [Laptop resource-selection audit](laptop-resource-selection-audit-2026-09-05.md) — retained laptop runs omitted external ZIPs; correct the workload contract before exact-pack performance claims.
 - [VoxelShaper limited safe-domain closure — 2026-09-05](voxelshaper-safe-domain-2026-09-05.md) — **REJECTED #110**: `<=2` boxes is strict-safe but owns only 0.097% of measured stock fold CPU; the broader epsilon-stable domain covered about one quarter of stock fold CPU but failed strict equivalence with two natural and one exact-dyadic adversarial counterexample. Coverage is not TTMM savings; no A/B or laptop run was justified.
+- [MoreCulling reload-local translucency reuse — 2026-09-05](moreculling-translucency-reuse-2026-09-05.md) — **ACTIVE**: #108 measured 395.731 ms of exact repeated SpriteUtils wall under a 4,096-key cap; candidate is strict reload-local NativeImage identity+bounds reuse, default-off pending hosted semantic/performance gates.
 
 - [Hosted exact-pack startup CI](exact-pack-ci.md) — pinned exact software-pack fixture, Linux/Xvfb/llvmpipe surrogate boundaries, deterministic MCEF setup, PR-body A/B protocol, and real-hardware gate rules.
 - [Client model / ModelManager pipeline](model-pipeline.md) — historical #13/#14/#35/#36/#37/#47 evidence, the validated #55 blockstate matcher, and rejected shallow approaches.

@@ -235,6 +235,16 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+var moreCullingTranslucencyCacheTest = tasks.register('testMoreCullingTranslucencyCache', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass.set('dev.wachipayox.bootoptim.optimization.client.BoundedIdentityBoundsBooleanCacheTest')
+}
+
+tasks.named('check').configure {
+    dependsOn moreCullingTranslucencyCacheTest
+}
+
 idea {
     module {
         downloadSources = true
