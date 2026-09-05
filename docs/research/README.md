@@ -30,6 +30,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
+- [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
 - [Fixed laptop FancyMenu wait-CPU evidence — 2026-09-05](laptop-fancymenu-wait-cpu-variance-2026-09-05.md) — full-pack physical diagnostic proving material current-thread CPU in stock FancyMenu waits on the 2C4T software-renderer laptop; candidate remains gated by semantic and hosted A/B tests.
 - [Full-resource laptop variance](laptop-fullpack-variance-2026-09-05.md) — validated workload, control/candidate/control timing partitions, and the fixed-configuration causal diagnostic gate; no physical MCEF win established.
 
