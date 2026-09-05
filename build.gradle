@@ -235,6 +235,13 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+// The candidate uses a small no-dependency JavaExec harness instead of adding a test framework to
+// the root mod. Gradle 9 treats source-bearing Test tasks with no discovered framework tests as an
+// error, so leave that empty task non-fatal while keeping the explicit harness mandatory via check.
+tasks.named('test', Test).configure {
+    failOnNoDiscoveredTests = false
+}
+
 var moreCullingTranslucencyCacheTest = tasks.register('testMoreCullingTranslucencyCache', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
