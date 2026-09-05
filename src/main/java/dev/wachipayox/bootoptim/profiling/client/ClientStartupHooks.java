@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim.profiling.client;
 
+import dev.wachipayox.bootoptim.optimization.client.VoxelShaperBatchUnionExperiment;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -27,7 +28,11 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        boolean firstMainMenu = StartupProfiler.markMainMenu();
+        // Experiment reporting and verifier self-tests deliberately run after the
+        // TTMM marker so their heavy equality checks cannot improve/regress TTMM.
+        VoxelShaperBatchUnionExperiment.onMainMenu();
+        if (firstMainMenu && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
     }
