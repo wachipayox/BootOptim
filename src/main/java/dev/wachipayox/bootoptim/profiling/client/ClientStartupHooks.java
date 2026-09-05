@@ -27,7 +27,6 @@ public final class ClientStartupHooks {
             return;
         }
 
-        VoxelShaperExactReuseProfiler.onMainMenu();
         if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
