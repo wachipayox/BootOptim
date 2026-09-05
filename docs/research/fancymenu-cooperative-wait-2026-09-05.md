@@ -1,6 +1,6 @@
 # FancyMenu cooperative preload wait experiment — 2026-09-05
 
-Status: **ACTIVE EXPERIMENT / DEFAULT OFF / DO NOT PROMOTE WITHOUT PHYSICAL VISUAL GATE**
+Status: **REJECTED / DEFAULT OFF / DO NOT PROMOTE OR TEST ON LAPTOP**
 
 Base: `agent/integration-current` @ `d29a6bad6358c7ff78dadbc5e85bd753c0ad2a54`.
 
@@ -91,7 +91,7 @@ Stock ignores interruption. The candidate therefore never calls `Thread.interrup
 
 `Thread.sleep` is intentionally not used. Its checked interruption path clears interruption before throwing and would require a different restoration contract.
 
-`LockSupport.parkNanos` can consume a pre-existing LockSupport permit. The experiment minimizes exposure with short parks and immediately falls back to spin when interruption is set, but this remains a compatibility difference to inspect before any production promotion. If hosted/laptop evidence is only small, that semantic cost weighs against shipping the optimization.
+`LockSupport.parkNanos` can consume a pre-existing LockSupport permit. The experiment minimizes exposure with short parks and immediately falls back to spin when interruption is set, but this remains a compatibility difference and weighs further against promotion now that the performance gate failed.
 
 ## Instrumentation in the candidate
 
@@ -136,18 +136,40 @@ The pure state machine has JUnit coverage for:
 
 No CEF or GL is required for these tests.
 
-## Runtime gate and decision rule
+## Completed validation
 
-1. Build and normal Startup CI must pass.
-2. Run one hosted exact-pack smoke with the property enabled. It is semantic/coverage evidence only, not a performance result.
-3. A valid smoke must reach the title, preserve exact resource-pack selection/order, show zero BootOptim Mixin failures, and report `132` wait attempts with zero access/stock/park/timer/interrupt/virtual fallback in the fixture.
-4. Only then request same-branch hosted 3x3 candidate/control:
-   - candidate: `-Dboot_optim.experimentFancyMenuCooperativeWait=true`;
-   - control: `-Dboot_optim.experimentFancyMenuCooperativeWait=false`.
-5. Report TTMM, reload→FancyMenu, production panorama/preload wall, candidate wait CPU/wall, pack-selection state and Mixin state. Do not infer paired control wait CPU from an uninstrumented control; cite #109 separately.
-6. If hosted is tied/negative, reject without a laptop run.
-7. If hosted is positive but small, classify hardware-sensitive and prepare one reproducible JAR for the fixed `variance-fixed` laptop test only. Do not request repeated laptop batches.
-8. Production promotion would still require a physical semantic/visual menu check, especially because `LockSupport` parking is a scheduling/permit behavior change.
+Build run `33978909378` passed, including the Java 21 deterministic state-machine tests and packaged-bootstrap validation. Normal Startup Benchmark run `33978909363` also passed with the property absent, preserving the default-off path.
+
+Hosted exact-pack smoke `33978909404` passed and is retained strictly as semantic/coverage evidence, not as a speedup claim. It reached title with exact resource selection/order valid, one reload, zero BootOptim Mixin errors, and the existing production panorama path still reported `20` panoramas / `120` suppliers / `0` failures. The candidate covered all `132` waits, issued `20,689` parks, and had zero access, stock, park, timer, interruption or virtual-thread fallbacks. Its current-thread CPU marker was `329.653 ms` for preload and `242.165 ms` for panorama, demonstrating that the cooperative mechanism really does suppress the caller busy-spin CPU.
+
+## Hosted exact-pack 3x3 result
+
+Run `33979159742` completed successfully with three fresh candidate and three fresh control runs. All six reached title, preserved exact-pack selection/order, had exactly one reload, retained the `8192x8192x2` block atlas, reported zero BootOptim Mixin errors, and had no fallback condition.
+
+Aggregated medians:
+
+| Metric | Candidate | Control | Candidate - control |
+| --- | ---: | ---: | ---: |
+| TTMM | `93,702 ms` | `91,400 ms` | `+2,302 ms` (`+2.52%`) |
+| Mod entrypoint | `31,983 ms` | `29,482 ms` | `+2,501 ms` (`+8.48%`) |
+| Post-mod entrypoint | `62,832 ms` | `60,629 ms` | `+2,203 ms` (`+3.63%`) |
+| MCEF | `999 ms` | `1,401 ms` | `-402 ms` |
+| Reload → FancyMenu FINISHED | `44,040 ms` | `42,981 ms` | `+1,059 ms` (`+2.46%`) |
+| Panorama preload | `3,995.499 ms` | `4,165.776 ms` | `-170.277 ms` |
+
+The intended local mechanism is therefore real but does not improve the critical path on the hosted exact-pack surrogate. Panorama wall improves by only about `170 ms`, while the enclosing reload→FancyMenu interval regresses by `1.059 s` and TTMM regresses by `2.302 s`. The MCEF delta moves in the favorable direction and is treated as unrelated hosted variance, not compensation for the startup regressions.
+
+The result also resolves an important interpretation point: **lower caller CPU is not sufficient evidence of lower startup wall**. The candidate materially reduces the busy-spin CPU measured by the smoke, yet the end-to-end and enclosing critical-wall medians are worse.
+
+## Decision
+
+**REJECTED. Close PR #117 without merge, production promotion, or laptop testing.**
+
+The implementation is technically bounded, default-off, fail-open, and semantically covered, but it fails BootOptim's actual optimization criterion. The hosted gate is negative on both TTMM and reload→FancyMenu, so the project rule explicitly stops before the physical machine. No additional laptop batch or one-off physical confirmation is justified.
+
+This mechanism remains **hardware-sensitive evidence**, not a production candidate: the 2C/4T physical diagnostic proves that stock busy-spin can consume essentially the full wait wall on constrained hardware, while the hosted smoke proves parking can release that caller CPU. However, there is no demonstrated end-to-end win, and the completed hosted A/B is the required stop gate. The `LockSupport` permit semantic caveat remains an additional reason not to ship it for a small subphase-only gain.
+
+Reopen this exact mechanism only if a materially different premise changes the critical-path outcome—for example, a future FancyMenu implementation changes the wait contract or a reproducible exact-pack hosted environment shows the cooperative wait improving the enclosing reload→FancyMenu and TTMM medians, not merely caller CPU or panorama-local wall. Do not reopen solely because a constrained machine still shows high busy-spin CPU.
 
 ## Related
 
@@ -156,3 +178,4 @@ No CEF or GL is required for these tests.
 - #83 — rejected two-panorama look-ahead.
 - #95 / #102 — renderer defer line; not reused here.
 - #109 — stock wait current-thread CPU diagnostic.
+- #117 — this rejected cooperative-wait experiment; hosted A/B run `33979159742` is the final performance gate.
