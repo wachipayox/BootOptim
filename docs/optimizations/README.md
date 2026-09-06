@@ -15,6 +15,7 @@ Before adding a new entry, verify the implementation is actually present on `age
 | [Indexed blockstate variant matching](../research/blockstate-indexed-matching.md) | Minecraft 1.21.1 blockstate variants | Enabled | Keep stock predicate validation but replace the O(variants × possible states) candidate scan with reload-scoped property/value BitSet indexes |
 | [Direct generated-item quad baking](../research/production-optimizations.md#direct-generated-item-quad-baking) | Strict vanilla `builtin/generated` item path | Enabled when eligible | Feed stock/NeoForge `FaceBakery` directly from primitive sprite-edge topology instead of allocating the temporary `BlockElement` graph |
 | [MCEF first-consumer defer](compatibility/mcef-first-consumer-defer.md) | MCEF 2.1.6-1.21.1 + guarded consumers | Enabled on exact MCEF version | Suppress automatic pre-title CEF init and invoke the real initializer at the first actual browser/video consumer |
+| [CITResewn base item-model cache](compatibility/citresewn-base-item-model-cache.md) | CITResewn item-CIT loading | Enabled when the compatible target class exists | Reuse repeated base-model parses and skip repeated resource opens during one ModelBakery reload |
 
 The old vanilla top-level blockstate identity dedup experiment is intentionally **not** listed as production. PR #36 showed a 64.57% call-count reduction but only about 0.413 s / 4.7% reduction in `bakeModels` and no end-to-end improvement. See `docs/research/model-pipeline.md`.
 
