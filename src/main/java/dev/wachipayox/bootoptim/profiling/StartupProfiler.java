@@ -15,6 +15,7 @@ public final class StartupProfiler {
 
     private static final boolean PROFILING_ENABLED = Boolean.getBoolean(PROFILE_PROPERTY)
             || Boolean.getBoolean(EXIT_ON_TITLE_PROPERTY);
+    private static final boolean VARIANCE_ENABLED = VarianceProbe.enabled();
     private static final boolean REPORT_ENABLED = StartupReport.isEnabled();
     private static final AtomicBoolean MAIN_MENU_REPORTED = new AtomicBoolean();
 
@@ -22,10 +23,13 @@ public final class StartupProfiler {
     }
 
     public static boolean isEnabled() {
-        return PROFILING_ENABLED || REPORT_ENABLED;
+        return PROFILING_ENABLED || VARIANCE_ENABLED || REPORT_ENABLED;
     }
 
     public static void markModEntrypoint() {
+        if (VARIANCE_ENABLED) {
+            VarianceProbe.point("mod_entrypoint");
+        }
         if (REPORT_ENABLED) {
             StartupReport.phase("mod_entrypoint", uptimeMs());
         }
@@ -34,16 +38,16 @@ public final class StartupProfiler {
         }
     }
 
-    /**
-     * @return true exactly once when the first main menu is reached while profiling/reporting is enabled.
-     */
+    /** @return true exactly once when the first main menu is opened while profiling/reporting is enabled. */
     public static boolean markMainMenu() {
         if (!isEnabled() || !MAIN_MENU_REPORTED.compareAndSet(false, true)) {
             return false;
         }
 
         long uptimeMs = uptimeMs();
-        // Finish the on-disk report before emitting the console marker used by CI to terminate the client.
+        if (VARIANCE_ENABLED) {
+            VarianceProbe.point("main_menu_opening");
+        }
         if (REPORT_ENABLED) {
             StartupReport.phase("main_menu", uptimeMs);
             StartupReport.complete(uptimeMs);
@@ -54,8 +58,14 @@ public final class StartupProfiler {
         return true;
     }
 
-    public static boolean shouldExitOnTitle() {
-        return Boolean.getBoolean(EXIT_ON_TITLE_PROPERTY);
+    /** Normal benchmark exits at opening; variance diagnostics need one presented frame first. */
+    public static boolean shouldExitOnTitleOpening() {
+        return Boolean.getBoolean(EXIT_ON_TITLE_PROPERTY) && !VARIANCE_ENABLED;
+    }
+
+    /** In variance mode, preserve auto-exit but move it to the first post-updateDisplay title tick. */
+    public static boolean shouldExitAfterPresentedTitle() {
+        return Boolean.getBoolean(EXIT_ON_TITLE_PROPERTY) && VARIANCE_ENABLED;
     }
 
     private static void logPhase(String phase) {
