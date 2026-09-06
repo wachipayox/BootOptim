@@ -192,6 +192,16 @@ configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
 
+var mcefCoordinatorHarness = tasks.register('mcefCoordinatorHarness', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass.set('dev.wachipayox.bootoptim.compat.client.McefInitializationStateMachineHarness')
+}
+
+tasks.named('check').configure {
+    dependsOn mcefCoordinatorHarness
+}
+
 var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
     var replaceProperties = [
             minecraft_version      : minecraft_version,
