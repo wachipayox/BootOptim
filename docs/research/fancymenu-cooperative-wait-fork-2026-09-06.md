@@ -31,13 +31,22 @@ no se mueven cargas OpenGL, audio, vídeo ni callbacks a otro hilo.
 - No está instalado todavía; la instancia que está en el mundo sigue usando el
   JAR anterior.
 
-## Gate pendiente
+## Gate físico inicial
 
-Después de cerrar la sesión actual, instalar el JAR del candidato y ejecutar un
-par control/candidato con el mismo pack, mismo estado de configuración y
-`preload_cooperative_wait=true` sólo en el candidato. Registrar TTMM, la espera
-de precarga y CPU del proceso, además de comprobar paridad visual/errores de
-recarga. Promover únicamente si el ahorro de CPU mueve el tiempo a menú y no
-aparece deriva en la primera pantalla; si no, mantenerlo como kill-switch
-opt-in para hardware muy lento.
+Se ejecutó un par sin reinicio, con Prism reiniciado entre variantes,
+`mcefFirstConsumerDefer=false`, `exitOnTitle=true` y el mismo pack:
 
+| variante | mod entrypoint | precarga FancyMenu | main menu | resultado |
+| --- | ---: | ---: | ---: | --- |
+| stock, opción ausente | 281,177 ms | 31,481.140 ms | 588,530 ms | válido |
+| `79a5504c5`, opción `true` | 153,614 ms | 31,795.323 ms | 432,312 ms | válido |
+
+La diferencia de TTMM no es atribuible al fork: el control ya llevaba 127,563
+ms más al entrar en el mod, y la precarga candidata quedó 314 ms peor, dentro
+del ruido observado. No hay ahorro de pared demostrado ni motivo para activar
+la opción por defecto. El candidato queda **NO-GO como optimización de TTMM por
+ahora**, pero no se descarta el mecanismo de reducción de CPU: falta un probe
+barato que mida CPU del hilo/proceso sólo durante las 132 esperas sin introducir
+otra carga significativa. El portátil fue restaurado al JAR stock SHA-256
+`8E1C68F2C91AED02057209252BBE221BF3B019C4E82FB20FE35809BAC2C08DB8` y la
+opción volvió a ausente.
