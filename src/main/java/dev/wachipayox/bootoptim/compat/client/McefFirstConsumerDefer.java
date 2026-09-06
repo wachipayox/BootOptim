@@ -2,10 +2,7 @@ package dev.wachipayox.bootoptim.compat.client;
 
 import com.mojang.logging.LogUtils;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.client.Minecraft;
 import net.neoforged.fml.ModList;
 import org.slf4j.Logger;
@@ -26,10 +23,7 @@ public final class McefFirstConsumerDefer {
     private static final String EXPECTED_VERSION = "2.1.6-1.21.1";
     private static final boolean ENABLED = Boolean.parseBoolean(System.getProperty(PROPERTY, "true"));
     private static final ThreadLocal<Boolean> FORCE_INITIALIZE = ThreadLocal.withInitial(() -> false);
-    private static final AtomicReference<State> STATE = new AtomicReference<>(State.ARMED);
-    /** Thread executing the one real synchronous MCEF.initialize call, if it has begun. */
-    private static final AtomicReference<Thread> INITIALIZER_THREAD = new AtomicReference<>();
-    private static final CompletableFuture<Boolean> INITIALIZATION_COMPLETION = new CompletableFuture<>();
+    private static final McefInitializationStateMachine COORDINATOR = new McefInitializationStateMachine();
 
     private static volatile boolean compatibilityChecked;
     private static volatile boolean compatible;
@@ -45,32 +39,37 @@ public final class McefFirstConsumerDefer {
             return false;
         }
 
-        State state = STATE.get();
-        if (state == State.COMPLETE) {
+        McefInitializationStateMachine.State state = COORDINATOR.state();
+        if (state == McefInitializationStateMachine.State.COMPLETE) {
             // CefInitMixin can leave a delayed initialize task queued after a consumer forced CEF.
             // Suppress only when MCEF itself confirms that initialization actually completed.
             return isMcefInitialized();
         }
+        if (state == McefInitializationStateMachine.State.FORCING_BY_CONSUMER
+                || state == McefInitializationStateMachine.State.INITIALIZING) {
+            // The real owner call bypasses this branch through FORCE_INITIALIZE. Any delayed stock
+            // trigger racing the claimed attempt must not start a second unowned initializer.
+            return true;
+        }
         if (isMcefInitialized()) {
-            STATE.set(State.COMPLETE);
-            INITIALIZATION_COMPLETION.complete(true);
+            COORDINATOR.observeReady();
             return false;
         }
-        if (state != State.ARMED && state != State.DEFERRED) {
+        if (state != McefInitializationStateMachine.State.ARMED
+                && state != McefInitializationStateMachine.State.DEFERRED) {
             return false;
         }
 
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || !minecraft.isSameThread()) {
-            STATE.set(State.ABORTED);
-            INITIALIZATION_COMPLETION.complete(false);
+            COORDINATOR.abortBeforeInitialization();
             LOGGER.warn(
                     "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=initialize_not_client_thread thread={}",
                     Thread.currentThread().getName());
             return false;
         }
 
-        if (STATE.compareAndSet(State.ARMED, State.DEFERRED)) {
+        if (COORDINATOR.markDeferred()) {
             LOGGER.info(
                     "BOOTOPTIM_MCEF_FIRST_CONSUMER status=deferred mcef_version={} kill_switch=-D{}=false",
                     EXPECTED_VERSION,
@@ -86,26 +85,22 @@ public final class McefFirstConsumerDefer {
             return;
         }
 
-        State state = STATE.get();
-        if (state == State.FORCING_BY_CONSUMER || state == State.INITIALIZING) {
-            // MCEF publishes its client/app before running scheduleForInit callbacks. Those
-            // callbacks are allowed to call getApp/getClient synchronously on the same thread
-            // that owns initialize(); waiting on our completion future here would deadlock the
-            // outer native call. The stock getter is safe once MCEF reports initialized.
-            if (INITIALIZER_THREAD.get() == Thread.currentThread()
-                    && (state == State.INITIALIZING || isMcefInitialized())) {
-                return;
-            }
+        McefInitializationStateMachine.ConsumerAction action;
+        try {
+            action = COORDINATOR.beforeConsumer(Thread.currentThread(), isMcefInitialized());
+        } catch (IllegalStateException exception) {
+            LOGGER.error(
+                    "BOOTOPTIM_MCEF_FIRST_CONSUMER status=failed reason=owner_reentry_before_publication consumer={}",
+                    consumer,
+                    exception);
+            throw exception;
+        }
+
+        if (action == McefInitializationStateMachine.ConsumerAction.BYPASS) {
+            return;
+        }
+        if (action == McefInitializationStateMachine.ConsumerAction.WAIT) {
             awaitInFlightInitialization(consumer);
-            return;
-        }
-        if (state != State.DEFERRED) {
-            return;
-        }
-        if (!STATE.compareAndSet(State.DEFERRED, State.FORCING_BY_CONSUMER)) {
-            if (STATE.get() == State.FORCING_BY_CONSUMER) {
-                awaitInFlightInitialization(consumer);
-            }
             return;
         }
 
@@ -139,23 +134,22 @@ public final class McefFirstConsumerDefer {
 
     private static void awaitInFlightInitialization(String consumer) {
         Minecraft minecraft = Minecraft.getInstance();
-        Thread initializerThread = INITIALIZER_THREAD.get();
         if (minecraft != null
                 && minecraft.isSameThread()
                 && !isMcefInitialized()
-                && (initializerThread == null || initializerThread == Thread.currentThread())) {
-            // A worker may have won the state transition and queued its client-thread initializer.
-            // Never block the client thread waiting for work queued to that same thread; perform the
-            // authoritative real initializer here. The queued task will later observe initialized=true.
+                && COORDINATOR.state() == McefInitializationStateMachine.State.FORCING_BY_CONSUMER
+                && COORDINATOR.initializerThread() == null) {
+            // A worker may have claimed the attempt and queued its client-thread initializer. Never
+            // block the client thread waiting for work queued to itself; take ownership here. The
+            // queued task later observes COMPLETE and becomes a no-op.
             forceInitializeNow("concurrent-consumer:" + consumer);
             return;
         }
 
         try {
-            // Do not turn a waiter timeout into ABORTED while the synchronous native initializer
-            // is still running. A consumer must never proceed against half-published MCEF state;
-            // the future completes when the real owner returns or throws.
-            INITIALIZATION_COMPLETION.join();
+            // There is deliberately no lifecycle timeout here. Only the real owner may publish a
+            // terminal state; a slow native initializer cannot be converted into ABORTED by a waiter.
+            COORDINATOR.awaitCompletion();
         } catch (RuntimeException exception) {
             LOGGER.error(
                     "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=concurrent_consumer_wait_failed consumer={}",
@@ -167,30 +161,22 @@ public final class McefFirstConsumerDefer {
     private static void forceInitializeOnClientThread(String reason) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null) {
-            STATE.set(State.ABORTED);
-            INITIALIZATION_COMPLETION.complete(false);
+            COORDINATOR.abortBeforeInitialization();
             LOGGER.warn("BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=no_minecraft_instance trigger={}", reason);
             return;
         }
 
         if (minecraft.isSameThread()) {
-            INITIALIZATION_COMPLETION.complete(forceInitializeNow(reason));
+            forceInitializeNow(reason);
             return;
         }
 
-        minecraft.execute(() -> {
-            try {
-                forceInitializeNow(reason);
-            } catch (Throwable throwable) {
-                STATE.set(State.ABORTED);
-                INITIALIZATION_COMPLETION.completeExceptionally(throwable);
-            }
-        });
+        minecraft.execute(() -> forceInitializeNow(reason));
 
         try {
-            // The client-thread task owns the only safe place to invoke native CEF. Do not
-            // publish a timeout/ABORTED state while it may still be inside MCEF.initialize().
-            INITIALIZATION_COMPLETION.join();
+            // The client-thread task owns the only safe place to invoke native CEF. Wait for that
+            // authoritative completion; do not invent a timeout terminal state behind it.
+            COORDINATOR.awaitCompletion();
         } catch (RuntimeException exception) {
             LOGGER.error(
                     "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=client_thread_handoff_failed trigger={}",
@@ -201,13 +187,21 @@ public final class McefFirstConsumerDefer {
 
     private static boolean forceInitializeNow(String reason) {
         if (isMcefInitialized()) {
-            STATE.set(State.COMPLETE);
-            INITIALIZATION_COMPLETION.complete(true);
+            COORDINATOR.observeReady();
             return true;
         }
+        if (!COORDINATOR.beginInitialization(Thread.currentThread())) {
+            if (isMcefInitialized()) {
+                COORDINATOR.observeReady();
+                return true;
+            }
+            try {
+                return COORDINATOR.awaitCompletion();
+            } catch (RuntimeException exception) {
+                return false;
+            }
+        }
 
-        INITIALIZER_THREAD.set(Thread.currentThread());
-        STATE.set(State.INITIALIZING);
         long startNanos = System.nanoTime();
         boolean result = false;
         try {
@@ -216,27 +210,21 @@ public final class McefFirstConsumerDefer {
             Method initialize = mcef.getMethod("initialize");
             Object value = initialize.invoke(null);
             result = value instanceof Boolean booleanValue && booleanValue;
-            STATE.set(result ? State.COMPLETE : State.ABORTED);
-        } catch (Throwable exception) {
-            STATE.set(State.ABORTED);
-            Throwable cause = exception instanceof InvocationTargetException invocation && invocation.getCause() != null
-                    ? invocation.getCause()
-                    : exception;
+            COORDINATOR.finishInitialization(result, null);
+        } catch (Throwable throwable) {
+            Throwable cause = McefInitializationStateMachine.unwrapInitializerThrowable(throwable);
+            COORDINATOR.finishInitialization(false, cause);
             LOGGER.error(
                     "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=force_init_failed trigger={}",
                     reason,
                     cause);
-            INITIALIZATION_COMPLETION.complete(false);
-            if (exception instanceof Error error) {
+            if (cause instanceof Error error) {
                 throw error;
             }
             return false;
         } finally {
             FORCE_INITIALIZE.remove();
-            INITIALIZER_THREAD.compareAndSet(Thread.currentThread(), null);
         }
-
-        INITIALIZATION_COMPLETION.complete(result);
 
         LOGGER.info(
                 "BOOTOPTIM_MCEF_FIRST_CONSUMER status=initialized trigger={} result={} wall_ms={} thread={}",
@@ -293,14 +281,5 @@ public final class McefFirstConsumerDefer {
         } catch (ReflectiveOperationException | RuntimeException exception) {
             return false;
         }
-    }
-
-    private enum State {
-        ARMED,
-        DEFERRED,
-        FORCING_BY_CONSUMER,
-        COMPLETE,
-        INITIALIZING,
-        ABORTED
     }
 }
