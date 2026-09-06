@@ -58,12 +58,17 @@ public final class StartupProfiler {
         return true;
     }
 
-    /** Normal benchmark exits at opening; variance diagnostics need one presented frame first. */
+    /** True after the first TitleScreen opening marker has been accepted. */
+    public static boolean hasMainMenuOpened() {
+        return MAIN_MENU_REPORTED.get();
+    }
+
+    /** Normal benchmark exits at opening; variance diagnostics need one presented display update first. */
     public static boolean shouldExitOnTitleOpening() {
         return Boolean.getBoolean(EXIT_ON_TITLE_PROPERTY) && !VARIANCE_ENABLED;
     }
 
-    /** In variance mode, preserve auto-exit but move it to the first post-updateDisplay title tick. */
+    /** In variance mode, preserve auto-exit but move it to the first display update after title opening. */
     public static boolean shouldExitAfterPresentedTitle() {
         return Boolean.getBoolean(EXIT_ON_TITLE_PROPERTY) && VARIANCE_ENABLED;
     }
