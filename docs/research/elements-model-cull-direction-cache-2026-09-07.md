@@ -1,6 +1,6 @@
 # ElementsModel cull-direction precomputation — 2026-09-07
 
-**Status: ACTIVE exact-pack experiment.** This branch is not production. The
+**Status: LIMITED / INCONCLUSIVE hosted experiment.** This branch is not production. The
 candidate is disabled unless `-Dboot_optim.elementsCullDirectionCache=true` is
 present.
 
@@ -36,6 +36,24 @@ A small coherent hosted win can justify one physical laptop check because the
 operation is CPU-dense and the laptop's model-bake path has historically scaled
 about 5–9× versus the hosted four-processor surrogate. A neutral or negative
 hosted result closes this specific loop without spending a laptop launch.
+
+## Hosted A/B result (2026-09-07)
+
+The candidate activated successfully, with zero BootOptim Mixin errors and an
+unchanged `8192x8192x2` atlas. The three fresh-VM totals were:
+
+| Variant | Run 1 | Run 2 | Run 3 | Median |
+| --- | ---: | ---: | ---: | ---: |
+| candidate | 64,930 ms | 66,132 ms | 91,575 ms | 66,132 ms |
+| control | 93,771 ms | 95,727 ms | 74,592 ms | 93,771 ms |
+
+The nominal median delta is `-27,639 ms`, but it is not a coherent mechanism
+signal: the third candidate is `16,983 ms` slower than the third control while
+the first two candidate VMs are roughly 28–30 seconds faster than their
+controls. The exact-pack hosted VMs are too variable in this campaign to
+attribute the median movement to a direction-map micro-optimization. No laptop
+run is justified from this A/B, and the broader `ElementsModel` section remains
+open for a more discriminating premise or measurement.
 
 ## Reopening
 
