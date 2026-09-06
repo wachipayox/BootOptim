@@ -53,6 +53,19 @@ Both requested current-head campaigns therefore reproduce the favorable TTMM dir
 
 This is hosted software-pack evidence, not laptop-hardware equivalence. It establishes a coherent TTMM win and confirms that the normal exact-pack title path does not require CEF before BootOptim's main-menu boundary.
 
+### Physical laptop confirmation (2026-09-06)
+
+The exact production-head artifact was exercised on the final Windows laptop without rebooting between the two runs. Both runs used the same exact-pack instance, reached the main-menu marker, and exited cleanly; the original JAR and `instance.cfg` were restored afterwards. This is a useful hardware-sensitive confirmation, but it is not a clean cold-cache A/B because the candidate ran first and native MCEF download/cache state is shared between runs.
+
+| run | setting | main-menu | mod entrypoint | pre-title MCEF |
+| --- | --- | ---: | ---: | --- |
+| `mcef-pr90-physical-022` | `mcefFirstConsumerDefer=true` | **396.130 s** | **136.049 s** | not initialized |
+| `mcef-pr90-physical-023` | `mcefFirstConsumerDefer=false` | **664.775 s** | **317.437 s** | initialized before resource reload |
+
+The control log shows stock CEF initialization on the Render thread before the initial resource reload (`03:03:26`–`03:03:43`), while the candidate reached the title boundary with the real MCEF state still deferred. The candidate therefore improved the measured main-menu boundary by **268.645 s** in this run, but that magnitude must not be treated as a stable expectation: the control also performed its native checksum/download path during startup and the pair was intentionally not rebooted. The durable conclusion is narrower and stronger: on the target laptop, pre-title CEF work is a very large, hardware-sensitive critical-path cost, and first-consumer defer removes it without preventing the exact pack from reaching the menu.
+
+Physical artifacts: candidate SHA-256 `77841F17E771F0EA8F4A913D99D7B74EF1D8BA6DF15D21F2D02082AC0B888D8B`; restored stock SHA-256 `C0B20FA7874B6837297B78320910EBE755A250F8278F3BFA8246C0B3A80A5E25`.
+
 ## FancyMenu compatibility hardening
 
 FancyMenu `3.9.0-wedit` keeps its own `MCEFUtil.MCEF_initialized` bridge and some video/browser paths return before reaching `MCEF.getClient()` while that flag is false. Direct MCEF API guards alone were therefore insufficient.
@@ -95,6 +108,6 @@ Optional targets use `@Pseudo` / `require=0`; version mismatch, absent MCEF, sig
 
 ## Remaining boundary
 
-Hosted validation proves startup/title behavior and a real FancyMenu MCEF-video first consumer. A physical final check is still useful for Windows-native CEF timing/visual output and an in-world WebDisplays browser, but repetitive laptop A/B is not required to establish the mechanism.
+Hosted validation and the physical laptop confirmation prove startup/title behavior and a real FancyMenu MCEF-video first consumer. An in-world WebDisplays browser remains a separate semantic check; repetitive laptop A/B is not required to establish the mechanism, and the physical pair above should not be reused as a precise effect-size estimate.
 
 Relevant PRs: #78 rejected overlap experiment, #88 first-consumer experiment, #89 FancyMenu/static/dynamic compatibility audit, #90 production promotion and repeated current-head confirmation.
