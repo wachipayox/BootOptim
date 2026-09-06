@@ -19,6 +19,7 @@ on:
         options:
           - smoke
           - ab
+          - paired
       repetitions:
         description: A/B repetitions per variant (1-5)
         required: true
@@ -101,7 +102,7 @@ jobs:
               candidate_args = '\n'.join(directive('exact-pack-candidate-jvm-arg')).strip()
               control_args = '\n'.join(directive('exact-pack-control-jvm-arg')).strip()
 
-          if mode not in {'smoke', 'ab'}:
+          if mode not in {'smoke', 'ab', 'paired'}:
               raise SystemExit(f'Unsupported exact-pack mode: {mode}')
           try:
               repetitions = int(repetitions_text)
@@ -113,12 +114,21 @@ jobs:
           include = []
           if mode == 'smoke':
               include.append({'variant': 'smoke', 'iteration': 1, 'jvm_args': smoke_args})
-          else:
+          elif mode == 'ab':
               if candidate_args == control_args:
                   raise SystemExit('A/B mode requires candidate and control JVM args to differ.')
               for iteration in range(1, repetitions + 1):
                   include.append({'variant': 'control', 'iteration': iteration, 'jvm_args': control_args})
                   include.append({'variant': 'candidate', 'iteration': iteration, 'jvm_args': candidate_args})
+          else:
+              if candidate_args == control_args:
+                  raise SystemExit('Paired mode requires candidate and control JVM args to differ.')
+              for pair in range(1, repetitions + 1):
+                  include.append({
+                      'pair': pair,
+                      'control_jvm_args': control_args,
+                      'candidate_jvm_args': candidate_args,
+                  })
 
           matrix = json.dumps({'include': include}, separators=(',', ':'))
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
@@ -348,6 +358,7 @@ jobs:
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 
       - name: Launch exact pack to main menu
+        if: needs.plan.outputs.mode != 'paired'
         shell: bash
         run: |
           python scripts/exact-pack/run_startup.py \
@@ -355,17 +366,30 @@ jobs:
             --iteration ${{ matrix.iteration }} \
             --timeout 1200
 
+      - name: Launch paired control/candidate runs on this same VM
+        if: needs.plan.outputs.mode == 'paired'
+        shell: bash
+        env:
+          BOOTOPTIM_PAIRED_CONTROL_JVM_ARGS: ${{ matrix.control_jvm_args }}
+          BOOTOPTIM_PAIRED_CANDIDATE_JVM_ARGS: ${{ matrix.candidate_jvm_args }}
+        run: |
+          python scripts/exact-pack/run_paired.py \
+            --pair ${{ matrix.pair }} \
+            --timeout 1200 \
+            --rerun-tasks
+
       - name: Upload exact-pack run diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: exact-pack-result-${{ matrix.variant }}-${{ matrix.iteration }}
+          name: exact-pack-result-${{ matrix.variant || format('paired-{0}', matrix.pair) }}
           path: |
             result.json
             resource-selection-check.json
             resource-selection-reference.txt
             exact-pack-console.log
             exact-pack-thread-dump.log
+            paired-results/**
             xvfb.log
             glxinfo.txt
             hosted-runner.txt

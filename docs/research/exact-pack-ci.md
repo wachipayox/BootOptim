@@ -150,6 +150,28 @@ exact-pack-control-jvm-arg: -Dboot_optim.exampleFeature=false
 
 Multiple candidate/control JVM-arg lines are supported. Repetitions are limited to 1-5 per variant. Every matrix entry gets a fresh hosted VM, so candidate/control runs do not share JVM state, Minecraft process state or OS page cache.
 
+Same-VM paired diagnostic:
+
+```text
+[exact-pack-ci]
+exact-pack-mode: paired
+exact-pack-repetitions: 3
+exact-pack-candidate-jvm-arg: -Dboot_optim.exampleFeature=true
+exact-pack-control-jvm-arg: -Dboot_optim.exampleFeature=false
+```
+
+Paired mode is specifically for separating runner noise from an apparent A/B
+effect. Each matrix entry still gets a fresh hosted VM, but that VM launches
+both processes sequentially. Odd pairs run control then candidate; even pairs
+run candidate then control. The game reports, logs and result JSON are copied
+after each process into `paired-results/` before the next process starts. The
+pair therefore shares the VM, kernel, filesystem/page cache and Gradle caches,
+while each Minecraft process and its mutable benchmark reports are reset. Do
+not interpret the second process as a cold-start absolute measurement; compare
+within-pair deltas and inspect the alternating-order metadata. This mode is a
+diagnostic for the fresh-VM variance seen in ordinary A/B, not a replacement
+for the cold-start and physical-laptop gates.
+
 PR-body triggering is the durable contract because `agent/integration-current` is not the repository default branch. `workflow_dispatch` is also defined for environments where the workflow is available from the default branch.
 
 ## Evidence produced
