@@ -102,6 +102,19 @@ two-core laptop the smaller heap adds GC pressure rather than removing the
 dominant storage/model variance. The benchmark instance is restored to its
 original 6 GiB configuration after the run.
 
+## Follow-up hosted A/B with resource-open bypass
+
+After adding the safe stream-open bypass (activated only after the parse
+redirect has proved active), exact-pack run `34057909967` completed all 3+3
+fresh-VM repetitions with zero Mixin errors and unchanged `8192x8192x2` atlas.
+Candidate medians were `65.006 s` main-menu, `28.709 s`
+reload-to-FancyMenu and `2.909 s` panorama, versus `75.609 s`, `33.907 s` and
+`3.586 s` for control. The deltas were respectively `-10.603 s` (`-14.02%`),
+`-5.198 s` (`-15.33%`) and `-0.678 s` (`-18.89%`). This confirms that avoiding
+the repeated resource stream opens matters in addition to avoiding JSON parse
+work; the earlier `34054864798` A/B measured only the parse cache and showed a
+smaller `-3.259 s` median delta.
+
 ## Reopening / rejection criteria
 
 Reject or redesign if the target method no longer has the direct base-model

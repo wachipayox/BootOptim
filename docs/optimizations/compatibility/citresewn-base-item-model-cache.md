@@ -16,8 +16,9 @@ longer matches, the stock path remains active. The JVM kill switch is
 target class is present. The cache is reload-scoped and therefore needs no
 resource-pack persistence or invalidation protocol.
 
-Evidence: exact-pack A/B showed `3960` requests, `3944` hits and no Mixin
-errors, with a median main-menu improvement of `3.259 s` on hosted runners.
+Evidence: exact-pack run `34057909967` showed `3960` requests, `3944` hits and
+zero Mixin errors, with a median main-menu improvement of `10.603 s` (`14.02%`)
+and reload-to-FancyMenu improvement of `5.198 s` (`15.33%`) on hosted runners.
 On the target HDD laptop the isolated CITResewn load/link span fell from
 `64.092 s` to `52.665 s` (`-11.427 s`, `-17.8%`) in a same-boot control/
 candidate pair. Total startup remains noisy; this entry deliberately claims
