@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import http.server
+import json
 import os
 import signal
 import subprocess
@@ -108,6 +109,30 @@ def wait_for_marker(process: subprocess.Popen, console_path: Path, timeout_secon
     return False, "timeout"
 
 
+def validate_variance_probe(console_log: Path, output_path: Path) -> None:
+    console_text = console_log.read_text(encoding="utf-8", errors="replace")
+    if "BOOTOPTIM_VARIANCE " not in console_text:
+        return
+    result = subprocess.run(
+        [sys.executable, "tools/laptop-bench/variance_probe.py", str(console_log)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output_path.write_text(result.stdout or result.stderr, encoding="utf-8", errors="replace")
+    if result.returncode != 0:
+        raise SystemExit(f"Variance-probe parser failed with exit {result.returncode}")
+    try:
+        payload = json.loads(result.stdout)
+        summary = next(iter(payload.values()))
+    except (json.JSONDecodeError, StopIteration, AttributeError) as exc:
+        raise SystemExit(f"Variance-probe summary was not valid JSON: {exc}") from exc
+    if not summary.get("valid"):
+        raise SystemExit(
+            "Variance-probe semantic gate failed: " + ", ".join(summary.get("invalid_reasons", []))
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--variant", required=True)
@@ -119,11 +144,12 @@ def main() -> None:
     console_log = root / "exact-pack-console.log"
     thread_dump = root / "exact-pack-thread-dump.log"
     result_json = root / "result.json"
+    variance_summary = root / "variance-probe-summary.json"
     latest_log = root / "run-pack-benchmark" / "logs" / "latest.log"
     startup_log = root / "run-pack-benchmark" / "logs" / "bootoptim-startup.log"
     selection_report = root / "resource-selection-check.json"
     selection_reference = root / "resource-selection-reference.txt"
-    for path in (console_log, thread_dump, result_json, selection_report, selection_reference):
+    for path in (console_log, thread_dump, result_json, variance_summary, selection_report, selection_reference):
         path.unlink(missing_ok=True)
 
     # Snapshot the fixture contract before launch; never derive expectations from
@@ -189,6 +215,10 @@ def main() -> None:
         )
         if any(pattern in latest_text for pattern in mixin_failures):
             raise SystemExit("BootOptim Mixin failure detected in exact-pack latest.log.")
+
+        # Diagnostic branches may emit early SERVICE-layer rows only to the captured console.
+        # Validate them strictly after Java has exited; never poll latest.log while Java runs.
+        validate_variance_probe(console_log, variance_summary)
 
         with selection_report.open("w", encoding="utf-8") as report:
             resource_check = subprocess.run(
