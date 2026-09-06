@@ -53,6 +53,7 @@ def run_variant(
     jvm_args: str,
     timeout: int,
     rerun_tasks: bool,
+    order_label: str,
 ) -> None:
     clear_runtime_logs(root)
     env = os.environ.copy()
@@ -77,6 +78,20 @@ def run_variant(
     destination = paired_root / f"{variant}-{pair}"
     destination.mkdir(parents=True, exist_ok=True)
     copy_if_exists(root / "result.json", destination / "result.json")
+    result_path = destination / "result.json"
+    if result_path.is_file():
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        result.update(
+            {
+                "paired_same_vm": True,
+                "paired_pair": pair,
+                "paired_order": order_label,
+            }
+        )
+        result_path.write_text(
+            json.dumps(result, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     copy_if_exists(root / "exact-pack-console.log", destination / "exact-pack-console.log")
     copy_if_exists(root / "exact-pack-thread-dump.log", destination / "exact-pack-thread-dump.log")
     copy_if_exists(
@@ -136,12 +151,18 @@ def main() -> None:
     # it to one variant.  Pair deltas are later interpreted together with this
     # order metadata, never as a cold-start absolute benchmark.
     if args.pair % 2:
-        sequence = (("control", control_args), ("candidate", candidate_args))
+        sequence = (
+            ("control", control_args, "control->candidate"),
+            ("candidate", candidate_args, "control->candidate"),
+        )
     else:
-        sequence = (("candidate", candidate_args), ("control", control_args))
+        sequence = (
+            ("candidate", candidate_args, "candidate->control"),
+            ("control", control_args, "candidate->control"),
+        )
 
     try:
-        for variant, jvm_args in sequence:
+        for variant, jvm_args, order_label in sequence:
             run_variant(
                 root,
                 paired_root,
@@ -150,6 +171,7 @@ def main() -> None:
                 jvm_args,
                 args.timeout,
                 args.rerun_tasks,
+                order_label,
             )
     finally:
         # Do not upload the last run a second time as root-level result.json.

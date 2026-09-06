@@ -219,6 +219,50 @@ def parse_aggregate(args):
         summary[variant]["decocraft_atlas_removed"] = median([row.get("decocraft_atlas_removed") for row in subset])
         summary[variant]["blocks_atlas"] = stable_text(atlas_text(row) for row in subset)
 
+    # Paired diagnostics carry an explicit pair/order marker.  Keep their
+    # within-VM deltas separate from the ordinary per-variant medians: the
+    # latter are useful for cold-start evidence, while the former answer
+    # whether a candidate survives a common runner and page-cache state.
+    paired_groups = {}
+    for row in rows:
+        if not row.get("paired_same_vm"):
+            continue
+        pair = row.get("paired_pair")
+        if pair is None:
+            continue
+        paired_groups.setdefault(str(pair), []).append(row)
+
+    paired_pairs = []
+    for pair_text, pair_rows in sorted(paired_groups.items(), key=lambda item: int(item[0])):
+        control_rows = [row for row in pair_rows if row.get("variant") == "control"]
+        candidate_rows = [row for row in pair_rows if row.get("variant") == "candidate"]
+        if not control_rows or not candidate_rows:
+            continue
+        control = control_rows[0]
+        candidate = candidate_rows[0]
+        paired_pairs.append(
+            {
+                "pair": int(pair_text),
+                "order": candidate.get("paired_order") or control.get("paired_order") or "unknown",
+                "deltas": {
+                    metric: (
+                        candidate.get(metric) - control.get(metric)
+                        if candidate.get(metric) is not None and control.get(metric) is not None
+                        else None
+                    )
+                    for metric in metrics
+                },
+            }
+        )
+    if paired_pairs:
+        summary["paired"] = {
+            "pairs": paired_pairs,
+            "median_deltas": {
+                metric: median(pair["deltas"].get(metric) for pair in paired_pairs)
+                for metric in metrics
+            },
+        }
+
     markdown = [
         "# Exact-pack startup benchmark",
         "",
@@ -249,6 +293,33 @@ def parse_aggregate(args):
                 pct = (delta / control * 100.0) if control else None
                 pct_text = f" ({pct:+.2f}%)" if pct is not None else ""
                 markdown.append(f"- `{metric}`: {delta:+,.1f} ms{pct_text}")
+
+    if paired_pairs:
+        markdown.extend(
+            [
+                "",
+                "## Same-VM paired deltas (candidate minus control)",
+                "",
+                "The rows below are within-VM process pairs, not cold-start medians. The order alternates to expose a warm-second-run bias.",
+                "",
+                "| Pair | Order | main_menu ms | post-mod ms | reload→FancyMenu ms | panorama ms |",
+                "| ---: | --- | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for pair in paired_pairs:
+            deltas = pair["deltas"]
+            markdown.append(
+                f"| {pair['pair']} | {pair['order']} | {format_ms(deltas.get('startup_total_ms'))} | "
+                f"{format_ms(deltas.get('post_mod_entrypoint_ms'))} | "
+                f"{format_ms(deltas.get('reload_to_fancymenu_finish_ms'))} | "
+                f"{format_ms(deltas.get('fancymenu_panorama_ms'))} |"
+            )
+        median_deltas = summary["paired"]["median_deltas"]
+        markdown.extend(["", "Paired median deltas:"])
+        for metric in metrics:
+            delta = median_deltas.get(metric)
+            if delta is not None:
+                markdown.append(f"- `{metric}`: {delta:+,.1f} ms")
 
     markdown_text = "\n".join(markdown) + "\n"
     Path(args.output).write_text(markdown_text, encoding="utf-8")
