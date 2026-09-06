@@ -6,6 +6,7 @@
   "client": [
     "client.AtlasSetVarianceBoundaryMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.BootstrapVarianceBoundaryMixin",
     "client.FancyMenuBrowserElementFirstConsumerMixin",
     "client.FancyMenuMcefBrowserFirstConsumerMixin",
     "client.FancyMenuMcefVideoFirstConsumerMixin",
