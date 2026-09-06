@@ -50,3 +50,8 @@ barato que mida CPU del hilo/proceso sólo durante las 132 esperas sin introduci
 otra carga significativa. El portátil fue restaurado al JAR stock SHA-256
 `8E1C68F2C91AED02057209252BBE221BF3B019C4E82FB20FE35809BAC2C08DB8` y la
 opción volvió a ausente.
+
+El seguimiento previsto con el diagnóstico de CPU de espera de BootOptim no
+se ejecutó: su artefacto no estaba preposicionado en el portátil. Por tanto no
+se hace ninguna afirmación de ahorro de CPU para el candidato; el portátil se
+restauró de nuevo tras cancelar la preparación.
