@@ -1,6 +1,6 @@
 # ModernFix reload parallelism lease audit (2026-09-06)
 
-Status: **REJECTED AS A PRODUCTION OPTIMIZATION; retain only as hardware-sensitive evidence**.
+Status: **REJECTED AS A PRODUCTION OPTIMIZATION; retain only as inconclusive hardware-sensitive evidence**.
 
 Related PRs: #14, #47, #109, #117, #120, #122, #124, #126.
 
@@ -40,6 +40,19 @@ The per-sample `result.json` files make the reload-local result weaker than the 
 Likewise TTMM per iteration is `90,401 vs 95,400`, `72,793 vs 66,583`, and `93,869 vs 94,036 ms`. The extreme fast second control sample materially determines the cohort median picture. Hosted variance is therefore larger than the measured direct effect, and two of three same-index reload-local comparisons regress.
 
 No process-CPU or reload-worker CPU metric is present in #126's `result.json`; the logs only establish `processors=4` and lease state/restoration. Therefore #126 cannot show that 3 -> 2 removes CPU contention even if its wall median survives.
+
+## Physical laptop replication
+
+The final Windows laptop was kept logged in and was not rebooted. Runs `025`/`027` used the same #126 artifact and exact-pack instance, with lease first and control second; runs `028`/`029` repeated the same artifact in reverse order (control first, lease second). Every run reached the main menu, logged successful lease restoration, and the original JAR/config were restored after the experiment.
+
+| order | run | lease | main menu | mod entrypoint | reload → FancyMenu |
+| --- | --- | --- | ---: | ---: | ---: |
+| lease → control | `025` | on | 427.170 s | 104.476 s | 231.206 s |
+| lease → control | `027` | off | 535.912 s | 193.159 s | 254.963 s |
+| control → lease | `028` | off | 444.332 s | 154.618 s | 218.405 s |
+| control → lease | `029` | on | 676.432 s | 365.481 s | 216.863 s |
+
+The first pair showed a `-23.757 s` reload interval and `-20.059 s` post-entrypoint movement for the lease, but `-88.683 s` of the total difference was already before mod entrypoint. The reversed pair showed only `-1.542 s` in reload interval while the lease run was `+232.100 s` slower overall and `+210.863 s` slower before mod entrypoint. The direct physical sign is therefore not reproducible; native MCEF/download, page-cache and other pre-entrypoint state dominate these no-reboot runs. This strengthens the no-promotion decision rather than supplying a hardware activation rule.
 
 ## Why an adaptive controller is not justified
 
@@ -83,6 +96,6 @@ The lease does not move OpenGL/render-thread work and #126's semantic smoke reac
 
 Reason: the only directly relevant hosted wall metric moves `-242 ms` at cohort median while per-sample reload-local comparisons are mixed and mostly negative; TTMM is dominated by unrelated cohort drift; and no CPU metric demonstrates the intended contention mechanism. There is no stable input from which to derive a safe adaptive policy.
 
-Retain #126 as hardware-sensitive evidence only. The concrete hardware prediction, if this lane is ever reopened, is narrow: a true 2-physical-core/4-thread machine with software-render/native/common-pool competition may benefit from reserving one logical slot where hosted 4-vCPU runners do not. That prediction is sufficiently hardware-specific that hosted CI cannot prove it, but it is not strong enough to justify another runtime branch now.
+Retain #126 as inconclusive hardware-sensitive evidence only. The concrete hardware prediction, if this lane is ever reopened, is narrow: a true 2-physical-core/4-thread machine with software-render/native/common-pool competition may benefit from reserving one logical slot where hosted 4-vCPU runners do not. The physical reversed pair did not reproduce the first signal, so another runtime branch is not justified now.
 
 Reopening requires **new evidence**, not another 3x3 of the same patch: a small physical discriminator on the exact 2C/4T target showing a repeatable improvement in reload->FancyMenu and TTMM together with process/reload CPU reduction. Any reimplementation should restore at `allPreparations`, preserve #126's exact executor/version/fail-open guards, and then pass one semantic smoke plus an interleaved A/B. Without that evidence, the lane remains closed.
