@@ -57,7 +57,7 @@ Después del par anterior se ejecutó una sola tanda con el mismo candidato y el
 diagnóstico opt-in de PR #113 (`boot_optim.fancymenuWaitCpuDiagnostic=true`,
 artefacto SHA-256 `39620D06E82BBD9EE89EBCFF4371C270EB3CF52FA32C8DA9025EA8F7F2D14D1E`),
 manteniendo `mcefFirstConsumerDefer=false` y autocierre al título. Llegó al menú
-sin errores nuevos y produjo:
+sin nuevos errores de BootOptim/Mixin y produjo:
 
 | métrica | candidato híbrido |
 | --- | ---: |
