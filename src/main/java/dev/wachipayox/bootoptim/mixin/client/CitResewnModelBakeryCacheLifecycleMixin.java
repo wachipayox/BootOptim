@@ -15,12 +15,12 @@ import java.util.Map;
 @Mixin(ModelBakery.class)
 abstract class CitResewnModelBakeryCacheLifecycleMixin {
     @Inject(method = "<init>", at = @At("HEAD"), require = 0)
-    private void bootoptim$beginCitResewnCache(BlockColors blockColors, ProfilerFiller profiler, Map<?, ?> blockModels, Map<?, ?> blockStates, CallbackInfo ci) {
+    private static void bootoptim$beginCitResewnCache(BlockColors blockColors, ProfilerFiller profiler, Map<?, ?> blockModels, Map<?, ?> blockStates, CallbackInfo ci) {
         CitResewnItemModelCache.beginReload();
     }
 
     @Inject(method = "<init>", at = @At("RETURN"), require = 0)
-    private void bootoptim$reportCitResewnCache(BlockColors blockColors, ProfilerFiller profiler, Map<?, ?> blockModels, Map<?, ?> blockStates, CallbackInfo ci) {
+    private static void bootoptim$reportCitResewnCache(BlockColors blockColors, ProfilerFiller profiler, Map<?, ?> blockModels, Map<?, ?> blockStates, CallbackInfo ci) {
         CitResewnItemModelCache.report();
     }
 }
