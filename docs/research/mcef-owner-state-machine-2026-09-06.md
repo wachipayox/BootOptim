@@ -46,7 +46,7 @@ The real BootOptim-owned initializer still bypasses the suppression hook through
 
 ## Deterministic harness
 
-`src/test/java/dev/wachipayox/bootoptim/compat/client/McefInitializationStateMachineHarness.java` uses only Java threads, `CountDownLatch`, and explicit checks. `build.gradle` registers `mcefCoordinatorHarness` and makes `check` depend on it, so normal `build` executes the harness without adding JUnit or any dependency.
+`src/mcefHarness/java/dev/wachipayox/bootoptim/compat/client/McefInitializationStateMachineHarness.java` uses only Java threads, `CountDownLatch`, and explicit checks. `build.gradle` defines a dedicated `mcefHarness` source set, registers `mcefCoordinatorHarness`, and makes `check` depend on it, so normal `build` executes the harness without adding JUnit, creating normal Gradle test classes, or changing production packaging.
 
 Run directly with:
 
