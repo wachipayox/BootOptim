@@ -113,7 +113,7 @@ The actual observer cost is measured rather than inferred. PR #148 requests host
 
 Validated head: `523a434dba87e00021f012da715039364599973a`.
 
-- Build `34040729707`: **success**; packaged artifact `bootoptim-39160bbc49e38840ae843d1283b8f0b6bce39b1a`, artifact id `9991595940`, artifact ZIP digest `sha256:21a1611b5d02950df95ac0b3bb7192b4795c014ce9510f05c833d6c2e7b89e5e`.
+- Build `34040729707`: **success**; packaged artifact `bootoptim-39160bbc49e38840ae843d1283b8f0b6bce39b1a`, artifact id `9991595940`, artifact ZIP digest `sha256:21a1611b5d02950df95ac0b3bb7192b4795c014ce9510f05c833d6c2e7b89e5e`. The artifact contains `bootoptim-ci.jar`, SHA-256 `ef7186ec8545d940ba021c82c86b9649adef433d3c3ff1852e4fe6bb7dd210be`.
 - normal Startup `34040729699`: **success** with the diagnostic property absent.
 - exact-pack run `34040729705`: **success** for control, candidate and aggregate.
 
@@ -151,7 +151,7 @@ Physical-run invariants:
 
 - keep the established exact-pack selection and order unchanged;
 - keep the established Java/heap/G1/processor settings unchanged;
-- replace only the BootOptim benchmark JAR with the packaged artifact for the validated PR head;
+- replace only the BootOptim benchmark JAR with `bootoptim-ci.jar` from artifact `9991595940` and verify its SHA-256 is `ef7186ec8545d940ba021c82c86b9649adef433d3c3ff1852e4fe6bb7dd210be` before launch;
 - add `-Dboot_optim.profileStartupVariance=true` while retaining the existing benchmark auto-exit property if the physical harness normally uses it;
 - do not purge caches, change drivers/OS settings, add JFR, poll `latest.log`, or change FancyMenu/MCEF properties for this run;
 - capture the whole Java process console through process exit, then run the offline parser; preserve `latest.log` as secondary evidence;
