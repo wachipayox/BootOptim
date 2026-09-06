@@ -28,6 +28,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 ## Research index
 
+- [Low-noise startup variance harness — 2026-09-06](startup-variance-harness-2026-09-06.md) — **ACTIVE DIAGNOSTIC / P0.2**: default-off monotonic JVM/process/GC/memory snapshots at early discovery, vanilla Bootstrap, reload/ModelManager/atlas/FancyMenu/title boundaries plus nanoTime-only listener barrier/turn/completion rows emitted after first title presentation; parser invalidates stale-JVM and ambiguous runs.
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
 - [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
