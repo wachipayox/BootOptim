@@ -51,7 +51,30 @@ otra carga significativa. El portátil fue restaurado al JAR stock SHA-256
 `8E1C68F2C91AED02057209252BBE221BF3B019C4E82FB20FE35809BAC2C08DB8` y la
 opción volvió a ausente.
 
-El seguimiento previsto con el diagnóstico de CPU de espera de BootOptim no
-se ejecutó: su artefacto no estaba preposicionado en el portátil. Por tanto no
-se hace ninguna afirmación de ahorro de CPU para el candidato; el portátil se
-restauró de nuevo tras cancelar la preparación.
+## Probe físico de CPU (no es un A/B de pared)
+
+Después del par anterior se ejecutó una sola tanda con el mismo candidato y el
+diagnóstico opt-in de PR #113 (`boot_optim.fancymenuWaitCpuDiagnostic=true`,
+artefacto SHA-256 `39620D06E82BBD9EE89EBCFF4371C270EB3CF52FA32C8DA9025EA8F7F2D14D1E`),
+manteniendo `mcefFirstConsumerDefer=false` y autocierre al título. Llegó al menú
+sin errores nuevos y produjo:
+
+| métrica | candidato híbrido |
+| --- | ---: |
+| llamadas de espera | 130 |
+| precarga FancyMenu (wall) | 36,782.066 ms |
+| precarga FancyMenu (CPU del hilo propietario) | 578.125 ms |
+| panorama (wall / CPU) | 30,217.910 / 406.250 ms |
+| slideshow (wall / CPU) | 1,822.068 / 0 ms |
+| `preload` del proceso (wall / CPU) | 36,928.307 / 21,281.250 ms |
+
+El control físico `variance-fixed-021` había medido, con el busy-spin stock,
+18,298 ms de espera y 18,234 ms de CPU del hilo propietario (16,360 / 16,282
+ms sólo en panoramas). Las tandas no son comparables para TTMM —la precarga
+candidata tuvo distinta caché/contención y tardó 36.8 s—, pero sí confirman la
+premisa mecánica: la opción híbrida elimina el consumo de CPU del busy-spin sin
+cambiar la frontera ni introducir excepciones. Esto no convierte el candidato
+en una optimización de pared: la decisión sigue siendo **NO-GO por defecto** y
+requiere un A/B emparejado que demuestre ahorro de tiempo crítico antes de
+activarlo. El portátil quedó restaurado al JAR stock, opciones y configuración
+originales.
