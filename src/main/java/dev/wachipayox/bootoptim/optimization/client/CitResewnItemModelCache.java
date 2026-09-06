@@ -8,6 +8,8 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import org.slf4j.Logger;
 
 import java.io.Reader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
@@ -28,7 +30,8 @@ public final class CitResewnItemModelCache {
     private static final LongAdder REQUESTS = new LongAdder();
     private static final LongAdder HITS = new LongAdder();
     private static final LongAdder MISSES = new LongAdder();
-    private static final LongAdder PARSED_BYTES_UNKNOWN = new LongAdder();
+    private static final LongAdder RESOURCE_OPEN_BYPASSES = new LongAdder();
+    private static volatile boolean PARSE_REDIRECT_ACTIVE;
 
     private CitResewnItemModelCache() {
     }
@@ -59,6 +62,7 @@ public final class CitResewnItemModelCache {
             return BlockModel.fromStream(reader);
         }
 
+        PARSE_REDIRECT_ACTIVE = true;
         REQUESTS.increment();
         BlockModel cached = BASE_MODELS.get(id);
         if (cached != null) {
@@ -72,6 +76,23 @@ public final class CitResewnItemModelCache {
         return existing == null ? parsed : existing;
     }
 
+    /**
+     * Once the parse redirect has proved active, cache hits do not need to open
+     * the same ZIP/HDD stream again. The caller still constructs and closes its
+     * Reader, so a zero-byte stream is sufficient because the parse redirect
+     * returns the already cached model. Before the first redirected parse this
+     * remains the stock open path, preserving fail-open behavior if a target
+     * mapping changes.
+     */
+    public static InputStream open(Resource resource) throws IOException {
+        ResourceLocation id = PENDING_ID.get();
+        if (enabled() && PARSE_REDIRECT_ACTIVE && id != null && BASE_MODELS.containsKey(id)) {
+            RESOURCE_OPEN_BYPASSES.increment();
+            return InputStream.nullInputStream();
+        }
+        return resource.open();
+    }
+
     /** Must run before CITResewn's TypeItem constructor hook on each resource reload. */
     public static void beginReload() {
         BASE_MODELS.clear();
@@ -79,7 +100,8 @@ public final class CitResewnItemModelCache {
         REQUESTS.reset();
         HITS.reset();
         MISSES.reset();
-        PARSED_BYTES_UNKNOWN.reset();
+        RESOURCE_OPEN_BYPASSES.reset();
+        PARSE_REDIRECT_ACTIVE = false;
     }
 
     /**
@@ -95,8 +117,9 @@ public final class CitResewnItemModelCache {
         if (requests == 0L) {
             return;
         }
-        LOGGER.info("BOOTOPTIM_CITRESEWN_BASE_MODEL_CACHE requests={} hits={} misses={} hit_rate_percent={} entries={}",
-                requests, HITS.sum(), MISSES.sum(), (HITS.sum() * 100L) / requests, BASE_MODELS.size());
+        LOGGER.info("BOOTOPTIM_CITRESEWN_BASE_MODEL_CACHE requests={} hits={} misses={} hit_rate_percent={} entries={} resource_open_bypasses={}",
+                requests, HITS.sum(), MISSES.sum(), (HITS.sum() * 100L) / requests, BASE_MODELS.size(),
+                RESOURCE_OPEN_BYPASSES.sum());
     }
 
     private static boolean isBaseItemModel(ResourceLocation id) {

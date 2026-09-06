@@ -11,6 +11,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.io.Reader;
+import java.io.InputStream;
+import java.io.IOException;
 import java.util.Optional;
 
 /** Optional, fail-open bridge for CITResewn's repeated base item-model parses. */
@@ -32,5 +34,13 @@ abstract class CitResewnTypeItemModelCacheMixin {
             require = 0)
     private BlockModel bootoptim$reuseParsedBaseModel(Reader reader) {
         return CitResewnItemModelCache.parse(reader);
+    }
+
+    @Redirect(
+            method = "loadUnbakedAssets",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/server/packs/resources/Resource;open()Ljava/io/InputStream;"),
+            require = 0)
+    private InputStream bootoptim$avoidRepeatedBaseModelOpen(Resource resource) throws IOException {
+        return CitResewnItemModelCache.open(resource);
     }
 }
