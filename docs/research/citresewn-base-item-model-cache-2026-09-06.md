@@ -48,6 +48,34 @@ separate HDD-cache variance from the optimization.
 Do not treat the 7,920 warning lines as the optimization target: muting them can
 reduce log overhead but does not remove the repeated model parsing.
 
+## Initial hosted evidence
+
+The exact-pack A/B workflow (run `34054864798`, three fresh VMs per side) loaded
+the same CITResewn path and reported `requests=3960`, `hits=3944`,
+`misses=16`, `hit_rate_percent=99` for every candidate run. There were no new
+Mixin errors and the atlas/block counts were unchanged. Candidate median
+time-to-main-menu was 88.511 s versus 91.770 s for control (-3.259 s,
+-3.55%); the resource-reload-to-FancyMenu median was 39.178 s versus 41.998 s
+(-2.820 s, -6.71%). The hosted machine has much faster storage than the target
+laptop, so this is confirmation that the bridge is active rather than a
+physical-laptop equivalence claim.
+
+## Physical variance evidence to reproduce
+
+Before this cache, the laptop's `Loading item CIT models` → `Linking baked
+models to item CITs` span was 40.1 s, 82.2 s, 37.6 s, 42.9 s and 33.3 s in
+the available runs. The corresponding total menu times ranged from 335.578 s
+to 505.143 s, with one contaminated 1,272.775 s run. This spread is consistent
+with repeated HDD reads/page-cache state and GC on a two-core machine. A
+control/candidate pair on the same boot is therefore required before claiming
+that the cache removes variance; a later cold/after-reboot sample is needed to
+separate page-cache effects from the code-level reduction.
+
+The 7,920 legacy-name warnings are a separate, secondary source of serialized
+logging work. `mute_warns=true` would hide diagnostics but must not be counted
+as a model-cache result; it should be tested independently only after this
+candidate's physical A/B.
+
 ## Reopening / rejection criteria
 
 Reject or redesign if the target method no longer has the direct base-model
