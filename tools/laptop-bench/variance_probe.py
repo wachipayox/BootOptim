@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 MARKER = "BOOTOPTIM_VARIANCE "
+LISTENER_MARKER = "BOOTOPTIM_VARIANCE_LISTENER "
 INT_FIELDS = {
     "seq", "scope", "mono_ns", "wall_epoch_ms", "jvm_start_epoch_ms", "uptime_ms",
     "thread_id", "gc_count", "gc_time_ms", "gc_count_delta", "gc_time_delta_ms",
@@ -16,10 +17,15 @@ FLOAT_FIELDS = {
     "heap_max_mib", "available_memory_mib", "elapsed_ms", "process_cpu_delta_ms",
     "owner_thread_cpu_delta_ms", "heap_used_delta_mib", "available_memory_delta_mib",
 }
+LISTENER_INT_FIELDS = {"reload_id", "index", "barrier_calls"}
+LISTENER_FLOAT_FIELDS = {
+    "prepare_done_ms", "apply_turn_ms", "complete_ms", "global_wait_ms", "order_wait_ms", "post_turn_ms",
+}
 REQUIRED = {
     ("transformation_service_construct", "point"),
     ("root_mod_discovery", "end"),
     ("dependency_discovery", "end"),
+    ("vanilla_bootstrap", "end"),
     ("mod_entrypoint", "point"),
     ("resource_reload", "end"),
     ("reload_all_preparations", "point"),
@@ -32,36 +38,54 @@ REQUIRED = {
     ("model_manager_reload", "end"),
     ("fancymenu_preload", "end"),
     ("main_menu_opening", "point"),
+    ("main_menu_presented", "point"),
 }
 
 
-def parse_line(line: str):
-    index = line.find(MARKER)
-    if index < 0:
-        return None
-    payload = line[index + len(MARKER):].strip()
+def _parse_payload(payload: str, int_fields, float_fields):
     record = {}
-    for token in payload.split():
+    for token in payload.strip().split():
         if "=" not in token:
             continue
         key, value = token.split("=", 1)
-        if key in INT_FIELDS:
+        if key in int_fields:
             try:
                 record[key] = int(value)
             except ValueError:
                 record[key] = None
-        elif key in FLOAT_FIELDS:
+        elif key in float_fields:
             try:
                 record[key] = float(value)
             except ValueError:
                 record[key] = None
         else:
             record[key] = value
+    return record
+
+
+def parse_line(line: str):
+    index = line.find(MARKER)
+    if index < 0:
+        return None
+    record = _parse_payload(line[index + len(MARKER):], INT_FIELDS, FLOAT_FIELDS)
     return record if record.get("phase") and record.get("event") else None
+
+
+def parse_listener_line(line: str):
+    index = line.find(LISTENER_MARKER)
+    if index < 0:
+        return None
+    record = _parse_payload(
+        line[index + len(LISTENER_MARKER):], LISTENER_INT_FIELDS, LISTENER_FLOAT_FIELDS)
+    return record if record.get("reload_id") is not None and record.get("index") is not None else None
 
 
 def parse_lines(lines: Iterable[str]):
     return [record for line in lines if (record := parse_line(line)) is not None]
+
+
+def parse_listener_lines(lines: Iterable[str]):
+    return [record for line in lines if (record := parse_listener_line(line)) is not None]
 
 
 def _scope_summaries(records):
@@ -104,12 +128,12 @@ def _scope_summaries(records):
     return summaries, warnings
 
 
-def summarize(records, max_early_uptime_ms=60_000):
+def summarize(records, max_early_uptime_ms=60_000, listeners=None):
     records = sorted(records, key=lambda row: (row.get("mono_ns") is None, row.get("mono_ns") or 0))
     invalid = []
     warnings = []
     if not records:
-        return {"valid": False, "invalid_reasons": ["no_variance_records"], "warnings": [], "scopes": [], "markers": []}
+        return {"valid": False, "invalid_reasons": ["no_variance_records"], "warnings": [], "scopes": [], "markers": [], "listeners": []}
 
     first = records[0]
     first_uptime = first.get("uptime_ms")
@@ -135,6 +159,9 @@ def summarize(records, max_early_uptime_ms=60_000):
                      and (menu_mono is None or row.get("mono_ns", 0) <= menu_mono)]
     if len(reload_starts) != 1:
         invalid.append(f"resource_reload_count_before_menu:{len(reload_starts)}")
+
+    if listeners is not None and not listeners:
+        invalid.append("missing_listener_lifecycle_rows")
 
     scopes, scope_warnings = _scope_summaries(records)
     warnings.extend(scope_warnings)
@@ -166,14 +193,18 @@ def summarize(records, max_early_uptime_ms=60_000):
         "warnings": warnings,
         "first_probe_uptime_ms": first_uptime,
         "jvm_start_epoch_ms": first.get("jvm_start_epoch_ms"),
-        "main_menu_uptime_ms": next((row.get("uptime_ms") for row in records
-                                      if row.get("phase") == "main_menu_opening" and row.get("event") == "point"), None),
+        "main_menu_opening_uptime_ms": next((row.get("uptime_ms") for row in records
+                                              if row.get("phase") == "main_menu_opening" and row.get("event") == "point"), None),
+        "main_menu_presented_uptime_ms": next((row.get("uptime_ms") for row in records
+                                                if row.get("phase") == "main_menu_presented" and row.get("event") == "point"), None),
         "scopes": scopes,
         "markers": markers,
+        "listeners": [] if listeners is None else listeners,
         "semantics": {
             "wall": "scope elapsed from System.nanoTime; async/inclusive scopes may overlap and must not be summed",
             "process_cpu": "cumulative Minecraft JVM CPU across all JVM threads; not decoder or listener-exclusive CPU",
             "owner_thread_cpu": "only emitted as a delta when start/end execute on the same thread",
+            "listener_rows": "nanoTime-only barrier/turn/completion lifecycle captured in-memory and logged after first title presentation; rows are not task CPU",
             "available_memory": "OS free/available physical memory snapshot; not a hard-fault or page-cache counter",
         },
     }
@@ -181,7 +212,11 @@ def summarize(records, max_early_uptime_ms=60_000):
 
 def analyze_file(path: Path, max_early_uptime_ms=60_000):
     lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
-    return summarize(parse_lines(lines), max_early_uptime_ms=max_early_uptime_ms)
+    return summarize(
+        parse_lines(lines),
+        max_early_uptime_ms=max_early_uptime_ms,
+        listeners=parse_listener_lines(lines),
+    )
 
 
 def main():
