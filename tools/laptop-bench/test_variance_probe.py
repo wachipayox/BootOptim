@@ -1,6 +1,6 @@
 import unittest
 
-from variance_probe import parse_line, summarize
+from variance_probe import parse_line, parse_listener_line, summarize
 
 
 class VarianceProbeParserTests(unittest.TestCase):
@@ -18,6 +18,16 @@ class VarianceProbeParserTests(unittest.TestCase):
         self.assertEqual(row["scope"], 3)
         self.assertEqual(row["elapsed_ms"], 250.0)
         self.assertEqual(row["available_memory_delta_mib"], -20.0)
+
+    def test_parse_deferred_listener_row(self):
+        row = parse_listener_line(
+            "[INFO] BOOTOPTIM_VARIANCE_LISTENER reload_id=1 index=4 class=x.Y barrier_calls=1 "
+            "prepare_done_ms=100.000 apply_turn_ms=250.000 complete_ms=300.000 global_wait_ms=120.000 "
+            "order_wait_ms=30.000 post_turn_ms=50.000 turn_result=success result=success"
+        )
+        self.assertEqual(row["reload_id"], 1)
+        self.assertEqual(row["index"], 4)
+        self.assertEqual(row["order_wait_ms"], 30.0)
 
     def record(self, phase, event, mono, uptime, scope=0, process=100.0, **extra):
         row = {
@@ -37,7 +47,7 @@ class VarianceProbeParserTests(unittest.TestCase):
         rows = [self.record("transformation_service_construct", "point", 1, 1000)]
         mono, uptime, scope = 2, 1100, 10
         scoped = [
-            "root_mod_discovery", "dependency_discovery", "resource_reload", "block_models",
+            "root_mod_discovery", "dependency_discovery", "vanilla_bootstrap", "resource_reload", "block_models",
             "block_states", "atlas_schedule_load", "model_bakery_init", "bake_models",
             "load_models", "model_manager_reload", "fancymenu_preload",
         ]
@@ -57,6 +67,8 @@ class VarianceProbeParserTests(unittest.TestCase):
         rows.append(self.record("mod_entrypoint", "point", mono, uptime, process=100.0 + mono))
         mono += 1; uptime += 100
         rows.append(self.record("main_menu_opening", "point", mono, uptime, process=100.0 + mono))
+        mono += 1; uptime += 100
+        rows.append(self.record("main_menu_presented", "point", mono, uptime, process=100.0 + mono))
         return rows
 
     def test_valid_state_and_scope_cpu_are_separate_from_wall(self):
@@ -82,6 +94,17 @@ class VarianceProbeParserTests(unittest.TestCase):
         summary = summarize(records)
         self.assertFalse(summary["valid"])
         self.assertIn("resource_reload_count_before_menu:2", summary["invalid_reasons"])
+
+    def test_missing_presented_frame_is_invalidated(self):
+        records = [row for row in self.valid_records() if row["phase"] != "main_menu_presented"]
+        summary = summarize(records)
+        self.assertFalse(summary["valid"])
+        self.assertIn("missing:main_menu_presented:point", summary["invalid_reasons"])
+
+    def test_analyzed_run_requires_listener_rows(self):
+        summary = summarize(self.valid_records(), listeners=[])
+        self.assertFalse(summary["valid"])
+        self.assertIn("missing_listener_lifecycle_rows", summary["invalid_reasons"])
 
 
 if __name__ == "__main__":
