@@ -33,3 +33,20 @@ resource selection, atlas dimensions, menu completion, zero BootOptim Mixin
 errors and no semantic/visual regression. A laptop run is justified only if
 the hosted candidate has a coherent reload-to-menu win; otherwise close it as
 another inclusive-only optimization.
+
+## Hosted A/B result — PR #142
+
+The exact-pack 3×3 completed with identical selected resource packs, atlas
+`8192x8192x2` and zero BootOptim Mixin errors in every run. The paired
+time-to-menu deltas (candidate minus control) were `+1.342 s`, `-4.578 s` and
+`-5.516 s`; the candidate median was `90.000 s` versus `92.442 s` for the
+control. This global signal is dominated by startup variance and a quantized
+90-second candidate run.
+
+The more relevant reload-to-FancyMenu medians were `41.207 s` candidate vs
+`41.310 s` control (`-103 ms`), with post-entrypoint medians `60.369 s` vs
+`60.736 s` (`-367 ms`). These are not a coherent end-to-end win at the hosted
+scale. The branch therefore remains a disabled candidate and is not promoted
+or shipped. A physical A/B would require a separately justified cold-cache
+protocol; do not spend repeated laptop starts on this branch merely because
+the inclusive profiler rows were large.
