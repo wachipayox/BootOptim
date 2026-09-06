@@ -134,6 +134,9 @@ public final class McefInitializationStateMachineHarness {
         rethrowThreadFailure(threadFailure);
         check(machine.state() == McefInitializationStateMachine.State.FAILED, "Error must leave terminal FAILED");
         check(machine.initializerThread() == null, "Error must clear initializer owner");
+        check(machine.beforeConsumer(Thread.currentThread(), false)
+                        == McefInitializationStateMachine.ConsumerAction.BYPASS,
+                "FAILED must be fail-open for later stock consumers");
     }
 
     private static void longWaitNeverPublishesAborted() throws Exception {
@@ -170,6 +173,7 @@ public final class McefInitializationStateMachineHarness {
         await(waiterEntered);
 
         check(!waiterDone.await(250, TimeUnit.MILLISECONDS), "waiter must not invent a timeout result");
+        check(!machine.abortBeforeInitialization(), "INITIALIZING must reject ABORTED publication from non-owner control paths");
         check(machine.state() == McefInitializationStateMachine.State.INITIALIZING,
                 "elapsed wait must leave global state INITIALIZING, never ABORTED");
         check(machine.initializerThread() == owner, "long wait must retain the same owner");
