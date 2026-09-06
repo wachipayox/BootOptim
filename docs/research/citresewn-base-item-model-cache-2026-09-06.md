@@ -76,6 +76,24 @@ logging work. `mute_warns=true` would hide diagnostics but must not be counted
 as a model-cache result; it should be tested independently only after this
 candidate's physical A/B.
 
+## Physical laptop A/B (6 GiB heap, no reboot)
+
+The valid control run reached the main menu in `381.011 s`; its CITResewn
+load-to-link span was `64.092 s`. A first candidate artifact was discarded
+because its wrapper still contained the pre-fix non-static constructor hook;
+the log showed the Mixin rejection and no cache marker, so its `426.378 s`
+total is not evidence.
+
+The corrected candidate reached the menu in `444.478 s`. It emitted
+`requests=3960 hits=3944 misses=16 resource_open_bypasses=3944` with no Mixin
+failure. Its CITResewn span was `52.665 s`, an isolated reduction of
+`11.427 s` (`17.8%`) despite the total startup moving in the opposite
+direction. During the run the Java process grew to about `5.4 GiB` private/
+working-set territory on the laptop's `8 GiB` system, making total startup a
+poor attribution metric. A follow-up with a 4 GiB Prism heap is in progress to
+test whether avoiding memory pressure narrows the tail and makes this win
+repeatable.
+
 ## Reopening / rejection criteria
 
 Reject or redesign if the target method no longer has the direct base-model
