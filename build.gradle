@@ -26,6 +26,14 @@ sourceSets.main.resources {
     exclude('src/generated/**/.cache')
 }
 
+sourceSets {
+    mcefHarness {
+        java.srcDir('src/mcefHarness/java')
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
 repositories {
 }
 
@@ -193,8 +201,8 @@ configurations {
 }
 
 var mcefCoordinatorHarness = tasks.register('mcefCoordinatorHarness', JavaExec) {
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
+    dependsOn sourceSets.mcefHarness.classesTaskName
+    classpath = sourceSets.mcefHarness.runtimeClasspath
     mainClass.set('dev.wachipayox.bootoptim.compat.client.McefInitializationStateMachineHarness')
 }
 
