@@ -17,12 +17,11 @@ import org.slf4j.LoggerFactory;
  * Low-noise resource-reload lifecycle tracing.
  *
  * <p>Listener hot-path observation is intentionally restricted to {@link System#nanoTime()}, atomics,
- * and the stock preparation barrier/future callbacks. No MXBean snapshot and no log formatting occurs
- * per listener while the initial reload is on the startup critical path. Listener rows are emitted only
- * after the first title frame is presented.</p>
+ * and the stock preparation barrier/future callbacks. No MXBean snapshot, logger lookup, or log formatting
+ * occurs per listener while the initial reload is on the startup critical path. Listener rows are emitted
+ * only after the first title frame is presented.</p>
  */
 public final class ReloadListenerVarianceProfiler {
-    private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/VarianceListeners");
     private static final AtomicInteger NEXT_RELOAD_ID = new AtomicInteger();
     private static final CopyOnWriteArrayList<ReloadTrace> RELOADS = new CopyOnWriteArrayList<>();
     private static final AtomicBoolean EMITTED = new AtomicBoolean();
@@ -97,7 +96,7 @@ public final class ReloadListenerVarianceProfiler {
         }
 
         private void emit() {
-            LOGGER.info(
+            logger().info(
                     "BOOTOPTIM_VARIANCE_RELOAD reload_id={} expected_listeners={} observed_listeners={} all_preparations_ms={} all_done_ms={} result={}",
                     id,
                     expectedListenerCount,
@@ -169,7 +168,7 @@ public final class ReloadListenerVarianceProfiler {
             long orderWait = prepared < 0L || turn < 0L || allPreparationsNanos < 0L
                     ? -1L : Math.max(0L, turn - Math.max(prepared, allPreparationsNanos));
             long postTurn = turn < 0L || complete < 0L ? -1L : Math.max(0L, complete - turn);
-            LOGGER.info(
+            logger().info(
                     "BOOTOPTIM_VARIANCE_LISTENER reload_id={} index={} class={} barrier_calls={} prepare_done_ms={} apply_turn_ms={} complete_ms={} global_wait_ms={} order_wait_ms={} post_turn_ms={} turn_result={} result={}",
                     reload.id,
                     index,
@@ -200,5 +199,13 @@ public final class ReloadListenerVarianceProfiler {
 
     private static String token(String value) {
         return value == null ? "null" : value.replaceAll("[^A-Za-z0-9_.$:/#-]", "_");
+    }
+
+    private static Logger logger() {
+        return LoggerHolder.LOGGER;
+    }
+
+    private static final class LoggerHolder {
+        private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/VarianceListeners");
     }
 }
