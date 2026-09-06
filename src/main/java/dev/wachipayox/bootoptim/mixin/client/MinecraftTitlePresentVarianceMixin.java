@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.VarianceProbe;
+import dev.wachipayox.bootoptim.profiling.client.ReloadListenerVarianceProfiler;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -26,6 +27,7 @@ abstract class MinecraftTitlePresentVarianceMixin {
         Minecraft minecraft = (Minecraft) (Object) this;
         if (minecraft.screen instanceof TitleScreen && BOOTOPTIM$PRESENT_REPORTED.compareAndSet(false, true)) {
             VarianceProbe.point("main_menu_presented");
+            ReloadListenerVarianceProfiler.emitAfterTitle();
             if (StartupProfiler.shouldExitAfterPresentedTitle()) {
                 minecraft.stop();
             }
