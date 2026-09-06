@@ -28,8 +28,8 @@ no se mueven cargas OpenGL, audio, vídeo ni callbacks a otro hilo.
 - `:common:compileJava :neoforge:build` del fork: correcto.
 - JAR construido y SHA-256 preposicionado en el portátil:
   `2D27BDE29DE21E1E3615A4BBA78DDB3BDFEF1E77746FFB8E7A981A9FDD6D905C`.
-- No está instalado todavía; la instancia que está en el mundo sigue usando el
-  JAR anterior.
+- Se instaló de forma temporal para el gate físico y después se restauró el JAR
+  stock; la instancia quedó sin la opción experimental.
 
 ## Gate físico inicial
 
