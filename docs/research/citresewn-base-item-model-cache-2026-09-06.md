@@ -94,6 +94,14 @@ poor attribution metric. A follow-up with a 4 GiB Prism heap is in progress to
 test whether avoiding memory pressure narrows the tail and makes this win
 repeatable.
 
+The 4 GiB follow-up reached the menu in `471.979 s`; the CITResewn span was
+`61.9 s` and the cache marker still showed `3944` open bypasses. It therefore
+did not improve this workload over the 6 GiB candidate (`444.478 s`, `52.665 s`
+CIT span). The heap change is rejected as a BootOptim recommendation: on this
+two-core laptop the smaller heap adds GC pressure rather than removing the
+dominant storage/model variance. The benchmark instance is restored to its
+original 6 GiB configuration after the run.
+
 ## Reopening / rejection criteria
 
 Reject or redesign if the target method no longer has the direct base-model
