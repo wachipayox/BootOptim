@@ -28,6 +28,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 ## Research index
 
+- [Laptop extreme startup variance causal ranking — 2026-09-06](laptop-extreme-variance-causal-ranking-2026-09-06.md) — **P0.2 TRIAGE / NO NEW RUNTIME PROBE**: stale-JVM contamination and ZIP/page-cache sensitivity are confirmed; scheduler/system contention and memory pressure rank as probable contributors, while shader-error symptoms are rejected as primary cause; defines one-run host-observation gate.
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
 - [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
