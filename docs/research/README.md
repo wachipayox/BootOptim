@@ -28,6 +28,7 @@ Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and ins
 
 ## Research index
 
+- [Early NeoForge / ModLauncher / FML physical-variance boundary — 2026-09-06](early-fml-physical-variance-boundary-2026-09-06.md) — **RESEARCH / NO RUNTIME CANDIDATE YET**: generic discovery, class-prewarm and transformed-class-cache directions remain closed/blocked, but BootOptim's own root-locator fallback can open every top-level mod JAR to rediscover its wrapper; defines a hosted-gated low-cardinality diagnostic and one-run physical discriminator before any optimization.
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
 - [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
