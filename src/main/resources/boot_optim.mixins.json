@@ -4,14 +4,21 @@
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "client.AtlasSetVarianceBoundaryMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.BootstrapVarianceBoundaryMixin",
     "client.FancyMenuBrowserElementFirstConsumerMixin",
     "client.FancyMenuMcefBrowserFirstConsumerMixin",
     "client.FancyMenuMcefVideoFirstConsumerMixin",
     "client.FancyMenuPanoramaPreloadMixin",
+    "client.FancyMenuVarianceMarkerMixin",
     "client.McefFirstConsumerDeferMixin",
+    "client.MinecraftTitlePresentVarianceMixin",
     "client.ModelBakeryDecocraftReuseMixin",
+    "client.ModelBakeryVarianceBoundaryMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
+    "client.ModelManagerVarianceBoundaryMixin",
+    "client.SimpleReloadInstanceVarianceMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
