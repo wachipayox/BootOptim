@@ -51,6 +51,25 @@ saving: the calls can overlap on reload workers, and this run has no same-boot
 unprofiled control. The physical startup total is also within the historical
 laptop spread, so no end-to-end delta is attributed to the probe.
 
+The combined boundary run `filepack-boundary-physical-003` adds the missing
+causal context. It reached the menu at `417,823 ms`; the resource reload
+covered about `208.472 s` from the reload marker to FancyMenu's finished
+marker. The aggregate ModelManager boundary started around JVM uptime
+`206,836 ms` and completed at `356,877 ms` (`150.041 s`). Atlas preparation
+completed at `302,067 ms` (`94.918 s` from its scheduling start), followed by
+ModelBakery construction, baking and synchronous model loading. The
+`model_manager_reload` future therefore remained the enclosing join, while
+the ZIP profiler measured only `1,321.009 ms` inclusive in this run
+(`list_resources` `1,104.620 ms`, `get_namespaces` `216.389 ms`), with
+`Glowing Trim Armors` accounting for `1,118.840 ms`.
+
+The two physical runs (5.276 s and 1.321 s inclusive) demonstrate substantial
+storage/page-cache variance. They do not justify summing the ZIP rows or
+claiming an end-to-end saving: the calls occur inside the broad atlas/model
+preparation window, and the boundary probe does not yet timestamp each ZIP
+call against a future. The evidence does justify a candidate only as a
+hardware-sensitive, bounded index experiment with strict equivalence gates.
+
 ## Gate
 
 1. Build and startup smoke must show zero BootOptim Mixin errors with the property disabled and enabled.
