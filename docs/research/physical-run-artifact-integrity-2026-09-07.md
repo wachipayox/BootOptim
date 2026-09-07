@@ -48,3 +48,20 @@ Every physical run must now:
 The corrected current-integration run is the first one eligible for a future
 baseline, but it must still be analyzed only after the PID and launcher have
 exited and the postflight hash is recorded.
+
+## Corrected baseline result
+
+The subsequent run used the corrected JAR and was observed only through its
+recorded Java PID until that PID disappeared. Its startup report began at
+`2026-09-07T08:22:50.709798300Z` and reached the menu at
+`367561 ms` (`mod_entrypoint=146171 ms`). It reported Java 25.0.4, four
+processors, a 6144 MiB heap, and the normal `mod_scan_cache`; it did not report
+the stale `resource_reload_pool` optimization. The postflight hash remained
+`03842956B7AF47CAB4C1C3AC94D16A2563A0A652EA7A49B1ACE3C7E528C329F6`, with
+exactly one active BootOptim JAR and no Java or Prism process left.
+
+The run is a valid **single corrected baseline**, not an A/B or a promotion
+claim. The latest log shows normal Realtek OpenAL initialization and no
+BootOptim Mixin failure. Existing pack warnings (missing model variants,
+Realms authentication, and EMF repeated-model warnings) remain separate
+follow-up signals; they do not invalidate the startup measurement.
