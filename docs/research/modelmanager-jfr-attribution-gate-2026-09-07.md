@@ -79,6 +79,23 @@ This is useful localization, not exclusive accounting: a sample can contain a
 frame from an overlapping future, and allocation weights still need a compact
 offline aggregator before any H1/H2/H3 decision.
 
+`analyze_modelmanager_jfr.py` performs that aggregation as a streaming
+post-process (it deliberately avoids the multi-hundred-MiB/GB JSON form):
+
+```text
+python scripts/exact-pack/analyze_modelmanager_jfr.py \
+  --recording diagnostics/modelmanager-jfr-hosted.jfr \
+  --start-time 2026-09-07T09:04:56.520981043Z \
+  --mod-entrypoint-ms 32577 --main-menu-ms 94807 \
+  --output diagnostics/modelmanager-jfr-hosted-analysis.json
+```
+
+On this smoke it reports 367/2,733 post-entry execution samples (13.4%) and
+about 4.30 GiB / 41.47 GiB weighted post-entry allocation samples (10.4%)
+whose stack contains one of the broad model markers. Both are far below the
+50% reopening threshold, and the marker matching is intentionally conservative
+evidence rather than an exclusive CPU/byte claim.
+
 ## Decision gate
 
 Reopen a production candidate only if the diagnostic supports one of these
