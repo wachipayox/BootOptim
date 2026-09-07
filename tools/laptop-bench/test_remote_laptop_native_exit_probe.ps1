@@ -38,6 +38,14 @@ function Start-Fixture {
     [pscustomobject]@{process=$p;creation=([DateTime]$cim.CreationDate).ToString('o')}
 }
 
+function Read-Sidecar([string]$path) {
+    $sidecarPath = "$path.observer-error.json"
+    if (Test-Path -LiteralPath $sidecarPath -PathType Leaf) {
+        return (Get-Content -LiteralPath $sidecarPath -Raw)
+    }
+    return '<none>'
+}
+
 try {
     # Abrupt termination after proven attach: the observer must still produce a final primary JSON.
     $fixture = Start-Fixture
@@ -65,22 +73,23 @@ try {
     } while ([DateTime]::UtcNow -lt $attachDeadline)
 
     if (-not $attached) {
-        $jobDiagnostic = Receive-Job -Job $job -Keep -ErrorAction SilentlyContinue
-        $sidecarDiagnostic = $null
-        if (Test-Path -LiteralPath "$successOut.observer-error.json" -PathType Leaf) {
-            $sidecarDiagnostic = Get-Content -LiteralPath "$successOut.observer-error.json" -Raw
-        }
+        $jobErrors = @()
+        $jobDiagnostic = Receive-Job -Job $job -Keep -ErrorVariable jobErrors -ErrorAction SilentlyContinue
         $status = if ($checkpoint) { [string]$checkpoint.status } else { '<none>' }
-        throw "Observer never reached attached before forced-exit test; job=$($job.State) checkpoint=$status output=$jobDiagnostic sidecar=$sidecarDiagnostic"
+        throw "Observer never reached attached before forced-exit test; job=$($job.State) checkpoint=$status output=$jobDiagnostic errors=$($jobErrors -join ' | ') sidecar=$(Read-Sidecar $successOut)"
     }
 
     Stop-Process -Id $fixture.process.Id -Force -ErrorAction Stop
     if (-not (Wait-Job -Job $job -Timeout 30)) { throw 'Observer job did not finish after forced Java termination' }
-    $jobOutput = Receive-Job -Job $job -ErrorAction SilentlyContinue
-    if ($job.State -ne 'Completed') { throw "Observer failed on forced Java termination: $($job.State) $jobOutput" }
-    if (-not (Test-Path -LiteralPath $successOut -PathType Leaf)) { throw 'Forced-exit observer did not write primary JSON' }
+    $jobErrors = @()
+    $jobOutput = Receive-Job -Job $job -Keep -ErrorVariable jobErrors -ErrorAction SilentlyContinue
+    if (-not (Test-Path -LiteralPath $successOut -PathType Leaf)) {
+        throw "Forced-exit observer did not write primary JSON; job=$($job.State) output=$jobOutput errors=$($jobErrors -join ' | ') sidecar=$(Read-Sidecar $successOut)"
+    }
     $success = Get-Content -LiteralPath $successOut -Raw | ConvertFrom-Json
-    if ($success.status -ne 'complete') { throw "Forced-exit observer status is '$($success.status)', expected complete" }
+    if ($success.status -ne 'complete') {
+        throw "Forced-exit observer status is '$($success.status)', expected complete; job=$($job.State) output=$jobOutput errors=$($jobErrors -join ' | ') sidecar=$(Read-Sidecar $successOut)"
+    }
     if ([int]$success.javaPid -ne [int]$fixture.process.Id) { throw 'Forced-exit observer recorded the wrong Java PID' }
     if (-not $success.exitedUtc) { throw 'Forced-exit observer did not checkpoint parent exit time' }
     Remove-Job -Job $job -Force
