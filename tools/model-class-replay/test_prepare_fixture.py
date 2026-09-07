@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -8,6 +9,7 @@ from pathlib import Path
 MODULE_PATH = Path(__file__).with_name("prepare_fixture.py")
 spec = importlib.util.spec_from_file_location("prepare_fixture", MODULE_PATH)
 module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 
@@ -48,7 +50,8 @@ class FixtureTests(unittest.TestCase):
             root = Path(tmp)
             (root / "resourcepacks").mkdir()
             with zipfile.ZipFile(root / "resourcepacks" / "one.zip", "w") as archive:
-                archive.writestr("assets/test/models/child.json", '{"parent":"test:base"}')
+                # Parent + textures gives child the deterministic highest feature score for limit=1.
+                archive.writestr("assets/test/models/child.json", '{"parent":"test:base","textures":{"side":"#all"}}')
                 archive.writestr("assets/test/models/base.json", '{"textures":{"all":"test:block/x"}}')
             (root / "options.txt").write_text('resourcePacks:["file/one.zip"]\n', encoding="utf-8")
             manifest = module.build(root, root / "out", 1, False)
