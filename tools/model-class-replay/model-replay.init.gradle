@@ -24,7 +24,8 @@ gradle.afterProject { project, state ->
         description = 'Runs the dependency-free-input real BlockModel replay self-tests.'
         dependsOn replay.classesTaskName
         classpath = replay.runtimeClasspath
-        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplaySelfTest')
+        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplayLauncher')
+        args '--bounded-self-test'
     }
 
     project.tasks.register('modelClassReplay', JavaExec) {
@@ -32,7 +33,7 @@ gradle.afterProject { project, state ->
         description = 'Runs real Minecraft/NeoForge BlockModel parsing and parent/material replay.'
         dependsOn replay.classesTaskName
         classpath = replay.runtimeClasspath
-        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplay')
+        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplayLauncher')
         doFirst {
             def manifest = project.findProperty('bootoptimModelReplayManifest')
             def output = project.findProperty('bootoptimModelReplayOutput')
