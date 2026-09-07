@@ -21,27 +21,17 @@ gradle.afterProject { project, state ->
 
     project.tasks.register('modelReplaySelfTest', JavaExec) {
         group = 'verification'
-        description = 'Runs the dependency-free-input real BlockModel replay self-tests.'
+        description = 'Runs the proven pre-parent real BlockModel headless smoke test.'
         dependsOn replay.classesTaskName
         classpath = replay.runtimeClasspath
-        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplayLauncher')
-        args '--bounded-self-test'
+        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplaySelfTest')
     }
 
-    project.tasks.register('modelClassReplay', JavaExec) {
+    project.tasks.register('modelReplayBootstrapBoundary', JavaExec) {
         group = 'verification'
-        description = 'Runs real Minecraft/NeoForge BlockModel parsing and parent/material replay.'
+        description = 'Reproduces the clean-JavaExec NeoForge LoadingModList bootstrap blocker.'
         dependsOn replay.classesTaskName
         classpath = replay.runtimeClasspath
         mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplayLauncher')
-        doFirst {
-            def manifest = project.findProperty('bootoptimModelReplayManifest')
-            def output = project.findProperty('bootoptimModelReplayOutput')
-            if (manifest == null || output == null) {
-                throw new GradleException('Set -PbootoptimModelReplayManifest=... and -PbootoptimModelReplayOutput=...')
-            }
-            setArgs(['--manifest', project.file(manifest).absolutePath,
-                     '--output-dir', project.file(output).absolutePath])
-        }
     }
 }
