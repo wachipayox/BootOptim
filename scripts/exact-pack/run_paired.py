@@ -52,7 +52,10 @@ def start_host_trace(root: Path):
     trace_handle = trace_path.open("w", encoding="utf-8", errors="replace")
     try:
         process = subprocess.Popen(
-            ["vmstat", "-w", "1"],
+            # -y omits vmstat's first since-boot aggregate. Without it, the
+            # first sample can describe the entire hosted VM lifetime rather
+            # than the paired benchmark interval.
+            ["vmstat", "-y", "-w", "1"],
             stdout=trace_handle,
             stderr=subprocess.STDOUT,
             text=True,

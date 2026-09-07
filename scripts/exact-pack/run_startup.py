@@ -6,7 +6,6 @@ import signal
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
 
 MARKER = "BOOTOPTIM_STARTUP phase=main_menu"
@@ -86,26 +85,20 @@ def tail(path: Path, count: int = 250) -> str:
     return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-count:])
 
 
-def wait_for_marker(process: subprocess.Popen, console_path: Path, timeout_seconds: int) -> tuple[bool, str]:
-    deadline = time.monotonic() + timeout_seconds
-    position = 0
-    carry = ""
-    while time.monotonic() < deadline:
-        time.sleep(1.0)
-        if console_path.exists():
-            with console_path.open("r", encoding="utf-8", errors="replace") as handle:
-                handle.seek(position)
-                chunk = handle.read()
-                position = handle.tell()
-            if chunk:
-                combined = carry + chunk
-                if MARKER in combined:
-                    return True, "marker"
-                carry = combined[-len(MARKER):]
-        code = process.poll()
-        if code is not None:
-            return False, f"process_exit_{code}"
-    return False, "timeout"
+def wait_for_process(process: subprocess.Popen, timeout_seconds: int) -> tuple[bool, str]:
+    """Wait without touching benchmark logs while the timed process is alive.
+
+    The pack benchmark enables ``exitOnTitle`` in the Gradle run configuration,
+    so process termination is the live synchronization point. Reading the
+    console once per second would add filesystem observer noise to the very
+    storage/cache behavior the benchmark is meant to measure. Endpoint and
+    marker validation happens only after this function returns.
+    """
+    try:
+        process.wait(timeout=timeout_seconds)
+        return True, f"process_exit_{process.returncode}"
+    except subprocess.TimeoutExpired:
+        return False, "timeout"
 
 
 def main() -> None:
@@ -162,26 +155,29 @@ def main() -> None:
             else:
                 kwargs["start_new_session"] = True
             process = subprocess.Popen(command, **kwargs)
-            marker_found, reason = wait_for_marker(process, console_log, args.timeout)
+            process_finished, reason = wait_for_process(process, args.timeout)
 
-        if not marker_found:
+        if not process_finished:
             capture_thread_dump(thread_dump)
             if process is not None:
                 terminate_tree(process)
             print(tail(console_log), file=sys.stderr)
-            if reason.startswith("process_exit_"):
-                raise SystemExit(
-                    f"Exact-pack benchmark exited before the main-menu marker ({reason})."
-                )
             raise SystemExit(
                 f"Exact-pack benchmark did not reach the main-menu marker within {args.timeout} seconds."
             )
 
-        # Give BootOptim's exit-on-title path time to flush logs and stop child JVMs.
-        try:
-            process.wait(timeout=45)
-        except subprocess.TimeoutExpired:
-            terminate_tree(process)
+        # This is the first console read. The process is already gone, so this
+        # validation cannot perturb the measured startup interval.
+        console_text = console_log.read_text(encoding="utf-8", errors="replace")
+        if MARKER not in console_text:
+            print(tail(console_log), file=sys.stderr)
+            raise SystemExit(
+                f"Exact-pack benchmark exited without the main-menu marker ({reason})."
+            )
+
+        # The process has exited, so log collection and endpoint validation are
+        # now safe. Do not infer success from process exit alone: the summary
+        # and resource-contract checks below remain authoritative.
 
         if not latest_log.is_file():
             raise SystemExit(f"Exact-pack run reached marker but latest.log is missing: {latest_log}")
