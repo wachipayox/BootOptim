@@ -20,7 +20,8 @@ jobs:
           $failed = $false
           foreach ($path in @(
             'tools/laptop-bench/remote_laptop_transaction.ps1',
-            'tools/laptop-bench/remote_laptop_interactive_run.ps1'
+            'tools/laptop-bench/remote_laptop_interactive_run.ps1',
+            'tools/laptop-bench/remote_laptop_native_exit_probe.ps1'
           )) {
             $tokens = $null
             $errors = $null
