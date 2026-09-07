@@ -19,6 +19,7 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 import dev.wachipayox.bootoptim.profiling.StartupReport;
@@ -34,6 +35,7 @@ import dev.wachipayox.bootoptim.profiling.StartupReport;
 public final class StrictElementsBakePlan {
     private static final String PROPERTY = "boot_optim.compiledElementsMaterialPlan";
     private static final FaceBakery FACE_BAKERY = new FaceBakery();
+    private static final AtomicBoolean ACTIVE_REPORTED = new AtomicBoolean();
 
     private final BlockElement[] elements;
     private final Direction[] directions;
@@ -170,8 +172,9 @@ public final class StrictElementsBakePlan {
     }
 
     public static void reportActive() {
-        if (Boolean.getBoolean("boot_optim.profileStartup")
-                || Boolean.getBoolean("boot_optim.benchmark.exitOnTitle")) {
+        if (ACTIVE_REPORTED.compareAndSet(false, true)
+                && (Boolean.getBoolean("boot_optim.profileStartup")
+                || Boolean.getBoolean("boot_optim.benchmark.exitOnTitle"))) {
             StartupReport.optimization("compiled_elements_material_plan", true,
                     "reload_local_direct_materials");
         }
