@@ -23,7 +23,7 @@ Only after that marker does BootOptim call the authoritative real `MCEF.initiali
 
 PR #144 is an open owner/waiter/re-entry hardening candidate around this forcing path. The supplied physical evidence says the complete closure persisted while testing that candidate, so this branch does not repeat or promote its state-machine change.
 
-## Exact upstream native boundary
+## Exact upstream/native-pack boundary
 
 MCEF `MCEF.initialize()` calls `CefUtil.init()`. On success it creates MCEF wrapper/client objects and logs `Chromium Embedded Framework initialized`. On a normal `false` return it dispatches failure callbacks, logs an error, calls `shutdown()`, and returns `false`; it does not deliberately terminate the JVM.
 
@@ -33,7 +33,12 @@ At the exact MCEF 1.21.1 source, `CefUtil.init()` performs:
 2. `CefApp.getInstance(cefSwitches, cefSettings)`;
 3. `cefAppInstance.createClient()`.
 
-The MCEF `1.21.1` branch pins `common/java-cef` to commit `eaeb3d4370aa3526ee237ad1981ad59af3de4dd1`. On Windows that exact java-cef code does the following:
+There are two java-cef provenance facts that must not be conflated:
+
+- the current public `CinemaMod/mcef:1.21.1` branch points its `common/java-cef` submodule at `eaeb3d4370aa3526ee237ad1981ad59af3de4dd1`;
+- BootOptim's pinned exact-pack harness explicitly supplies `-Dmcef.java.cef.commit=a78e832f9f13c2c688caea3d04d8b84fcd238d94` and downloads that JCEF build. This is the provenance relevant to the exact pack and therefore to the diagnostic guard.
+
+For the audited Windows bootstrap, `CefApp.java` is byte-identical at those two commits, and `native/context.cpp` at the exact-pack commit confirms the same `N_PreInitialize` / `CefInitialize` route. On Windows:
 
 - `CefApp.startup(...)` synchronously `System.load`s `d3dcompiler_47.dll`, `libGLESv2.dll`, `libEGL.dll`, `chrome_elf.dll`, `libcef.dll`, and `jcef.dll`, then returns `true`; Windows does **not** call `N_Startup` on this path;
 - `CefApp.getInstance(...)` constructs `CefApp` and calls `N_PreInitialize`, which records JVM/class-loader state;
@@ -58,7 +63,7 @@ A null OpenAL backend removes the observed OpenAL WER signature but the full cli
 
 The null-audio run disappearing around MCEF messages is suggestive but the two generic MCEF messages precede #90's suppression boundary. The missing discriminator is whether the run reached the first real consumer and, if so, whether it died while loading CEF/JCEF DLLs in `startup`, in `getInstance`, in `createClient/CefInitialize`, or only after `CefUtil.init` returned.
 
-This branch adds those markers, default-off. The probe requires both MCEF `2.1.6-1.21.1` **and** java-cef commit `eaeb3d4370aa3526ee237ad1981ad59af3de4dd1`; mismatch or unavailable provenance disables the probe without changing MCEF behavior.
+This branch adds those markers, default-off. The probe requires both MCEF `2.1.6-1.21.1` **and** the exact-pack java-cef commit `a78e832f9f13c2c688caea3d04d8b84fcd238d94`; mismatch or unavailable provenance disables the probe without changing MCEF behavior.
 
 ### GPU / render backend
 
@@ -130,7 +135,9 @@ Only if case 5 is reproduced with null audio and no OpenAL WER should the next c
 
 ## Hosted validation
 
-For PR #169 head before the final provenance-guard correction, Build, normal Startup Benchmark and Windows PowerShell parser all completed successfully. The normal hosted dev startup reached `main_menu` at `20662 ms` uptime. That dev job does not contain MCEF/FancyMenu, so it validates compile/package/fail-open behavior only, not the exact optional-target injections. Exact-pack was skipped for the PR and is **not** counted as a passed gate. The final provenance-guard commit must retain the same Build/Startup/tooling green state before this branch is used physically.
+An initial head passed Build, normal Startup Benchmark and the Windows PowerShell parser; the normal hosted dev startup reached `main_menu` at `20662 ms` uptime. That dev job does not contain MCEF/FancyMenu, so it validates compile/package/fail-open behavior only.
+
+The PR must also run an exact-pack smoke with `-Dboot_optim.mcefNativeBootstrapProbe=true`. That is the relevant hosted gate for proving the optional MCEF/JCEF injection points and provenance guard activate against the pinned pack. Even a green exact-pack smoke remains only surrogate evidence and does not validate the Windows native crash. Until the laptop reproduces with this branch: **sin evidencia física**.
 
 ## Risks
 
@@ -138,8 +145,8 @@ For PR #169 head before the final provenance-guard correction, Build, normal Sta
 - Windows may deny some `ProcessHandle.Info` fields; the probe degrades to `unknown` rather than changing behavior.
 - A native fail-fast can terminate the parent before buffered logs flush. The ordered last marker is therefore a boundary, not a stack trace.
 - Direct-child observation can miss a very short-lived helper or a grandchild. WER/exit code remain independent evidence.
-- `getJavaCefCommit()` provenance depends on MCEF's packaged manifest lookup; if unavailable or altered, the diagnostic disables itself rather than guessing mappings.
-- Hosted exact-pack can validate build/startup compatibility but cannot validate this Windows native/GPU/audio failure. Until the laptop reproduces with this branch: **sin evidencia física**.
+- `getJavaCefCommit()` provenance depends on MCEF's system-property/manifest lookup; if unavailable or altered, the diagnostic disables itself rather than guessing mappings.
+- Hosted exact-pack can validate build/startup compatibility but cannot validate this Windows native/GPU/audio failure.
 
 ## Public source anchors
 
@@ -148,5 +155,6 @@ For PR #169 head before the final provenance-guard correction, Build, normal Sta
 - BootOptim PR #163: merged transactional remote-laptop harness.
 - BootOptim PR #166: separate open P1 variance/ModelManager diagnostic build; not part of this native-crash fix.
 - BootOptim PR #168: integrated follow-up that makes the interactive runner executable and lifecycle fields durable.
+- BootOptim exact-pack workflow: pinned JCEF commit `a78e832f9f13c2c688caea3d04d8b84fcd238d94`.
 - MCEF `1.21.1`, version `2.1.6-1.21.1`: `MCEF.java`, `CefUtil.java`, `CefInitMixin.java`.
-- CinemaMod/java-cef exact submodule `eaeb3d4370aa3526ee237ad1981ad59af3de4dd1`: `CefApp.java`, `native/CefApp.cpp`, `native/context.cpp`, `native/jcef_helper.cpp`.
+- CinemaMod/java-cef exact-pack commit `a78e832f9f13c2c688caea3d04d8b84fcd238d94`: `CefApp.java`, `native/context.cpp`, `native/jcef_helper.cpp`.
