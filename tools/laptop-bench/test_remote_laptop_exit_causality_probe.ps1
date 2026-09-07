@@ -15,6 +15,7 @@ public final class ExitTreeFixture {
       new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), "ExitTreeFixture", "child").start();
       Thread.sleep(30000L);
     } else {
+      Thread.sleep(3000L);
       Process p = new ProcessBuilder("cmd.exe", "/c", "ping 127.0.0.1 -n 6 >nul & exit /b 9").start();
       p.waitFor();
       Thread.sleep(30000L);
@@ -36,10 +37,10 @@ try{
   do{Start-Sleep -Milliseconds 200;if(Test-Path $out){try{$s=Get-Content $out -Raw|ConvertFrom-Json}catch{}};if($s -and @($s.processes|Where-Object{$_.parentPid-ne$java.Id}).Count-gt0){break}}while([DateTime]::UtcNow-lt$deadline)
   if(-not$s){throw 'observer produced no checkpoint'}
   $grand=@($s.processes|Where-Object{$_.parentPid-ne$java.Id})
-  if($grand.Count-eq0){throw 'recursive descendant was not observed'}
+  if($grand.Count-eq0){$diag=$s|ConvertTo-Json -Depth 8 -Compress;throw "recursive descendant was not observed; status=$($s.status) state=$diag"}
   $deadline=[DateTime]::UtcNow.AddSeconds(12);$s=$null
   do{Start-Sleep -Milliseconds 200;$s=Get-Content $out -Raw|ConvertFrom-Json;$bad=@($s.processes|Where-Object{$_.exitCode-eq9});if($bad.Count-gt0){break}}while([DateTime]::UtcNow-lt$deadline)
-  if(@($s.processes|Where-Object{$_.exitCode-eq9}).Count-eq0){throw 'descendant exit code 9 was not persisted while parent stayed alive'}
+  if(@($s.processes|Where-Object{$_.exitCode-eq9}).Count-eq0){$diag=$s|ConvertTo-Json -Depth 8 -Compress;throw "descendant exit code 9 was not persisted while parent stayed alive; state=$diag"}
   Stop-Process -Id $java.Id -Force
   if(-not(Wait-Job $job -Timeout 20)){throw 'observer did not finish'}
   Receive-Job $job -ErrorAction SilentlyContinue|Out-Null
