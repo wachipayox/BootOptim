@@ -53,6 +53,24 @@ jfr print --events jdk.ObjectAllocationSample diagnostics/modelmanager-jfr-contr
 Use `bootoptim-startup.log` and the completed phase report to partition samples
 by the real monotonic boundaries. Do not sum inclusive listener/future scopes.
 
+### Hosted smoke result (2026-09-07)
+
+The first successful hosted smoke completed with the exact-pack workflow run
+`34103728083` (main menu `94,807 ms`, mod entrypoint `32,577 ms`). The wrapper
+produced a 14.8 MiB recording lasting 98 s with 3,988 execution samples and
+54,180 weighted allocation samples, so the observer path is operational and
+the recording is usable for offline inspection. A textual stack scan found
+374 execution-sample records mentioning `ModelManager`/`ModelBakery`/`BlockModel`
+and 859 allocation-sample records mentioning those frames; these are only
+coarse event counts, not exclusive CPU or byte percentages. FancyMenu's
+preloader also appeared in 143 execution samples. Therefore this run validates
+the diagnostic plumbing, but does **not** meet the production gate: it has not
+yet established exclusive phase-local dominance or classified the samples
+against the real ModelManager interval. Do not promote #160 or introduce a
+model cache from this smoke alone. The initial two hosted attempts failed for
+diagnostic lifecycle reasons (relative JFC path, then staging before the
+benchmark directory existed); both were fixed before this successful run.
+
 ## Decision gate
 
 Reopen a production candidate only if the diagnostic supports one of these
