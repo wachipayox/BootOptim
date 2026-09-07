@@ -6,6 +6,15 @@ Before starting a new optimization experiment, check this ledger and the linked 
 
 Repository agents must also read the root [`AGENTS.md`](../../AGENTS.md) and inspect both open and closed PR history for the subsystem before changing code. A successful experiment can remain unmerged; the integration tree is the authority for what is actually present.
 
+Every result in this ledger must identify its measurement origin and endpoint.
+Do not compare hosted, physical-laptop and fast-PC timings as if they were the
+same population, and do not mix `main_menu` with `main_menu_presented`.
+Launcher/fixture warm-up, process entrypoint, resource-reload critical-path
+markers, post-menu presentation and inclusive listener/task-sum timings remain
+separate buckets; overlapping values are never summed. On the Prism laptop,
+stop Prism before editing `instance.cfg` and confirm the effective JVM command
+line afterwards, because Prism may rewrite stale in-memory arguments on exit.
+
 ## Status vocabulary
 
 - **PROFILED** — diagnostic evidence only; no optimization conclusion yet.
