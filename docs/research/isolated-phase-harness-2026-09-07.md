@@ -1,6 +1,6 @@
 # Isolated phase and mechanism harness
 
-Status: **PROPOSED METHODOLOGY**
+Status: **ACTIVE METHODOLOGY / FIRST REPLAY IMPLEMENTATION**
 
 The full exact-pack launch is the final integration gate, not the only place where
 an optimization should be designed. Most experiments can be moved to cheaper,
@@ -100,15 +100,31 @@ Artifacts must use the variant and repetition in their name. A missing origin,
 stale JVM prefix, mismatched endpoint, semantic mismatch, or incomplete fixture
 must make the result `invalid`/`inconclusive`, never a performance win.
 
-## Recommended first implementation
+## First implementation
 
-Start with a small `bench` source set (or a separate non-runtime Gradle project)
-for the material-resolution and blockstate-index fixtures. Reuse the existing
-bootstrap JUnit fixture conventions rather than adding a second production profiler.
-Then add one replay for the current ModelManager material-resolution hypothesis.
-Only after that runner can prove stock-equivalent outputs should it be connected to
-the hosted workflow as a separate `phase-replay` mode. The full exact-pack mode
-must remain unchanged and continue to validate the real reload graph.
+The first implementation lives under `tools/isolated-replay/`:
+
+* `pack_graph.py` scans model and blockstate JSON from the pinned exact-pack
+  extract, including mod/resource-pack archives, and creates parent/variant
+  dependency tasks;
+* `phase_replay.py` replays the resulting graph with deterministic worker and
+  ready-queue policies (`stock`, `critical-first`, `small-first`);
+* `.github/workflows/isolated-phase-replay.yml` creates one immutable graph fixture
+  and runs each policy in an independent Actions VM before publishing a summary.
+
+The graph currently assigns **relative model-complexity work units** from JSON
+size and structural counts. These units are deliberately not wall milliseconds:
+the resource-pack precedence approximation, disk latency, JVM/JIT, JSON library,
+registry callbacks and custom loaders are not yet represented. The tool is useful
+for visualising dependency and scheduling designs and for rejecting obviously bad
+policies, but it cannot promote a runtime optimization.
+
+The next fidelity step is to export per-task durations and barrier membership from
+the existing ModelManager boundary profiler and feed those measurements into the
+same graph schema. A later class-level replay can replace the estimator for a
+bounded material-resolution or blockstate fixture and compare semantic digests.
+The full exact-pack mode remains unchanged and continues to validate the real
+reload graph.
 
 This ordering gives fast iteration without weakening the project's evidence bar:
 cheap isolated rejection first, exact-pack validation second, and scarce physical
