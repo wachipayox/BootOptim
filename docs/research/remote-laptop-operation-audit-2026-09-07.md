@@ -2,64 +2,74 @@
 
 Base authority: `agent/integration-current` at `2bccf5f4fa221c78e286d052beb78636fa4c317b`.
 
-Status: tooling/documentation only. No Minecraft/NeoForge runtime, production optimization, Windows setting, Java installation, driver, power-plan, game behavior, profiler, or resource selection is changed by this branch.
+Status: tooling/documentation only. No Minecraft/NeoForge runtime, production optimization, Windows setting, Java installation, driver, power-plan, gameplay behavior, profiler, or resource selection is changed by this branch.
 
 ## Decision
 
-The remote laptop operation should be treated as a transaction, not as a sequence of ad-hoc SSH commands. The benchmark is valid only if the transaction proves all of these before Java enters the measured run:
+Remote laptop operation must be a recoverable transaction, not an ad-hoc sequence of SSH/PowerShell commands. A retained physical result must prove all of these conditions:
 
 1. Prism is fully stopped before `instance.cfg` is edited.
 2. No prior target `java.exe` or `javaw.exe` survives.
-3. Exactly one packaged BootOptim early-service wrapper is present in the live `mods` directory.
-4. The candidate wrapper SHA-256 is the expected artifact SHA-256.
-5. The launch task runs as the intended user with Task Scheduler `InteractiveToken`, in the same active Windows desktop session identified before launch.
-6. The newly-created Java process is identified by PID + creation time + instance path, not by process name alone.
-7. `Win32_Process.CommandLine` contains every required JVM argument, contains no forbidden/stale argument, and contains each required `-D...=` key exactly once. Duplicate `-Dboot_optim.*=` keys invalidate the run.
-8. No benchmark log/resource file is polled while Java is measuring.
-9. Java exits (normally via the already-established benchmark auto-exit contract); a timeout is an invalid run, not a timing result.
-10. Prism is fully closed before the exact original bytes of `instance.cfg` and the exact original BootOptim wrapper are restored and hash-verified.
+3. Exactly one BootOptim JAR exists in live `mods`, and it is the packaged early-service wrapper, not the inner regular-mod JAR.
+4. The candidate wrapper SHA-256 equals the expected artifact SHA-256.
+5. Prism is launched through Task Scheduler using the intended logged-on interactive account/session, not SYSTEM/S4U/an SSH service session.
+6. The new Java process is bound to instance path + PID + `CreationDate` + Windows `SessionId`; PID alone is never ownership proof.
+7. The effective Java command line is tokenized and validated in memory: every required JVM token occurs exactly once, forbidden tokens are absent, duplicate `-Dboot_optim.*` property keys are rejected, and singleton families such as `-Xmx`, `-Xms`, and `-XX:ActiveProcessorCount=` may not be duplicated.
+8. The raw effective command line is **not persisted**, because launcher arguments may contain account/access-token material. The state keeps only a SHA-256 of the raw line plus safe validated BootOptim property keys/required tokens.
+9. After identity validation the runner performs a blocking process wait; it does not poll logs, resources, WMI/process state, Task Scheduler, or JVM profilers during the accepted run.
+10. A timeout is invalid/inconclusive, never TTMM. Prism must be closed before exact original `instance.cfg` and BootOptim bytes are restored and hash-verified.
 
-The new scripts in `tools/laptop-bench/` implement those transaction boundaries. They are not automatically invoked by CI or production code.
+The scripts in `tools/laptop-bench/` implement those boundaries and are default-off. The CI workflow only parses their Windows PowerShell syntax; it does not execute a physical benchmark.
 
-## Confirmed failure classes in existing evidence
+## Confirmed failures from project evidence
 
-### 1. Stale JVM provenance is a real invalidation, not a theoretical risk
+### Stale JVM provenance
 
-PR #130 records a physical campaign where `mod_entrypoint=985056 ms` while the visible FML/ModernFix phases were ordinary: the JVM had remained alive while Prism was being prepared. PR #147 quantified an unobserved `842.733 s` prefix. This run class must be rejected before aggregation.
+PR #130 records a physical campaign with `mod_entrypoint=985056 ms` while visible FML/ModernFix phases were ordinary: the JVM had remained alive during Prism preparation. PR #147 quantified an unobserved `842.733 s` prefix. Such runs are invalid before aggregation.
 
-Therefore process matching must cover **both** `java.exe` and `javaw.exe`, and the accepted process must be newly created for the selected Prism instance. A process-name-only `Get-Process java` check is insufficient.
+This is why the transaction checks both `java.exe` and `javaw.exe` and refuses any pre-existing process whose command line identifies the target instance.
 
-### 2. Prism can silently defeat an intended JVM-property change
+### Prism overwriting intended JVM arguments
 
-`AGENTS.md` and the corrected P0.2 variance run record the operational rule: stop Prism before editing `instance.cfg`, because Prism can write its in-memory settings on exit. The first P0.2 launch was discarded after the intended variance property was absent from the effective run; only the corrected launch was evidence.
+`AGENTS.md`, PR #157 and the corrected P0.2 variance record establish the operational rule: stop Prism before editing `instance.cfg`, then verify the *effective* Java command line on the next launch. The first P0.2 launch was discarded because Prism rewrote the JVM options without the intended variance property. Only the corrected run is evidence.
 
-The correct sequence is therefore **Prism exit -> edit/stage -> launch -> inspect effective Java command line -> measure -> Java exit -> Prism exit -> restore**. Restoring `instance.cfg` while Prism is still alive is unsafe because Prism may rewrite it again afterward.
+Correct sequence:
 
-### 3. Resource packs existing on disk does not prove the exact workload was selected
+`Prism stopped -> Preflight -> Stage -> interactive launch -> effective command-line validation -> blocking Java wait -> Prism close -> Postflight/Recover`
 
-PR #103 proved that an isolated physical instance had resource ZIPs on disk but did not select them. Those historical timings cannot establish exact-pack performance. `tools/laptop-bench/check_resource_selection.py` remains the post-run selection gate; do not replace it with a directory count.
+Do not restore `instance.cfg` while Prism is alive; it may subsequently save stale in-memory values over the restored file.
 
-### 4. Duplicate/wrong BootOptim packaging is a concrete harness hazard
+### Wrong/duplicate BootOptim JAR
 
-`AGENTS.md` requires exactly one BootOptim JAR in the instance `mods` directory before every benchmark and identifies `bootstrap/build/libs/` as the distributable wrapper. `bootstrap/src/main/java/dev/wachipayox/bootoptim/bootstrap/DiscoveryStartLocator.java` identifies the wrapper by the entry:
+`AGENTS.md` requires exactly one BootOptim JAR and identifies `bootstrap/build/libs/` as the distributable artifact. The transaction recognizes the wrapper by `dev/wachipayox/bootoptim/bootstrap/DiscoveryStartLocator.class` and separately recognizes the inner mod by `dev/wachipayox/bootoptim/BootOptim.class`. One inner JAR, two BootOptim JARs, or an ambiguous artifact is rejected.
 
-`dev/wachipayox/bootoptim/bootstrap/DiscoveryStartLocator.class`
+This is stronger than filename matching and prevents a renamed inner JAR from accidentally being accepted as the packaged benchmark artifact.
 
-The transaction script uses that exact marker rather than a filename glob. This catches renamed wrappers and avoids mistaking the root project's inner regular-mod JAR for the standalone benchmark artifact.
+### Resource files on disk are not workload proof
 
-### 5. Invisible-session launch is a credible methodology failure, but is not proven as the cause of a retained run
+Historical resource-selection work already proved that resource ZIPs may exist while not being selected. `tools/laptop-bench/check_resource_selection.py` remains a post-run gate. Counts of files/JARs/resources are correctness checks, not TTMM improvements.
 
-Microsoft Task Scheduler documents `TASK_LOGON_INTERACTIVE_TOKEN`: the user must already be logged on and the task runs only in an existing interactive session. `schtasks /IT` has the corresponding semantics. SYSTEM has no interactive logon, and S4U is not an interactive desktop token.
+## Hypotheses / prevented failure classes
 
-A direct SSH-created GUI process is therefore not accepted merely because its process exists. The robust contract is: discover one active Explorer/WTS session for the intended user, register the task with `LogonType Interactive`, and inside the scheduled runner assert that its own `SessionId` and the new Java process `SessionId` equal the preflight session. `Win32_Process` exposes `CommandLine`, `CreationDate`, and `SessionId`, so this does not require a Java profiler.
+### Invisible or wrong Windows session
 
-This is a prevention rule. Current public evidence does not prove that a retained BootOptim physical run actually executed invisibly.
+Public Task Scheduler documentation defines `TASK_LOGON_INTERACTIVE_TOKEN` as requiring an already logged-on user and running only in an existing interactive session. Therefore a GUI process created directly by the SSH service, SYSTEM, or S4U is not accepted merely because it exists.
 
-## Why encoded PowerShell is the SSH boundary
+The tooling resolves one `WTSActive` Explorer session for the intended account before launch, uses `New-ScheduledTaskPrincipal -LogonType Interactive -RunLevel Limited`, and the runner rechecks its own, Prism's and Java's `SessionId` against that session. This prevents invisible-session launches, but public BootOptim evidence does **not** prove that this was the cause of any already-retained physical run.
 
-Microsoft documents that `powershell.exe -EncodedCommand` takes Base64 of UTF-16LE text and is intended for commands with complex nested quoting. Use the SSH command line only to transport that one Base64 token. Put Windows paths, usernames, arrays, JVM flags and script invocation syntax inside the encoded script text.
+### PID reuse during recovery
 
-Example controller-side PowerShell:
+A recovery script that stores only a PID can kill an unrelated later process if Windows reuses the number. The tooling records `CreationDate` and `SessionId`; `Recover -ForceStopOwned` kills only when the live process still matches the recorded identity and expected executable class. A PID mismatch simply fails safe.
+
+### Staging collisions / partial copies
+
+Candidate staging refuses an already-existing target path rather than overwriting it. Candidate copy uses a GUID-suffixed temporary file, verifies SHA-256, moves to the final `.jar`, and removes any leftover temporary in `finally`. Recovery refuses to delete unexpected BootOptim artifacts.
+
+## SSH / PowerShell quoting boundary
+
+Use SSH only to transport one Base64 token. Microsoft documents `powershell.exe -EncodedCommand` as Base64 over UTF-16LE and specifically intended for commands with complex nested quoting.
+
+Controller-side example:
 
 ```powershell
 $remote = @'
@@ -68,12 +78,13 @@ $remote = @'
   -RunId 'agent41-example-001' `
   -InstanceRoot 'C:\path with spaces\Prism\instances\Exact Pack' `
   -PrismExe 'C:\path with spaces\PrismLauncher.exe' `
+  -PrismRoot 'C:\path with spaces\Prism' `
   -InstanceId 'Exact Pack' `
-  -InteractiveUser 'wachi' `
+  -InteractiveUser 'MACHINE\wachi' `
   -ArtifactJar 'C:\bench\staging\bootoptim.jar' `
-  -ExpectedJarSha256 '<SHA256>' `
-  -JvmArgs '-Dboot_optim.startupLog=true -Dboot_optim.autoExit=true' `
-  -RequiredJvmArg '-Dboot_optim.startupLog=true','-Dboot_optim.autoExit=true' `
+  -ExpectedJarSha256 '<64-hex-sha256>' `
+  -JvmArgs '-Xmx6G -XX:ActiveProcessorCount=4 -Dboot_optim.startupLog=true -Dboot_optim.autoExit=true' `
+  -RequiredJvmArg '-Xmx6G','-XX:ActiveProcessorCount=4','-Dboot_optim.startupLog=true','-Dboot_optim.autoExit=true' `
   -ForbiddenJvmArg '-Dboot_optim.profileStartupVariance=true' `
   -TimeoutSeconds 900
 '@
@@ -81,99 +92,86 @@ $b64 = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($remote))
 ssh <host> "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand $b64"
 ```
 
-Do not build an SSH command such as `ssh host powershell -Command "... 'C:\path with spaces' ..."` with three quoting grammars interleaved. Do not put secrets in the encoded command: Base64 is transport encoding, not encryption.
+Prefer a qualified account such as `COMPUTER\user` or `DOMAIN\user` when available. Do not splice Windows paths/JVM flags directly through nested `ssh ... powershell -Command "..."` quoting. Base64 is transport encoding, not encryption; do not place secrets in the encoded command.
 
-## Transaction interface
+## Interface
 
-The state root defaults to `%LOCALAPPDATA%\BootOptimBench\<RunId>\state.json`. A pre-existing transaction blocks another `Stage`; recovery is explicit.
+### `Preflight` — read-only
 
-### `Preflight` — read only
+Validates paths, `instance.cfg`, Prism executable, candidate SHA-256/type, exactly-one live packaged wrapper, absence of Prism/target Java, and exactly one matching `WTSActive` Explorer session. It reports hashes and session identity without modifying the instance.
 
-Checks the instance, `.minecraft`, `mods`, `instance.cfg`, Prism executable, candidate artifact and expected SHA-256; candidate wrapper marker; exactly one existing live BootOptim wrapper; no Prism; no target `java/javaw`; and exactly one WTS-active Explorer session for the requested user.
+### `Stage` — reversible mutation
 
-It reports the active session ID and original/candidate/config hashes. It does not touch the instance.
+Repeats preflight, backs up exact original `instance.cfg` and wrapper, persists transaction state **before** live mutation, replaces the wrapper with the candidate, hash-verifies it, and sets `OverrideJavaArgs=true` plus a complete `JvmArgs` value.
 
-### `Stage` — reversible mutation before launch
+`JvmArgs` is replaced, not appended to Prism's previous value. QSettings-sensitive backslashes/quotes are escaped; newline and NUL are rejected. Duplicate `OverrideJavaArgs`/`JvmArgs` keys in `instance.cfg` are rejected rather than silently editing one of several conflicting values.
 
-Repeats preflight, copies the exact original `instance.cfg` and original wrapper into the transaction backup, writes the transaction state **before** live mutation, replaces the live wrapper atomically enough to verify its SHA, requires exactly one live wrapper afterward, sets `OverrideJavaArgs=true`, and replaces (not appends to) `JvmArgs`.
+### `Run` — interactive launch
 
-`JvmArgs` is deliberately a complete benchmark value. Do not append a diagnostic flag to whatever Prism happened to retain: that is how obsolete arguments survive. The helper rejects quoted/newline/NUL JVM strings; keep path-bearing quoted arguments out of this benchmark contract rather than relying on ad-hoc QSettings escaping.
+Rechecks no Prism/target Java, same active session, unchanged staged `instance.cfg`, and exact candidate wrapper. It registers/uses an on-demand task with `LogonType Interactive`, `RunLevel Limited`, `MultipleInstances IgnoreNew`, and a bounded execution limit.
 
-### `Run` — interactive on-demand task
+The runner launches Prism with documented `-l <instance ID>` and optional `-d <application root>`. It performs low-rate, filtered Java discovery only until the target process appears, then refreshes CIM identity to close the PID-reuse race, tokenizes the raw command line with `CommandLineToArgvW`, validates it, stores only a hash/safe summary, and blocks on the verified Java handle.
 
-Rechecks no Prism/target Java, the active session ID, and exactly-one candidate JAR. It registers an on-demand Scheduled Task with:
+The 1-second discovery query is an unavoidable small observer effect before Java identity is known; there is no continuing sampler after acceptance. No claim should treat this tooling as measurement-zero-cost.
 
-- the specified user;
-- `LogonType Interactive`;
-- `RunLevel Limited` (no hidden elevation change);
-- `MultipleInstances IgnoreNew`;
-- a bounded task execution limit;
-- a PowerShell `-EncodedCommand` action that invokes `remote_laptop_interactive_run.ps1`.
-
-The runner launches Prism with `-l <instance ID>` (and `-d <Prism root>` when explicitly supplied), waits only for the new target Java to appear, captures the effective `Win32_Process` identity/command line once, validates it, then performs a blocking OS process wait. It does **not** poll `latest.log`, resource packs, filesystem counters, JVM MXBeans, WMI samples, or another profiler during the measurement.
-
-The default Java timeout is `900 s`. A value below `600 s` is rejected because the established physical regime is about `350–380 s` to menu; a five-minute guard can kill a valid slow run before the endpoint. Timeout remains an invalid diagnostic outcome and is never treated as TTMM.
+Default Java timeout is `900 s`; values below `600 s` are rejected because valid physical startup is already around `350–380 s`.
 
 ### `Status`
 
-Reads the transaction JSON and Task Scheduler state. Do not poll this repeatedly during the benchmark on the old HDD. Prefer no remote reads while `phase=measuring`; check after the normal auto-exit horizon.
+Reads transaction JSON. While phase is `launching`, `validating`, or `measuring`, the script suppresses the Task Scheduler query and reports `taskState=suppressed_during_run`. Operationally, do not poll `Status` during the timed startup; inspect it after the normal auto-exit horizon.
 
 ### `Postflight`
 
-Accepted only after the runner says `finished` or `invalid`. It refuses restoration while Prism or the target Java still exists, unregisters the task, removes the staged wrapper, restores the original wrapper and exact original `instance.cfg`, and verifies both hashes plus the exactly-one-JAR invariant.
+Allowed only after `finished`/`invalid`. It refuses restoration if the target Java or any Prism remains, unregisters the task, removes only the exact staged candidate, restores the exact original wrapper/config, and verifies hashes and exactly-one-wrapper invariant.
 
-Run the existing resource-selection checker and parsers only after this point, on completed logs/artifacts.
+Resource-selection parsing and other artifact reads happen after this point.
 
 ### `Recover`
 
-Uses the same exact-hash restoration path after an interrupted transaction. By default it refuses to kill a recorded process. `-ForceStopOwned` is an explicit recovery-only escape hatch and targets only the PIDs recorded by this transaction; it must never be used as a normal auto-close mechanism during timing.
+For interrupted transactions. Default behavior refuses to kill a still-owned process. `-ForceStopOwned` is recovery-only and requires matching PID + `CreationDate` + session + process class before killing. Unexpected BootOptim JARs block recovery instead of being deleted.
 
-## Effective command-line acceptance
+## What must not happen during the timed startup
 
-Use a required list containing the complete benchmark contract relevant to the run, for example the established auto-exit/startup marker property and any one diagnostic property that is intentionally enabled. Put known obsolete/foreign diagnostic properties in `-ForbiddenJvmArg`.
+- no Prism restart/close/edit after launch;
+- no `instance.cfg`, JAR or resource-pack copy/move/hash scan;
+- no repeated `latest.log`/startup-log reads;
+- no resource-selection checker until exit;
+- no repeated WMI/process/Task Scheduler polling over SSH after Java identity acceptance;
+- no cache purge, reboot, Defender/AV manipulation, Windows counter reset, Java/driver/power-plan change;
+- no second Java profiler/JFR for this remote-operation question;
+- no interpretation of timeout, task counts, marker counts, inclusive listener sums or instrumentation overhead as TTMM improvement.
 
-The runner also rejects repeated `-Dboot_optim.<key>=` keys even when the values happen to match. This prevents Java's last-property-wins behavior from hiding stale Prism arguments.
+A run that used instrumentation exceeding the intended fixed-memory envelope is diagnostic evidence, not a clean production timing comparison.
 
-When a particular Oracle JDK executable is part of the comparison contract, pass `-ExpectedJavaExe`; otherwise the tool records, but does not assume, the executable path. This distinguishes `java.exe` from `javaw.exe` without requiring one particular launcher choice.
+## Acceptance criteria for a retained physical result
 
-## What not to do during the measured interval
+All must pass:
 
-From Java process validation until Java exits:
-
-- no `Get-Content -Wait` / repeated reads of `latest.log`;
-- no recursive hashing or resource-selection scans;
-- no copying/moving BootOptim JARs or resource packs;
-- no edits/restoration of `instance.cfg`;
-- no Prism restart/close command;
-- no repeated WMI/process/Task-Scheduler polling from SSH;
-- no cache purge, antivirus manipulation, reboot, Windows counter reset, Java/driver/power-plan change;
-- no additional Java profiler/JFR solely for this remote-operation problem.
-
-A single blocking wait on the already-identified Java PID is sufficient for orchestration. Offline evidence collection happens after exit.
-
-## Acceptance checklist for a retained physical result
-
-A result may enter a timing table only when all are true:
-
-- measurement origin and endpoint are stated per `AGENTS.md`;
-- preflight and stage hashes are saved;
-- one WTS-active intended user/session is resolved;
-- exactly one packaged BootOptim wrapper is live and has the expected SHA-256;
-- no stale target Java or Prism process exists at launch;
-- the new Java PID/creation time belongs to the instance and the expected session;
-- effective command line contains every required JVM flag exactly as intended and no forbidden/duplicate BootOptim property;
-- the run reaches its semantic endpoint and is not a timeout;
-- the normal resource selection/order checker passes every effective reload;
-- stale JVM age/provenance gates pass;
-- `instance.cfg` and the original BootOptim JAR are restored byte/hash-exactly after Prism exits;
+- origin/start marker/endpoint are explicit (`main_menu` vs `main_menu_presented` is not mixed);
+- original and staged config/JAR hashes exist;
+- one intended `WTSActive` session is identified;
+- one packaged wrapper with expected SHA-256 is live;
+- no stale Prism/target Java exists at dispatch;
+- Java PID + `CreationDate` + instance path + session are consistent;
+- effective JVM tokens match the required contract exactly and contain no forbidden/duplicate BootOptim property keys or duplicate singleton memory/processor options;
+- semantic endpoint is reached; timeout is excluded;
+- effective resource-selection/order checker passes;
+- postflight restores exact original `instance.cfg` and wrapper hashes after Prism exits;
 - inclusive/task-count diagnostics are not converted into TTMM savings.
 
-The `350330 ms` corrected P0.2 result remains a physical observation from its documented origin. The supplied later `355582/361195 ms` diagnostic values can only be compared after their memory/instrumentation and transaction provenance satisfy the same contract; an instrumentation run exceeding the intended fixed-memory envelope is diagnostic evidence, not a clean production TTMM comparison.
+The corrected P0.2 result remains `350330 ms` to `main_menu` and `356274 ms` to `main_menu_presented`. Later `355582/361195 ms` diagnostic values should not be treated as clean production A/B evidence when their instrumentation exceeded the intended memory envelope; they remain useful diagnostic observations only.
 
-## External references
+## Residual risks
 
-- Microsoft PowerShell `-EncodedCommand`: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe?view=powershell-5.1
-- Microsoft Task Scheduler interactive token: https://learn.microsoft.com/en-us/windows/win32/api/taskschd/nf-taskschd-itaskfolder-registertask
-- Microsoft `schtasks /create` `/IT`: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create
-- Microsoft `Win32_Process`: https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process
+- Task Scheduler/WTS/session correctness is strongly checked, but this tooling has not itself been exercised on the private physical laptop from this PR.
+- Java discovery still requires a small number of filtered CIM reads before ownership can be established; after acceptance there is no polling.
+- `ForbiddenJvmArg` is an exact-token deny list. If a future benchmark needs to forbid a property key regardless of value, add an explicit key-level deny parameter rather than assuming substring semantics.
+- The command-line SHA proves which raw line was validated within a run but is not intended to reconstruct potentially sensitive launcher arguments.
+
+## Public references
+
+- PowerShell `-EncodedCommand`: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe?view=powershell-5.1
+- Task Scheduler interactive token: https://learn.microsoft.com/en-us/windows/win32/taskschd/taskfolder-registertask
+- `New-ScheduledTaskPrincipal`: https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal
+- `Win32_Process`: https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process
 - Prism CLI: https://prismlauncher.org/wiki/getting-started/command-line-interface/
