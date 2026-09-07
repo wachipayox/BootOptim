@@ -59,6 +59,14 @@ def resource_names(pack_root: Path) -> list[tuple[str, str, bytes]]:
         if logical_id(relative):
             result.append(("pack-root", relative, path.read_bytes()))
 
+    resourcepacks_dir = pack_root / "resourcepacks"
+    if resourcepacks_dir.is_dir():
+        for resourcepack_root in sorted(path for path in resourcepacks_dir.iterdir() if path.is_dir()):
+            for path in sorted(resourcepack_root.rglob("*.json")):
+                relative = path.relative_to(resourcepack_root).as_posix()
+                if logical_id(relative):
+                    result.append((resourcepack_root.name, relative, path.read_bytes()))
+
     archives = sorted(
         path for directory in (pack_root / "mods", pack_root / "resourcepacks")
         if directory.is_dir()
