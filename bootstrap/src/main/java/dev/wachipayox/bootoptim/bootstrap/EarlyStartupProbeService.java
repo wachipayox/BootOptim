@@ -23,6 +23,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
     public EarlyStartupProbeService() {
         // ModLauncher's GAMEDIR is not populated yet while SERVICE implementations are constructed.
         // Delay every filesystem decision until initialize(IEnvironment), which runs after argument parsing.
+        BootstrapVarianceProbe.point("transformation_service_construct");
         BootOptimRuntimeInfo.version();
         mark("transformation_service_construct");
     }
@@ -34,6 +35,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public void initialize(IEnvironment environment) {
+        BootstrapVarianceProbe.Stamp variance = BootstrapVarianceProbe.start("transformation_service_initialize");
         Path fallback = Path.of(System.getProperty("user.dir", "."));
         Path gameDirectory = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).orElse(fallback);
         boolean authoritative = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).isPresent();
@@ -57,11 +59,13 @@ public final class EarlyStartupProbeService implements ITransformationService {
         StartupDiagnostics.cache("mod_scan_cache_path="
                 + config.gameDirectory().resolve(".bootoptim").resolve("mod-scan-cache-v1"));
         mark("transformation_service_initialize");
+        BootstrapVarianceProbe.finish("transformation_service_initialize", variance);
     }
 
     @Override
     public void onLoad(IEnvironment environment, Set<String> otherServices) {
         mark("transformation_service_on_load");
+        BootstrapVarianceProbe.point("transformation_service_on_load");
     }
 
     @Override

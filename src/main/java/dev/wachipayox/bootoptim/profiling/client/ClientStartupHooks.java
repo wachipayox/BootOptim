@@ -27,7 +27,7 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitleOpening()) {
             Minecraft.getInstance().stop();
         }
     }
