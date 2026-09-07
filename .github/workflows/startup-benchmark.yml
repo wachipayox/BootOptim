@@ -89,8 +89,19 @@ jobs:
             exit 1
           fi
 
+          if grep -q 'cpw/mods/niofs/union/UnionFileSystem' startup-benchmark.log; then
+            echo 'Unexpected direct UnionFS mixin target/classloading warning remains.'
+            grep 'cpw/mods/niofs/union/UnionFileSystem' startup-benchmark.log || true
+            exit 1
+          fi
+
           early_marker="$(grep 'BOOTOPTIM_STARTUP phase=transformation_service_construct' startup-benchmark.log | tail -n 1 || true)"
           test -n "$early_marker"
+          grep -q 'BOOTOPTIM_RESOURCE_PHYSICAL kind=summary' startup-benchmark.log
+          grep -Eq 'BOOTOPTIM_RESOURCE_PHYSICAL stage=enumeration\.wall metric_kind=wall' startup-benchmark.log
+          grep -Eq 'BOOTOPTIM_RESOURCE_PHYSICAL stage=resource\.open_supplier metric_kind=task_sum' startup-benchmark.log
+          grep -Eq 'BOOTOPTIM_RESOURCE_PHYSICAL stage=resource\.read_bytes metric_kind=count' startup-benchmark.log
+          ! grep -Eq 'BOOTOPTIM_RESOURCE_PHYSICAL .*phase=outside_model_context' startup-benchmark.log
 
           config='run-benchmark/config/boot_optim.properties'
           report='run-benchmark/logs/bootoptim-startup.log'
@@ -102,6 +113,7 @@ jobs:
 
           echo "$early_marker"
           echo "$marker"
+          grep 'BOOTOPTIM_RESOURCE_PHYSICAL' startup-benchmark.log || true
           cat "$report"
           kill "$launcher_pid" 2>/dev/null || true
           pkill -P "$launcher_pid" 2>/dev/null || true
@@ -112,7 +124,7 @@ jobs:
             echo "\`$early_marker\`"
             echo "\`$marker\`"
             echo
-            echo 'Startup diagnostics validated.'
+            echo 'Physical resource-path diagnostics validated with explicit wall/task-sum labels.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark diagnostics
