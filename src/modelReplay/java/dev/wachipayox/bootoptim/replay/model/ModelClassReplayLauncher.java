@@ -1,18 +1,31 @@
 package dev.wachipayox.bootoptim.replay.model;
 
-import java.util.Arrays;
 import net.minecraft.server.Bootstrap;
 
-/** Minimal headless launcher that establishes Minecraft's registry bootstrap before ModelBakery references. */
+/** Reproduces the clean-JavaExec FML bootstrap boundary without fabricating LoadingModList state. */
 public final class ModelClassReplayLauncher {
     private ModelClassReplayLauncher() {}
 
     public static void main(String[] args) throws Throwable {
-        Bootstrap.bootStrap();
-        if (args.length > 0 && "--bounded-self-test".equals(args[0])) {
-            ModelClassReplaySelfTest.main(Arrays.copyOfRange(args, 1, args.length));
-            return;
+        try {
+            Bootstrap.bootStrap();
+        } catch (Throwable throwable) {
+            boolean featureFlagLoader = false;
+            for (StackTraceElement frame : throwable.getStackTrace()) {
+                if (frame.getClassName().equals("net.neoforged.neoforge.common.util.flag.FeatureFlagLoader")) {
+                    featureFlagLoader = true;
+                    break;
+                }
+            }
+            Throwable root = throwable;
+            while (root.getCause() != null) root = root.getCause();
+            if (featureFlagLoader && root instanceof NullPointerException
+                    && String.valueOf(root.getMessage()).contains("LoadingModList")) {
+                System.out.println("MODEL_CLASS_HEADLESS_BLOCKED boundary=Bootstrap.bootStrap blocker=FeatureFlagLoader/LoadingModList root=" + root.getClass().getName());
+                return;
+            }
+            throw throwable;
         }
-        ModelClassReplay.main(args);
+        throw new AssertionError("Expected clean JavaExec NeoForge bootstrap to require FML LoadingModList, but Bootstrap.bootStrap() succeeded");
     }
 }
