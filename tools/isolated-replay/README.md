@@ -2,7 +2,8 @@
 
 `pack_graph.py` builds the first pack-derived fixture by scanning model and
 blockstate JSON from the exact-pack extract (including mod/resource-pack
-archives), resolving parent/model references and emitting a dependency graph.
+archives), resolving parent/model references and emitting enumeration, parse and
+approximate parent-aware bake tasks.
 The task durations are deliberately labelled relative model-complexity work
 units; they are not wall milliseconds and are not a startup claim.
 

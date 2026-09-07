@@ -105,8 +105,8 @@ must make the result `invalid`/`inconclusive`, never a performance win.
 The first implementation lives under `tools/isolated-replay/`:
 
 * `pack_graph.py` scans model and blockstate JSON from the pinned exact-pack
-  extract, including mod/resource-pack archives, and creates parent/variant
-  dependency tasks;
+  extract, including mod/resource-pack archives, and creates enumeration,
+  parse and approximate parent-aware bake dependency tasks;
 * `phase_replay.py` replays the resulting graph with deterministic worker and
   ready-queue policies (`stock`, `critical-first`, `small-first`);
 * `.github/workflows/isolated-phase-replay.yml` creates one immutable graph fixture

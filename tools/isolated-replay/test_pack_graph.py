@@ -32,8 +32,8 @@ class PackGraphTests(unittest.TestCase):
             tasks = {task["id"]: task for task in fixture["tasks"]}
             self.assertEqual(fixture["metadata"]["models"], 3)
             self.assertEqual(fixture["metadata"]["blockstates"], 1)
-            self.assertIn("demo:block/parent", tasks["demo:block/child"]["depends_on"])
-            self.assertIn("demo:block/child", tasks["demo:thing"]["depends_on"])
+            self.assertIn("model:demo:block/parent", tasks["model:demo:block/child"]["depends_on"])
+            self.assertIn("model:demo:block/child", tasks["blockstate:demo:thing"]["depends_on"])
 
 
 if __name__ == "__main__":

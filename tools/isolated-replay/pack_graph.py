@@ -163,39 +163,84 @@ def build_fixture(pack_root: Path) -> dict[str, Any]:
             "size": len(content),
         }
 
-    tasks: dict[str, dict[str, Any]] = {}
+    tasks: dict[str, dict[str, Any]] = {
+        "enumerate:model": {
+            "id": "enumerate:model",
+            "kind": "model_enumeration",
+            "source": "pack-root",
+            "entry": "assets/*/models/**/*.json",
+            "duration_ms": round(0.5 + sum(item["kind"] == "model" for item in selected.values()) * 0.02, 6),
+            "depends_on": [],
+            "order": 0,
+        },
+        "enumerate:blockstate": {
+            "id": "enumerate:blockstate",
+            "kind": "blockstate_enumeration",
+            "source": "pack-root",
+            "entry": "assets/*/blockstates/*.json",
+            "duration_ms": round(0.5 + sum(item["kind"] == "blockstate" for item in selected.values()) * 0.02, 6),
+            "depends_on": [],
+            "order": 1,
+        },
+    }
     for index, resource_id in enumerate(sorted(selected)):
         item = selected[resource_id]
         value = item["value"]
         if item["kind"] == "model":
-            elements, textures, overrides, has_parent = model_metrics(value)
+            elements, textures, overrides, _ = model_metrics(value)
             parent = normalize_reference(value.get("parent"), item["namespace"])
-            dependencies = [parent] if parent in selected else []
+            dependencies = ["enumerate:model"]
+            if parent in selected:
+                dependencies.append(f"model:{parent}")
             # These are relative work units, intentionally not milliseconds. The
             # graph is calibrated later with real profiler totals if needed.
             work = 1.0 + item["size"] / 1024.0 + elements * 0.5 + textures * 0.1 + overrides * 0.2
+            task_id = f"model:{resource_id}"
+            tasks[task_id] = {
+                "id": task_id,
+                "kind": "model_parse",
+                "source": item["source"],
+                "entry": item["entry"],
+                "duration_ms": round(work, 6),
+                "depends_on": dependencies,
+                "order": index + 10,
+            }
+            bake_dependencies = [task_id]
+            if parent in selected:
+                bake_dependencies.append(f"bake:{parent}")
+            tasks[f"bake:{resource_id}"] = {
+                "id": f"bake:{resource_id}",
+                "kind": "model_bake",
+                "source": item["source"],
+                "entry": item["entry"],
+                "duration_ms": round(max(0.5, work * 0.8 + elements * 0.3), 6),
+                "depends_on": bake_dependencies,
+                "order": index + 10_000,
+            }
         else:
             references = sorted(set(find_models(value, item["namespace"])))
-            dependencies = [reference for reference in references if reference in selected]
+            dependencies = ["enumerate:blockstate"]
+            dependencies.extend(f"model:{reference}" for reference in references if reference in selected)
             variant_count = sum(1 for _ in find_models(value, item["namespace"]))
             work = 1.0 + item["size"] / 1024.0 + variant_count * 0.2
-        tasks[resource_id] = {
-            "id": resource_id,
-            "kind": item["kind"],
-            "source": item["source"],
-            "entry": item["entry"],
-            "duration_ms": round(work, 6),
-            "depends_on": dependencies,
-            "order": index,
-        }
+            task_id = f"blockstate:{resource_id}"
+            tasks[task_id] = {
+                "id": task_id,
+                "kind": "blockstate_parse",
+                "source": item["source"],
+                "entry": item["entry"],
+                "duration_ms": round(work, 6),
+                "depends_on": dependencies,
+                "order": index + 20_000,
+            }
 
     cycle_edges_removed = break_cycles(tasks)
     manifest_hash = hashlib.sha256()
     manifest_hash.update(source_digest.digest())
     manifest_hash.update(json.dumps(tasks, sort_keys=True).encode("utf-8"))
     counts = {
-        "models": sum(task["kind"] == "model" for task in tasks.values()),
-        "blockstates": sum(task["kind"] == "blockstate" for task in tasks.values()),
+        "models": sum(item["kind"] == "model" for item in selected.values()),
+        "blockstates": sum(item["kind"] == "blockstate" for item in selected.values()),
     }
     return {
         "schema": SCHEMA,
@@ -207,7 +252,7 @@ def build_fixture(pack_root: Path) -> dict[str, Any]:
             "pack_root": str(pack_root),
             "duration_semantics": "relative_model_complexity_work_units",
             "resource_entries_considered": len(entries),
-            "logical_resources_selected": len(tasks),
+            "logical_resources_selected": len(selected),
             "cycle_edges_removed": cycle_edges_removed,
             **counts,
         },
