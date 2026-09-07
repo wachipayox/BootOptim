@@ -155,3 +155,37 @@ The corrected run materially changes priority: **the direct critical bottleneck 
 Therefore this branch makes **no runtime optimization**. A worker-count/adaptive-parallelism patch, generic baked-model cache, early atlas publication, JVM tuning or lazy complete-map publication would outrun the evidence or violate established compatibility boundaries. The next implementation should be selected only after the existing low-noise harness has a three-run physical distribution and current ModelBakery exclusive attribution. The strongest new architecture to keep on the roadmap is a strict-domain immutable preparation-plan cache with exact fingerprints/generations/fail-open semantics, but only if that attribution proves a material removable structural ceiling.
 
 Related evidence: #14, #36, #43, #47, #57, #59, #64, #65/#68, #69, #71/#72, #119, #126/#133, #132, #136–#142, #147 and #148.
+
+## Follow-up physical sample (2026-09-07)
+
+A single low-noise variance JAR from PR #148 was installed after verifying its
+SHA-256 (`ef7186ec8545d940ba021c82c86b9649adef433d3c3ff1852e4fe6bb7dd210be`).
+The run kept the production pack/JVM settings and added only
+`profileStartupVariance=true`. It reached both required endpoints, although
+the older diagnostic build did not honor the menu auto-exit flag; the process
+was force-stopped **after** `main_menu_presented` and all relevant rows had
+been emitted. The diagnostic JAR and property were then removed and the
+production JAR restored as the only active BootOptim file.
+
+Observed markers:
+
+- `main_menu_opening`: `355,582 ms`; `main_menu_presented`: `361,195 ms`;
+- resource reload: `166,355.705 ms`; all preparations: `123,797.845 ms`;
+- ModelManager final future: `130,955.212 ms`;
+- block states: `10,614.778 ms`; block models: `28,707.918 ms`;
+- atlas schedule/load: `36,540.344 ms`;
+- ModelBakery construction: `55,770.392 ms`;
+- `bakeModels`: `32,736.444 ms`; `loadModels`: `38,926.009 ms`;
+- `70/70` listener lifecycle rows, all successful;
+- process CPU at opening: about `990,031 ms`; GC: `169` collections / `15,311 ms`;
+- heap used at opening: `3,989.661 MiB`; available memory: `775.551 MiB`.
+
+This is a valid second physical sample for phase attribution, not a clean
+candidate/control result. It reproduces the same ordering: ModelBakery and
+the bake/load branch dominate the ModelManager future, while the machine is
+CPU-dense and reaches low available memory near the title boundary. The
+instrumentation's working set grew beyond `6 GiB` before the forced stop, so
+its absolute wall time must not be compared directly with production runs.
+One more comparable low-noise sample is still required before assigning the
+remaining run-to-run variance to CPU scheduling, memory pressure, storage or
+external OS activity.
