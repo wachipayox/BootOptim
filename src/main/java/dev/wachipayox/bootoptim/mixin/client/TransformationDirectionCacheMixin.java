@@ -7,9 +7,11 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
 /**
- * Stores the six immutable cull-direction results on the Transformation that
- * owns the matrix. The cache is lazy and dies with that Transformation object;
- * it is not a global model/resource-reload cache.
+ * Stores cull-direction results on the Transformation that owns the matrix.
+ * Both the array and each direction entry are lazy, so a transformation used
+ * by a model with one cull face pays for one mapping rather than all six. The
+ * cache dies with that Transformation object; it is not a global
+ * model/resource-reload cache.
  */
 @Mixin(Transformation.class)
 abstract class TransformationDirectionCacheMixin implements TransformationDirectionCacheAccess {
@@ -19,20 +21,24 @@ abstract class TransformationDirectionCacheMixin implements TransformationDirect
     @Override
     @Unique
     public Direction bootoptim$getCachedDirection(Direction direction) {
+        int ordinal = direction.ordinal();
         Direction[] cached = bootoptim$directionCache;
-        if (cached == null) {
+        Direction resolved = cached == null ? null : cached[ordinal];
+        if (resolved == null) {
             synchronized (this) {
                 cached = bootoptim$directionCache;
                 if (cached == null) {
+                    cached = new Direction[Direction.values().length];
+                    bootoptim$directionCache = cached;
+                }
+                resolved = cached[ordinal];
+                if (resolved == null) {
                     Transformation self = (Transformation) (Object) this;
-                    Direction[] computed = new Direction[Direction.values().length];
-                    for (Direction value : Direction.values()) {
-                        computed[value.ordinal()] = Direction.rotate(self.getMatrix(), value);
-                    }
-                    bootoptim$directionCache = cached = computed;
+                    resolved = Direction.rotate(self.getMatrix(), direction);
+                    cached[ordinal] = resolved;
                 }
             }
         }
-        return cached[direction.ordinal()];
+        return resolved;
     }
 }
