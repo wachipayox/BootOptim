@@ -24,8 +24,7 @@ gradle.afterProject { project, state ->
         description = 'Runs the dependency-free-input real BlockModel replay self-tests.'
         dependsOn replay.classesTaskName
         classpath = replay.runtimeClasspath
-        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplay')
-        args '--self-test'
+        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplaySelfTest')
     }
 
     project.tasks.register('modelClassReplay', JavaExec) {
