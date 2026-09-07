@@ -11,6 +11,7 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.McefFirstConsumerDeferMixin",
     "client.McefNativeBootstrapProbeMixin",
+    "client.MinecraftNativeExitProbeMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
