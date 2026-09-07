@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 
 import com.mojang.math.Transformation;
 import com.mojang.math.OctahedralGroup;
+import dev.wachipayox.bootoptim.optimization.client.TransformationDirectionCacheAccess;
 import dev.wachipayox.bootoptim.profiling.StartupReport;
 import net.minecraft.client.resources.model.BlockModelRotation;
 import net.minecraft.core.Direction;
