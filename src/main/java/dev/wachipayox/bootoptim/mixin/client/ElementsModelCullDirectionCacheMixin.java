@@ -45,6 +45,7 @@ abstract class ElementsModelCullDirectionCacheMixin {
     private static final boolean FIELD_CACHE_ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.elementsCullDirectionFieldCache", "false"));
     private static final AtomicBoolean REPORTED = new AtomicBoolean();
+    private static final AtomicBoolean FIELD_CACHE_REPORTED = new AtomicBoolean();
 
     @Shadow
     @Final
@@ -79,6 +80,7 @@ abstract class ElementsModelCullDirectionCacheMixin {
         Direction[] rotatedDirections = identityRotation
                 ? null
                 : new Direction[Direction.values().length];
+        boolean usedFieldCache = false;
 
         for (BlockElement element : elements) {
             for (Map.Entry<Direction, BlockElementFace> entry : element.faces.entrySet()) {
@@ -93,6 +95,7 @@ abstract class ElementsModelCullDirectionCacheMixin {
                 } else if (discreteRotation != null) {
                     builder.addCulledFace(discreteRotation.rotate(cullDirection), quad);
                 } else if (fieldCache != null) {
+                    usedFieldCache = true;
                     builder.addCulledFace(fieldCache.bootoptim$getCachedDirection(cullDirection), quad);
                 } else if (identityRotation) {
                     builder.addCulledFace(cullDirection, quad);
@@ -108,10 +111,21 @@ abstract class ElementsModelCullDirectionCacheMixin {
             }
         }
 
+        if (usedFieldCache && FIELD_CACHE_REPORTED.compareAndSet(false, true)) {
+            StartupReport.optimization(
+                    "elements_cull_direction_field_cache", true,
+                    "per_transformation_lazy_direction_map");
+        }
         if (REPORTED.compareAndSet(false, true)) {
             StartupReport.optimization(
                     "elements_cull_direction_cache", true,
-                    fieldCache != null ? "per_transformation_lazy_direction_map" : "per_model_state_direction_map");
+                    discreteRotation != null
+                            ? "block_model_discrete_rotation"
+                            : identityRotation
+                            ? "identity_rotation"
+                            : usedFieldCache
+                            ? "per_transformation_lazy_direction_map"
+                            : "per_model_state_direction_map");
         }
         ci.cancel();
     }
