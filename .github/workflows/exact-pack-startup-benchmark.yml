@@ -357,6 +357,10 @@ jobs:
             --extract .exact-pack-run \
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 
+      - name: Stage optional ModelManager JFR settings
+        shell: bash
+        run: cp scripts/exact-pack/modelmanager-attribution.jfc run-pack-benchmark/modelmanager-attribution.jfc
+
       - name: Launch exact pack to main menu
         if: needs.plan.outputs.mode != 'paired'
         shell: bash
