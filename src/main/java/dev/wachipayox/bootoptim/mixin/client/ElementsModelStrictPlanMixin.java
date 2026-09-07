@@ -37,6 +37,7 @@ abstract class ElementsModelStrictPlanMixin {
                 || blockContext.hasCustomGeometry()
                 || blockContext.getRenderTypeHint() != null
                 || !blockContext.getRootTransform().isIdentity()
+                || blockContext.owner.getElements() != elements
                 || !(blockContext.owner instanceof StrictElementsBakePlanHolder holder)) {
             return;
         }
