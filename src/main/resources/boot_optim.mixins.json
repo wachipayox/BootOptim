@@ -10,6 +10,7 @@
     "client.FancyMenuMcefVideoFirstConsumerMixin",
     "client.FancyMenuPanoramaPreloadMixin",
     "client.McefFirstConsumerDeferMixin",
+    "client.McefNativeBootstrapProbeMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
