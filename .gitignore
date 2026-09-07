@@ -41,3 +41,6 @@ repo/
 
 ### Local AI coordination (never publish relay prompts or answers) ###
 .agent-coordination/
+
+# Python bytecode from the isolated replay tests
+tools/isolated-replay/__pycache__/
