@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *
  * <p>This intentionally does not change CEF switches, audio, rendering, ownership, or retries. It is
  * present only to distinguish a suppressed MCEF auto-init from the first real JCEF bootstrap and to
- * observe CEF helper child-process creation while the client thread is inside native initialization.</p>
+ * observe CEF helper child-process creation while the client thread is inside the bootstrap window.</p>
  */
 @Pseudo
 @Mixin(targets = "com.cinemamod.mcef.CefUtil", remap = false)
@@ -27,6 +27,7 @@ abstract class McefNativeBootstrapProbeMixin {
     private static final Logger BOOTOPTIM$LOGGER = LogUtils.getLogger();
     private static final String BOOTOPTIM$PROPERTY = "boot_optim.mcefNativeBootstrapProbe";
     private static final String BOOTOPTIM$EXPECTED_VERSION = "2.1.6-1.21.1";
+    private static final String BOOTOPTIM$EXPECTED_JAVA_CEF_COMMIT = "eaeb3d4370aa3526ee237ad1981ad59af3de4dd1";
     private static final AtomicBoolean BOOTOPTIM$WATCHING = new AtomicBoolean(false);
     private static volatile boolean BOOTOPTIM$COMPATIBILITY_CHECKED;
     private static volatile boolean BOOTOPTIM$COMPATIBLE;
@@ -116,25 +117,38 @@ abstract class McefNativeBootstrapProbeMixin {
                             .getModContainerById("mcef")
                             .map(container -> container.getModInfo().getVersion().toString())
                             .orElse(null);
-                    BOOTOPTIM$COMPATIBLE = BOOTOPTIM$EXPECTED_VERSION.equals(version);
-                    if (!BOOTOPTIM$COMPATIBLE && Boolean.parseBoolean(System.getProperty(BOOTOPTIM$PROPERTY, "false"))) {
+                    if (!BOOTOPTIM$EXPECTED_VERSION.equals(version)) {
+                        BOOTOPTIM$COMPATIBLE = false;
                         BOOTOPTIM$LOGGER.warn(
                                 "BOOTOPTIM_MCEF_NATIVE_PROBE status=disabled reason=mcef_version expected={} actual={}",
                                 BOOTOPTIM$EXPECTED_VERSION,
                                 version == null ? "absent" : version);
+                    } else {
+                        String javaCefCommit = bootoptim$javaCefCommit();
+                        BOOTOPTIM$COMPATIBLE = BOOTOPTIM$EXPECTED_JAVA_CEF_COMMIT.equals(javaCefCommit);
+                        if (!BOOTOPTIM$COMPATIBLE) {
+                            BOOTOPTIM$LOGGER.warn(
+                                    "BOOTOPTIM_MCEF_NATIVE_PROBE status=disabled reason=java_cef_commit expected={} actual={}",
+                                    BOOTOPTIM$EXPECTED_JAVA_CEF_COMMIT,
+                                    javaCefCommit == null ? "unavailable" : javaCefCommit);
+                        }
                     }
-                } catch (RuntimeException exception) {
+                } catch (ReflectiveOperationException | RuntimeException exception) {
                     BOOTOPTIM$COMPATIBLE = false;
-                    if (Boolean.parseBoolean(System.getProperty(BOOTOPTIM$PROPERTY, "false"))) {
-                        BOOTOPTIM$LOGGER.warn(
-                                "BOOTOPTIM_MCEF_NATIVE_PROBE status=disabled reason=version_probe_failed",
-                                exception);
-                    }
+                    BOOTOPTIM$LOGGER.warn(
+                            "BOOTOPTIM_MCEF_NATIVE_PROBE status=disabled reason=mapping_probe_failed",
+                            exception);
                 }
                 BOOTOPTIM$COMPATIBILITY_CHECKED = true;
             }
             return BOOTOPTIM$COMPATIBLE;
         }
+    }
+
+    private static String bootoptim$javaCefCommit() throws ReflectiveOperationException {
+        Class<?> mcef = Class.forName("com.cinemamod.mcef.MCEF", false, McefNativeBootstrapProbeMixin.class.getClassLoader());
+        Object value = mcef.getMethod("getJavaCefCommit").invoke(null);
+        return value instanceof String stringValue ? stringValue : null;
     }
 
     private static void bootoptim$mark(String stage) {
