@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][int]$JavaPid,
     [Parameter(Mandatory = $true)][string]$JavaCreationDate,
     [Parameter(Mandatory = $true)][string]$OutputFile,
-    [ValidateRange(50, 1000)][int]$PollMilliseconds = 100
+    [ValidateRange(50, 1000)][int]$PollMilliseconds = 100,
+    [ValidateRange(0, 10000)][int]$PostExitEventGraceMilliseconds = 3000
 )
 
 Set-StrictMode -Version Latest
@@ -60,6 +61,7 @@ try {
         }
     }
 
+    $exitedUtc = [DateTime]::UtcNow
     $exitCode = $handle.ExitCode
     $childResults = @()
     foreach ($entry in $children.Values) {
@@ -83,6 +85,10 @@ try {
         }
     }
 
+    if ($PostExitEventGraceMilliseconds -gt 0) {
+        Start-Sleep -Milliseconds $PostExitEventGraceMilliseconds
+    }
+
     $nativeEvents = @()
     try {
         $nativeEvents = @(Get-WinEvent -FilterHashtable @{LogName='Application';StartTime=$startedUtc;Id=1000,1001} -ErrorAction SilentlyContinue |
@@ -90,15 +96,18 @@ try {
             Select-Object -First 20 |
             ForEach-Object { [pscustomobject]@{id=$_.Id;provider=$_.ProviderName;timeCreated=$_.TimeCreated.ToUniversalTime().ToString('o');message=$_.Message} })
     } catch {}
+    $eventQueryCompletedUtc = [DateTime]::UtcNow
 
     Save ([pscustomobject]@{
-        schema=1
+        schema=2
         diagnosticOnly=$true
-        observerEffect='100ms Win32_Process child polling; do not use this run for clean startup timing'
+        observerEffect=("{0}ms Win32_Process child polling; do not use this run for clean startup timing" -f $PollMilliseconds)
         javaPid=$JavaPid
         javaCreationDate=$JavaCreationDate
         startedUtc=$startedUtc.ToString('o')
-        exitedUtc=[DateTime]::UtcNow.ToString('o')
+        exitedUtc=$exitedUtc.ToString('o')
+        postExitEventGraceMilliseconds=$PostExitEventGraceMilliseconds
+        eventQueryCompletedUtc=$eventQueryCompletedUtc.ToString('o')
         exitCode=$exitCode
         exitCodeHex=(Exit-Hex $exitCode)
         children=@($childResults)
