@@ -73,3 +73,29 @@ warm-second-run bias. The candidate is therefore still **INCONCLUSIVE** and no
 laptop run is justified. The next paired diagnostic records `vmstat` pressure
 (`r`, blocked I/O, swap, wait and stolen CPU) during both launches so the
 remaining host/scheduler bucket can be tested directly.
+
+## Host-pressure confirmation (PR #154, second campaign)
+
+The paired campaign with `host-vmstat.log` reproduced mixed signs:
+
+| Pair | Order | Candidate minus control |
+| ---: | --- | ---: |
+| 1 | control → candidate | +1,750 ms |
+| 2 | candidate → control | −1,666 ms |
+| 3 | control → candidate | +1,191 ms |
+
+The traces identify the confounder rather than a Java mechanism. During the
+resource-reload intervals the runner reached roughly 40–97% I/O-wait, with
+blocked processes (`b`) and, in one pair, non-zero swap-out (`so`, with
+`swpd` rising while free memory fell below roughly 200 MiB). Stolen CPU stayed
+at zero, so the dominant disturbance is Azure runner storage/memory pressure,
+not a competing hypervisor CPU allocation. This explains why fresh-VM A/B can
+look like a tens-of-seconds win and why even same-VM pairs retain a few-second
+tail difference. It is measurement contamination, not evidence that the
+candidate changes ModelManager semantics.
+
+Operational consequence: ordinary fresh-VM A/B is not a sufficient gate for a
+small startup effect. Use same-VM paired runs with the host trace to reject
+pressure-contaminated samples, and retain the physical laptop gate for any
+storage/page-cache-sensitive conclusion. No BootOptim production code or
+laptop state was changed as a result of this diagnostic.
