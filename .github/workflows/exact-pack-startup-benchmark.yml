@@ -382,7 +382,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: exact-pack-result-${{ matrix.variant || format('paired-{0}', matrix.pair) }}
+          # Artifact names must include the repetition.  Artifact v4 forbids
+          # multiple uploads with the same name, and download-artifact merges
+          # same-named variant directories; without this suffix the aggregate
+          # silently kept only one result per variant.
+          name: exact-pack-result-${{ matrix.variant || format('paired-{0}', matrix.pair) }}-${{ matrix.iteration || matrix.pair }}
           path: |
             result.json
             resource-selection-check.json
