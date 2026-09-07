@@ -94,6 +94,7 @@ function Active-Session([string]$spec) {
     }
     if($out.Count-ne1){Fail "expected one WTSActive Explorer session for '$spec', found $($out.Count)"};$out[0]
 }
+function Canonical-SessionUser([object]$session) { if($session.domain){return ([string]$session.domain+'\'+[string]$session.user)}; [string]$session.user }
 
 function Set-CfgKey([string]$text,[string]$key,[string]$value) {
     $nl=if($text.Contains("`r`n")){"`r`n"}else{"`n"};$pat='(?m)^'+[regex]::Escape($key)+'=.*$';$rx=New-Object Text.RegularExpressions.Regex($pat);$m=$rx.Matches($text)
@@ -109,6 +110,7 @@ function Qs([string]$v) {
 
 function Config {
     foreach($n in @('RunId','InstanceRoot','PrismExe','InstanceId','InteractiveUser','ArtifactJar','ExpectedJarSha256','JvmArgs')){if([string]::IsNullOrWhiteSpace((Get-Variable -Name $n -ValueOnly))){Fail "$n is required"}}
+    if($RunId -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$'){Fail 'RunId must be 1-64 path-safe characters: letters, digits, dot, underscore, hyphen'}
     if($ExpectedJarSha256 -notmatch '^[0-9A-Fa-f]{64}$'){Fail 'ExpectedJarSha256 must be 64 hexadecimal characters'}
     if($TimeoutSeconds-lt600){Fail 'TimeoutSeconds < 600 is unsafe for the observed 350-380 s startup regime'}
     $r=Full $InstanceRoot;$g=Join-Path $r '.minecraft';if(-not(Test-Path -LiteralPath $g -PathType Container)){Fail "missing $g"}
@@ -143,19 +145,20 @@ if($Action -in @('Status','Postflight','Recover') -and -not$stateFile){Fail 'Run
 
 switch($Action){
 'Preflight'{
-    $c=Config;if(Test-Path -LiteralPath $stateFile){Fail 'transaction already exists'};$p=Pre $c
-    [pscustomobject]@{status='ok';sessionId=$p.session.sessionId;originalJar=$p.jar.path;originalJarSha256=$p.jar.sha256;candidateSha256=$c.candidateSha;instanceCfgSha256=Sha $c.instanceCfg}|ConvertTo-Json;break
+    $c=Config;if(Test-Path -LiteralPath $stateFile){Fail 'transaction already exists'};$p=Pre $c;$resolvedUser=Canonical-SessionUser $p.session
+    [pscustomobject]@{status='ok';sessionId=$p.session.sessionId;interactiveUser=$resolvedUser;originalJar=$p.jar.path;originalJarSha256=$p.jar.sha256;candidateSha256=$c.candidateSha;instanceCfgSha256=Sha $c.instanceCfg}|ConvertTo-Json;break
 }
 'Stage'{
     $c=Config
     if(Test-Path -LiteralPath $stateFile){$old=Load $stateFile;if($old.phase-eq'staged'){$live=One-Wrapper $old.modsDir $old.candidateSha256;if((Sha $old.instanceCfg)-ne$old.stagedCfgSha256){Fail 'staged instance.cfg drifted before repeat Stage'};$old|ConvertTo-Json -Depth 10;break};Fail "existing transaction phase $($old.phase); recover it before staging again"}
-    $p=Pre $c;$dir=Split-Path -Parent $stateFile;$bak=Join-Path $dir 'backup';New-Item -ItemType Directory -Force -Path $bak|Out-Null
+    $p=Pre $c;$resolvedUser=Canonical-SessionUser $p.session;$dir=Split-Path -Parent $stateFile;$bak=Join-Path $dir 'backup';New-Item -ItemType Directory -Force -Path $bak|Out-Null
     $cfgBak=Join-Path $bak 'instance.cfg.original';Copy-Item -LiteralPath $c.instanceCfg -Destination $cfgBak
     $jarBak=Join-Path $bak $p.jar.name;Copy-Item -LiteralPath $p.jar.path -Destination $jarBak;if((Sha $jarBak)-ne$p.jar.sha256){Fail 'JAR backup hash mismatch'}
     $runner=Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'remote_laptop_interactive_run.ps1';if(-not(Test-Path -LiteralPath $runner -PathType Leaf)){Fail "missing runner $runner"}
-    $st=[ordered]@{schema=3;phase='staging';valid=$false;reason=$null;runId=$c.runId;instanceRoot=$c.instanceRoot;gameRoot=$c.gameRoot;modsDir=$c.modsDir;instanceCfg=$c.instanceCfg;prismExe=$c.prismExe;prismRoot=$c.prismRoot;instanceId=$c.instanceId;interactiveUser=$c.interactiveUser;expectedSessionId=$p.session.sessionId;candidateSha256=$c.candidateSha;requiredJvmArgs=@($c.required);forbiddenJvmArgs=@($c.forbidden);expectedJavaExe=$c.expectedJava;timeoutSeconds=$c.timeout;originalCfgSha256=Sha $c.instanceCfg;cfgBackup=$cfgBak;originalJarPath=$p.jar.path;originalJarSha256=$p.jar.sha256;jarBackup=$jarBak;stagedJar=$null;stagedCfgSha256=$null;runner=$runner;taskName=('BootOptimBench-'+($c.runId-replace'[^A-Za-z0-9_.-]','_'));prismPid=0;prismCreationDate=$null;javaPid=0;javaCreationDate=$null;effectiveCommandLineSha256=$null;observedBootOptimPropertyKeys=@();validatedRequiredJvmArgs=@();effectiveJavaExe=$null;createdUtc=[DateTime]::UtcNow.ToString('o')};Save $st $stateFile
+    $taskNonce=[Guid]::NewGuid().ToString('N').Substring(0,12)
+    $st=[ordered]@{schema=3;phase='staging';valid=$false;reason=$null;runId=$c.runId;instanceRoot=$c.instanceRoot;gameRoot=$c.gameRoot;modsDir=$c.modsDir;instanceCfg=$c.instanceCfg;prismExe=$c.prismExe;prismRoot=$c.prismRoot;instanceId=$c.instanceId;interactiveUser=$resolvedUser;expectedSessionId=$p.session.sessionId;candidateSha256=$c.candidateSha;requiredJvmArgs=@($c.required);forbiddenJvmArgs=@($c.forbidden);expectedJavaExe=$c.expectedJava;timeoutSeconds=$c.timeout;originalCfgSha256=Sha $c.instanceCfg;cfgBackup=$cfgBak;originalJarPath=$p.jar.path;originalJarSha256=$p.jar.sha256;jarBackup=$jarBak;stagedJar=$null;stagedCfgSha256=$null;runner=$runner;taskName=('BootOptimBench-'+$c.runId+'-'+$taskNonce);prismPid=0;prismCreationDate=$null;javaPid=0;javaCreationDate=$null;effectiveCommandLineSha256=$null;observedBootOptimPropertyKeys=@();validatedRequiredJvmArgs=@();effectiveJavaExe=$null;createdUtc=[DateTime]::UtcNow.ToString('o')};Save $st $stateFile
     Remove-Item -LiteralPath $p.jar.path
-    $safeRun=($c.runId-replace'[^A-Za-z0-9_.-]','_');$target=Join-Path $c.modsDir ('bootoptim-bench-'+$safeRun+'-'+$c.candidateSha.Substring(0,12)+'.jar');if($target.Equals($p.jar.path,[StringComparison]::OrdinalIgnoreCase)){$target=Join-Path $c.modsDir ('bootoptim-bench-staged-'+$c.candidateSha.Substring(0,12)+'.jar')}
+    $target=Join-Path $c.modsDir ('bootoptim-bench-'+$c.runId+'-'+$c.candidateSha.Substring(0,12)+'.jar');if($target.Equals($p.jar.path,[StringComparison]::OrdinalIgnoreCase)){$target=Join-Path $c.modsDir ('bootoptim-bench-staged-'+$c.candidateSha.Substring(0,12)+'.jar')}
     if(Test-Path -LiteralPath $target){Fail "staged target path already exists: $target"}
     $tmp=$target+'.partial-'+[Guid]::NewGuid().ToString('N')
     try{Copy-Item -LiteralPath $c.artifactJar -Destination $tmp;if((Sha $tmp)-ne$c.candidateSha){Fail 'candidate copy hash mismatch'};Move-Item -LiteralPath $tmp -Destination $target}catch{throw}finally{if(Test-Path -LiteralPath $tmp){Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue}}
