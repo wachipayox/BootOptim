@@ -21,11 +21,11 @@ BootOptim production PR #90 is integrated and injects at `MCEF.initialize()` HEA
 
 Only after that marker does BootOptim call the authoritative real `MCEF.initialize()` on the client thread.
 
-PR #144 changes owner/waiter/re-entry coordination around this forcing path. The supplied physical evidence says the complete closure persisted under #144, so this branch does not repeat or promote that state-machine change.
+PR #144 is an open owner/waiter/re-entry hardening candidate around this forcing path. The supplied physical evidence says the complete closure persisted while testing that candidate, so this branch does not repeat or promote its state-machine change.
 
 ## Exact upstream native boundary
 
-MCEF `MCEF.initialize()` calls `CefUtil.init()`. On success it then creates MCEF wrapper/client objects and logs `Chromium Embedded Framework initialized`. On a normal `false` return it dispatches failure callbacks, logs an error, calls `shutdown()`, and returns `false`; it does not deliberately terminate the JVM.
+MCEF `MCEF.initialize()` calls `CefUtil.init()`. On success it creates MCEF wrapper/client objects and logs `Chromium Embedded Framework initialized`. On a normal `false` return it dispatches failure callbacks, logs an error, calls `shutdown()`, and returns `false`; it does not deliberately terminate the JVM.
 
 At the exact MCEF 1.21.1 source, `CefUtil.init()` performs:
 
@@ -33,14 +33,14 @@ At the exact MCEF 1.21.1 source, `CefUtil.init()` performs:
 2. `CefApp.getInstance(cefSwitches, cefSettings)`;
 3. `cefAppInstance.createClient()`.
 
-The exact `CinemaMod/java-cef` submodule is commit `eaeb3d4370aa3526ee237ad1981ad59af3de4dd1`. On Windows:
+The MCEF `1.21.1` branch pins `common/java-cef` to commit `eaeb3d4370aa3526ee237ad1981ad59af3de4dd1`. On Windows that exact java-cef code does the following:
 
-- `CefApp.startup(...)` reaches `N_Startup`, whose Windows path simply returns success after the library is already available;
+- `CefApp.startup(...)` synchronously `System.load`s `d3dcompiler_47.dll`, `libGLESv2.dll`, `libEGL.dll`, `chrome_elf.dll`, `libcef.dll`, and `jcef.dll`, then returns `true`; Windows does **not** call `N_Startup` on this path;
 - `CefApp.getInstance(...)` constructs `CefApp` and calls `N_PreInitialize`, which records JVM/class-loader state;
 - the first `createClient()` calls Java `initialize()`, sets `browser_subprocess_path` to `jcef_helper.exe`, then enters `N_Initialize`;
 - native `Context::Initialize` calls `CefInitialize(...)`, where Chromium browser-process initialization and helper-process creation happen.
 
-No `System.exit`, `Runtime.halt`, or Java-level intentional parent termination was found in this exact MCEF/JCEF bootstrap path. That does **not** prove CEF is innocent: a fail-fast/native exception inside `CefInitialize`, a driver fault, or an unrelated concurrent client termination can still kill the parent without returning to Java.
+No `System.exit`, `Runtime.halt`, or Java-level intentional parent termination was found in this exact MCEF/JCEF bootstrap path. That does **not** prove CEF is innocent: native DLL loading, a fail-fast/native exception inside `CefInitialize`, a GPU/driver fault, or an unrelated concurrent client termination can still kill the parent without returning to Java.
 
 ## Evidence separated by subsystem
 
@@ -56,9 +56,9 @@ A null OpenAL backend removes the observed OpenAL WER signature but the full cli
 
 ### MCEF / CEF
 
-The null-audio run disappearing around MCEF messages is suggestive but the two generic MCEF messages precede #90's suppression boundary. The missing discriminator is whether the run reached the first real consumer and, if so, whether it died in `getInstance`, `createClient/CefInitialize`, or after `CefUtil.init` returned.
+The null-audio run disappearing around MCEF messages is suggestive but the two generic MCEF messages precede #90's suppression boundary. The missing discriminator is whether the run reached the first real consumer and, if so, whether it died while loading CEF/JCEF DLLs in `startup`, in `getInstance`, in `createClient/CefInitialize`, or only after `CefUtil.init` returned.
 
-This branch adds exactly those markers, default-off and guarded to MCEF `2.1.6-1.21.1`.
+This branch adds those markers, default-off. The probe requires both MCEF `2.1.6-1.21.1` **and** java-cef commit `eaeb3d4370aa3526ee237ad1981ad59af3de4dd1`; mismatch or unavailable provenance disables the probe without changing MCEF behavior.
 
 ### GPU / render backend
 
@@ -78,7 +78,7 @@ Enable only for a forensic run:
 
 `-Dboot_optim.mcefNativeBootstrapProbe=true`
 
-Default is `false`. On an exact MCEF version mismatch the probe fails open and logs that it disabled itself. Mixin injection points use `require=0`.
+Default is `false`. On MCEF or java-cef provenance mismatch the probe fails open and logs that it disabled itself. Mixin injection points use `require=0`.
 
 Expected ordered markers are:
 
@@ -108,7 +108,7 @@ This is intentionally a noisy diagnostic observer. Its JSON says so explicitly. 
 Run **one** causal classification pass, not an A/B campaign:
 
 - keep JDK 21.0.9 as the supported baseline;
-- use the same exact pack/world and the same BootOptim artifact from this diagnostic PR;
+- use the same exact pack/world and the packaged BootOptim artifact from this diagnostic PR;
 - use `ALSOFT_DRIVERS=null` for this one run only to remove the already-confirmed OpenAL-device path as a confounder; this is diagnostic isolation, never a proposed default;
 - add `-Dboot_optim.mcefNativeBootstrapProbe=true` exactly once;
 - after the transaction has validated the target Java PID/CreationDate, launch `remote_laptop_native_exit_probe.ps1` against that identity and let it block until the client exits;
@@ -119,27 +119,34 @@ Classify the result before making another change:
 
 1. **No `BOOTOPTIM_MCEF_FIRST_CONSUMER status=initializing`:** the parent died before the first real #90 consumer. The two upstream `MCEF is attempting to load` messages were temporal coincidence for that run; do not patch CEF bootstrap.
 2. **First-consumer marker, then no `cefutil_head`:** failure/re-entry lies between BootOptim forcing and entering MCEF `CefUtil`; inspect Java exception/log boundary rather than GPU.
-3. **`before_get_instance` without `after_get_instance`:** failure lies in JCEF `CefApp` construction / `N_PreInitialize` / native-library boundary.
-4. **`before_create_client` without `after_create_client`:** strongest boundary is `CefInitialize` itself. Cross-check whether a `jcef_helper`/`gpu-process` child appeared and the parent/child exit codes before testing any GPU switch.
-5. **`after_create_client` / `cefutil_return` appears:** bootstrap completed. Move the investigation to first browser creation, renderer/GPU child lifecycle, WebDisplays/FancyMenu consumer behavior, or a concurrent OpenGL/native path; do not call MCEF initialization the root cause.
-6. **Parent exit hex is `0xC0000409` or WER names OpenAL/soft_oal:** retain the native fault classification even if CEF markers are nearby. A nearby CEF marker does not overwrite a concrete faulting module/NTSTATUS.
-7. **Clean exit code / no WER:** this still does not prove graceful Java shutdown. Inspect the final Minecraft/window markers and child lifecycle; absence of WER is not a pass.
+3. **`before_startup` without `after_startup`:** failure is inside the Windows CEF/JCEF DLL-load sequence (`System.load` of D3D/GLES/EGL/chrome_elf/libcef/jcef). Use WER/module/exit-code evidence to identify which native load failed; do not jump to `CefInitialize` or GPU-process lifecycle.
+4. **`before_get_instance` without `after_get_instance`:** failure lies in JCEF `CefApp` construction / `N_PreInitialize` / class-loader-native boundary after the DLL set loaded.
+5. **`before_create_client` without `after_create_client`:** strongest boundary is `CefInitialize` itself. Cross-check whether a `jcef_helper`/`gpu-process` child appeared and the parent/child exit codes before testing any GPU switch.
+6. **`after_create_client` / `cefutil_return` appears:** bootstrap completed. Move the investigation to first browser creation, renderer/GPU child lifecycle, WebDisplays/FancyMenu consumer behavior, or a concurrent OpenGL/native path; do not call MCEF initialization the root cause.
+7. **Parent exit hex is `0xC0000409` or WER names OpenAL/soft_oal:** retain the native fault classification even if CEF markers are nearby. A nearby CEF marker does not overwrite a concrete faulting module/NTSTATUS.
+8. **Clean exit code / no WER:** this still does not prove graceful Java shutdown. Inspect the final Minecraft/window markers and child lifecycle; absence of WER is not a pass.
 
-Only if case 4 is reproduced with null audio and no OpenAL WER should the next cheapest hypothesis be a **separate diagnostic** CEF GPU-off run. That flag must remain opt-in and cannot be promoted without gameplay/visual equivalence and physical evidence.
+Only if case 5 is reproduced with null audio and no OpenAL WER should the next cheapest hypothesis be a **separate diagnostic** CEF GPU-off run. That flag must remain opt-in and cannot be promoted without gameplay/visual equivalence and physical evidence.
+
+## Hosted validation
+
+For PR #169 head before the final provenance-guard correction, Build, normal Startup Benchmark and Windows PowerShell parser all completed successfully. The normal hosted dev startup reached `main_menu` at `20662 ms` uptime. That dev job does not contain MCEF/FancyMenu, so it validates compile/package/fail-open behavior only, not the exact optional-target injections. Exact-pack was skipped for the PR and is **not** counted as a passed gate. The final provenance-guard commit must retain the same Build/Startup/tooling green state before this branch is used physically.
 
 ## Risks
 
 - The in-process child watcher wakes every 100 ms during `CefUtil.init`; observer effect is deliberate and disqualifies timing conclusions.
 - Windows may deny some `ProcessHandle.Info` fields; the probe degrades to `unknown` rather than changing behavior.
-- A native fail-fast can terminate the parent before buffered external/native logs flush. The ordered last marker is therefore a boundary, not a stack trace.
+- A native fail-fast can terminate the parent before buffered logs flush. The ordered last marker is therefore a boundary, not a stack trace.
 - Direct-child observation can miss a very short-lived helper or a grandchild. WER/exit code remain independent evidence.
+- `getJavaCefCommit()` provenance depends on MCEF's packaged manifest lookup; if unavailable or altered, the diagnostic disables itself rather than guessing mappings.
 - Hosted exact-pack can validate build/startup compatibility but cannot validate this Windows native/GPU/audio failure. Until the laptop reproduces with this branch: **sin evidencia física**.
 
 ## Public source anchors
 
-- BootOptim PR #90: first-consumer MCEF defer.
-- BootOptim PR #144: owner/waiter/re-entry hardening; not repeated here.
-- BootOptim PR #163: exact-pack observer deadlock diagnostic fix.
-- BootOptim PR #166 and integrated remote tooling: physical transaction/measurement support.
+- BootOptim PR #90: merged first-consumer MCEF defer.
+- BootOptim PR #144: open owner/waiter/re-entry hardening candidate; not repeated here.
+- BootOptim PR #163: merged transactional remote-laptop harness.
+- BootOptim PR #166: separate open P1 variance/ModelManager diagnostic build; not part of this native-crash fix.
+- BootOptim PR #168: integrated follow-up that makes the interactive runner executable and lifecycle fields durable.
 - MCEF `1.21.1`, version `2.1.6-1.21.1`: `MCEF.java`, `CefUtil.java`, `CefInitMixin.java`.
 - CinemaMod/java-cef exact submodule `eaeb3d4370aa3526ee237ad1981ad59af3de4dd1`: `CefApp.java`, `native/CefApp.cpp`, `native/context.cpp`, `native/jcef_helper.cpp`.
