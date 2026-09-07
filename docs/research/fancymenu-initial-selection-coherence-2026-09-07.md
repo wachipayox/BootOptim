@@ -94,6 +94,12 @@ reload. It is staged as the active PC beta JAR with SHA-256
 one active FancyMenu JAR is present. The previous candidate is preserved as
 `.before-persistent-title-lock-20260907`.
 
+The lock is cleared at the start of a later Minecraft resource reload, so it
+cannot leak a stale filename into a changed configuration or into a reload
+where initial-only preloading is disabled. The current staged candidate is
+fork commit `6b1e7db79`, SHA-256
+`38E6183D89FEEAFF8AB993FBD1C8924C835CABED418E8D23D36E159E8CED8D04`.
+
 ## Gate
 
 Run the PC beta with exactly one FancyMenu JAR and the full configured
