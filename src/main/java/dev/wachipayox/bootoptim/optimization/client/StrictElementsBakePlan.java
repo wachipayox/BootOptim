@@ -3,8 +3,6 @@ package dev.wachipayox.bootoptim.optimization.client;
 import com.mojang.math.Transformation;
 import net.minecraft.client.renderer.block.model.BlockElement;
 import net.minecraft.client.renderer.block.model.BlockElementFace;
-import net.minecraft.client.renderer.block.model.BlockElementRotation;
-import net.minecraft.client.renderer.block.model.FaceBakery;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.Material;
 import net.minecraft.client.resources.model.ModelBaker;
@@ -15,7 +13,6 @@ import net.neoforged.neoforge.client.model.ExtraFaceData;
 import net.neoforged.neoforge.client.model.IModelBuilder;
 import net.neoforged.neoforge.client.model.geometry.BlockGeometryBakingContext;
 import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
-import org.joml.Vector3f;
 
 import java.util.List;
 import java.util.function.Function;
@@ -32,33 +29,23 @@ import dev.wachipayox.bootoptim.profiling.StartupReport;
  */
 public final class StrictElementsBakePlan {
     private static final String PROPERTY = "boot_optim.compiledElementsMaterialPlan";
-    private static final FaceBakery FACE_BAKERY = new FaceBakery();
 
     private final Direction[] directions;
     private final BlockElementFace[] faces;
+    private final BlockElement[] faceElements;
     private final Material[] materials;
-    private final Vector3f[] from;
-    private final Vector3f[] to;
-    private final BlockElementRotation[] rotations;
-    private final boolean[] shades;
     private final Direction[] cullDirections;
 
     private StrictElementsBakePlan(
             Direction[] directions,
             BlockElementFace[] faces,
+            BlockElement[] faceElements,
             Material[] materials,
-            Vector3f[] from,
-            Vector3f[] to,
-            BlockElementRotation[] rotations,
-            boolean[] shades,
             Direction[] cullDirections) {
         this.directions = directions;
         this.faces = faces;
+        this.faceElements = faceElements;
         this.materials = materials;
-        this.from = from;
-        this.to = to;
-        this.rotations = rotations;
-        this.shades = shades;
         this.cullDirections = cullDirections;
     }
 
@@ -114,11 +101,8 @@ public final class StrictElementsBakePlan {
 
         Direction[] directions = new Direction[faceCount];
         BlockElementFace[] faces = new BlockElementFace[faceCount];
+        BlockElement[] faceElements = new BlockElement[faceCount];
         Material[] materials = new Material[faceCount];
-        Vector3f[] from = new Vector3f[faceCount];
-        Vector3f[] to = new Vector3f[faceCount];
-        BlockElementRotation[] rotations = new BlockElementRotation[faceCount];
-        boolean[] shades = new boolean[faceCount];
         Direction[] culls = new Direction[faceCount];
         int index = 0;
         for (BlockElement element : sourceElements) {
@@ -126,17 +110,14 @@ public final class StrictElementsBakePlan {
                 BlockElementFace face = element.faces.get(direction);
                 directions[index] = direction;
                 faces[index] = face;
+                faceElements[index] = element;
                 materials[index] = owner.getMaterial(face.texture());
-                from[index] = element.from;
-                to[index] = element.to;
-                rotations[index] = element.rotation;
-                shades[index] = element.shade;
                 culls[index] = face.cullForDirection();
                 index++;
             }
         }
         return new StrictElementsBakePlan(
-                directions, faces, materials, from, to, rotations, shades, culls);
+                directions, faces, faceElements, materials, culls);
     }
 
     /**
@@ -157,8 +138,7 @@ public final class StrictElementsBakePlan {
         Transformation rotation = modelState.getRotation();
         for (int i = 0; i < faces.length; i++) {
             TextureAtlasSprite sprite = spriteGetter.apply(materials[i]);
-            var quad = FACE_BAKERY.bakeQuad(
-                    from[i], to[i], faces[i], sprite, directions[i], modelState, rotations[i], shades[i]);
+            var quad = BlockModel.bakeFace(faceElements[i], faces[i], sprite, directions[i], modelState);
             Direction cull = cullDirections[i];
             if (cull == null) {
                 modelBuilder.addUnculledFace(quad);

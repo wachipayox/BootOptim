@@ -32,7 +32,9 @@ construction strategy:
 - memoize a negative (ineligible/too-small) result so it is not recompiled on
   repeated bakes of the same `BlockModel`;
 - retain the previous strict metadata, custom-geometry, root-transform and
-  callback guards, stock `FaceBakery`, sprite getter and model-builder order.
+  callback guards, and call the stock `BlockModel.bakeFace` route rather than
+  bypassing it with a private `FaceBakery` invocation. Sprite lookup and
+  model-builder order remain unchanged.
 
 The candidate still does not persist models, move GL work, bypass NeoForge
 callbacks, or change the default runtime. It must be treated as a new
