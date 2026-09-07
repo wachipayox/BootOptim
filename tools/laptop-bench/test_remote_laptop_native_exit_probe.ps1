@@ -3,20 +3,24 @@ param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 $root = Join-Path $env:RUNNER_TEMP ("bootoptim-native-exit-probe-test-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 $probe = Join-Path $PSScriptRoot 'remote_laptop_native_exit_probe.ps1'
 $source = Join-Path $root 'NativeExitProbeFixture.java'
 $class = Join-Path $root 'NativeExitProbeFixture.class'
+$fixture = $null
+$fixture2 = $null
 
-@'
+$sourceText = @'
 public final class NativeExitProbeFixture {
     public static void main(String[] args) throws Exception {
         Thread.sleep(30000L);
     }
 }
-'@ | Set-Content -LiteralPath $source -Encoding UTF8
+'@
+[IO.File]::WriteAllText($source, $sourceText, $Utf8NoBom)
 
 & (Join-Path $env:JAVA_HOME 'bin\javac.exe') $source
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $class)) {
@@ -77,8 +81,10 @@ try {
     Write-Host 'Native exit observer recovery tests passed.'
 } finally {
     Get-Job | Where-Object { $_.Command -match 'remote_laptop_native_exit_probe' } | Remove-Job -Force -ErrorAction SilentlyContinue
-    Get-Process java, javaw -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $env:JAVA_HOME 'bin\java.exe') } | ForEach-Object {
-        try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
+    foreach ($candidate in @($fixture, $fixture2)) {
+        if ($candidate -and $candidate.process) {
+            try { Stop-Process -Id ([int]$candidate.process.Id) -Force -ErrorAction SilentlyContinue } catch {}
+        }
     }
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
