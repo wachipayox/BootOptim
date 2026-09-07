@@ -27,7 +27,13 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        boolean firstMainMenu = StartupProfiler.markMainMenu();
+        if (firstMainMenu) {
+            // Diagnostic work deliberately happens after the TTMM marker so reflection/class loading cannot
+            // contaminate the startup measurement that this repository optimizes.
+            ModernFixCompatibilityProbe.runAfterMainMenuMarker();
+        }
+        if (firstMainMenu && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
     }
