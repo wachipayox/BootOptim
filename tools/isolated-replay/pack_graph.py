@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import posixpath
+import re
 import zipfile
 from pathlib import Path
 from typing import Any, Iterable, TextIO
@@ -138,6 +139,7 @@ def break_cycles(tasks: dict[str, dict[str, Any]]) -> int:
 def build_fixture(pack_root: Path) -> dict[str, Any]:
     entries = resource_names(pack_root)
     selected: dict[str, dict[str, Any]] = {}
+    shadowed_resources = 0
     source_digest = hashlib.sha256()
     for source, entry, content in entries:
         parsed_id = logical_id(entry)
@@ -154,6 +156,8 @@ def build_fixture(pack_root: Path) -> dict[str, Any]:
         source_digest.update(entry.encode("utf-8"))
         source_digest.update(b"\0")
         source_digest.update(content)
+        if resource_id in selected:
+            shadowed_resources += 1
         selected[resource_id] = {
             "kind": kind,
             "namespace": namespace,
@@ -242,6 +246,14 @@ def build_fixture(pack_root: Path) -> dict[str, Any]:
         "models": sum(item["kind"] == "model" for item in selected.values()),
         "blockstates": sum(item["kind"] == "blockstate" for item in selected.values()),
     }
+    options_path = pack_root / "options.txt"
+    options_text = options_path.read_text(encoding="utf-8", errors="replace") if options_path.is_file() else ""
+    resource_pack_line = next(
+        (line for line in options_text.splitlines() if line.startswith("resourcePacks:")),
+        "",
+    )
+    selected_resource_packs = re.findall(r'"([^"]+)"', resource_pack_line)
+    options_hash = hashlib.sha256(options_text.encode("utf-8")).hexdigest() if options_text else None
     return {
         "schema": SCHEMA,
         "fixture_id": f"exact-pack-model-graph-{manifest_hash.hexdigest()[:16]}",
@@ -253,6 +265,9 @@ def build_fixture(pack_root: Path) -> dict[str, Any]:
             "duration_semantics": "relative_model_complexity_work_units",
             "resource_entries_considered": len(entries),
             "logical_resources_selected": len(selected),
+            "shadowed_logical_resources": shadowed_resources,
+            "options_sha256": options_hash,
+            "selected_resource_packs": selected_resource_packs,
             "cycle_edges_removed": cycle_edges_removed,
             **counts,
         },

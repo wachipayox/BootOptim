@@ -114,8 +114,10 @@ The first implementation lives under `tools/isolated-replay/`:
 
 The graph currently assigns **relative model-complexity work units** from JSON
 size and structural counts. These units are deliberately not wall milliseconds:
-the resource-pack precedence approximation, disk latency, JVM/JIT, JSON library,
-registry callbacks and custom loaders are not yet represented. The tool is useful
+the resource-pack precedence approximation (the fixture records the selected
+`options.txt` list and shadowed logical resources but does not yet reproduce every
+ResourceManager priority rule), disk latency, JVM/JIT, JSON library, registry
+callbacks and custom loaders are not yet represented. The tool is useful
 for visualising dependency and scheduling designs and for rejecting obviously bad
 policies, but it cannot promote a runtime optimization.
 
