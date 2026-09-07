@@ -11,8 +11,12 @@ import java.util.Deque;
  */
 public final class MaterialResolutionListPool {
     private static final String PROPERTY = "boot_optim.materialResolutionListPool";
-    private static final ThreadLocal<Deque<ArrayList<String>>> LISTS =
-            ThreadLocal.withInitial(ArrayDeque::new);
+    private static final ThreadLocal<State> STATES = ThreadLocal.withInitial(State::new);
+
+    private static final class State {
+        private final Deque<ArrayList<String>> available = new ArrayDeque<>();
+        private final Deque<ArrayList<String>> active = new ArrayDeque<>();
+    }
 
     private MaterialResolutionListPool() {
     }
@@ -25,14 +29,14 @@ public final class MaterialResolutionListPool {
         if (!enabled()) {
             return;
         }
-        Deque<ArrayList<String>> stack = LISTS.get();
-        ArrayList<String> list = stack.pollFirst();
+        State state = STATES.get();
+        ArrayList<String> list = state.available.pollFirst();
         if (list == null) {
             list = new ArrayList<>();
         } else {
             list.clear();
         }
-        stack.addFirst(list);
+        state.active.addFirst(list);
     }
 
     public static ArrayList<String> borrow() {
@@ -41,13 +45,13 @@ public final class MaterialResolutionListPool {
             // preserve vanilla's concrete return type and allocation path.
             return new ArrayList<>();
         }
-        Deque<ArrayList<String>> stack = LISTS.get();
-        ArrayList<String> list = stack.peekFirst();
+        State state = STATES.get();
+        ArrayList<String> list = state.active.peekFirst();
         if (list == null) {
             // Fail open if a loader invokes the redirected site unexpectedly
             // without passing through the method HEAD hook.
             list = new ArrayList<>();
-            stack.addFirst(list);
+            state.active.addFirst(list);
         }
         return list;
     }
@@ -56,10 +60,11 @@ public final class MaterialResolutionListPool {
         if (!enabled()) {
             return;
         }
-        Deque<ArrayList<String>> stack = LISTS.get();
-        ArrayList<String> list = stack.pollFirst();
+        State state = STATES.get();
+        ArrayList<String> list = state.active.pollFirst();
         if (list != null) {
             list.clear();
+            state.available.addFirst(list);
         }
     }
 }
