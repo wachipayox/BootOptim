@@ -1,0 +1,47 @@
+import org.gradle.api.tasks.JavaExec
+
+// Diagnostic/tooling-only source set injected by -I. Nothing here changes the
+// packaged BootOptim runtime or normal Gradle lifecycle.
+gradle.afterProject { project, state ->
+    if (project != gradle.rootProject || state.failure != null) {
+        return
+    }
+
+    def sourceSets = project.extensions.findByName('sourceSets')
+    if (sourceSets == null || sourceSets.findByName('modelReplay') != null) {
+        return
+    }
+
+    def main = sourceSets.getByName('main')
+    def replay = sourceSets.create('modelReplay')
+    replay.java.srcDir(project.file('src/modelReplay/java'))
+    replay.resources.srcDir(project.file('src/modelReplay/resources'))
+    replay.compileClasspath = project.files(main.output, main.compileClasspath)
+    replay.runtimeClasspath = project.files(replay.output, replay.compileClasspath, main.runtimeClasspath)
+
+    project.tasks.register('modelReplaySelfTest', JavaExec) {
+        group = 'verification'
+        description = 'Runs the dependency-free-input real BlockModel replay self-tests.'
+        dependsOn replay.classesTaskName
+        classpath = replay.runtimeClasspath
+        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplay')
+        args '--self-test'
+    }
+
+    project.tasks.register('modelClassReplay', JavaExec) {
+        group = 'verification'
+        description = 'Runs real Minecraft/NeoForge BlockModel parsing and parent/material replay.'
+        dependsOn replay.classesTaskName
+        classpath = replay.runtimeClasspath
+        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplay')
+        doFirst {
+            def manifest = project.findProperty('bootoptimModelReplayManifest')
+            def output = project.findProperty('bootoptimModelReplayOutput')
+            if (manifest == null || output == null) {
+                throw new GradleException('Set -PbootoptimModelReplayManifest=... and -PbootoptimModelReplayOutput=...')
+            }
+            setArgs(['--manifest', project.file(manifest).absolutePath,
+                     '--output-dir', project.file(output).absolutePath])
+        }
+    }
+}
