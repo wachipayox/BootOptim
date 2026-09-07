@@ -14,7 +14,14 @@
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.AtlasSetVarianceBoundaryMixin",
+    "client.BootstrapVarianceBoundaryMixin",
+    "client.FancyMenuVarianceMarkerMixin",
+    "client.MinecraftTitlePresentVarianceMixin",
+    "client.ModelBakeryVarianceBoundaryMixin",
+    "client.ModelManagerVarianceBoundaryMixin",
+    "client.SimpleReloadInstanceVarianceMixin"
   ],
   "injectors": {
     "defaultRequire": 0
