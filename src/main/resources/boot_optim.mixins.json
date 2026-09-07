@@ -15,6 +15,7 @@
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.ElementsModelCullDirectionCacheMixin",
+    "client.ElementsModelCullDirectionRedirectMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
