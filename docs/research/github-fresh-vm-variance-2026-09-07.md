@@ -51,3 +51,25 @@ If paired control-only repeats still vary materially, treat the unresolved
 runner bucket as the blocker and collect host telemetry before writing another
 Java optimization. A nominal improvement with mixed paired signs remains
 `INCONCLUSIVE`, not a reason to touch the laptop.
+
+## First paired result (PR #154)
+
+The first three alternating pairs completed successfully on fresh VMs. The
+candidate-minus-control main-menu deltas were:
+
+| Pair | Order | Candidate minus control |
+| ---: | --- | ---: |
+| 1 | control → candidate | −1,308 ms |
+| 2 | candidate → control | +4,732 ms |
+| 3 | control → candidate | −2,786 ms |
+
+The ordinary per-variant medians were `94,737 ms` candidate and `96,045 ms`
+control, but the within-VM signs are mixed. The corresponding
+reload→FancyMenu deltas were `−355 ms`, `+2,104 ms`, and `−3,281 ms`; this
+locates the residual noise in the resource-reload critical tail rather than in
+the small candidate mechanism. Pair 2's candidate was the slower run even
+though it launched first, so the effect is not explained by a simple
+warm-second-run bias. The candidate is therefore still **INCONCLUSIVE** and no
+laptop run is justified. The next paired diagnostic records `vmstat` pressure
+(`r`, blocked I/O, swap, wait and stolen CPU) during both launches so the
+remaining host/scheduler bucket can be tested directly.

@@ -168,9 +168,11 @@ after each process into `paired-results/` before the next process starts. The
 pair therefore shares the VM, kernel, filesystem/page cache and Gradle caches,
 while each Minecraft process and its mutable benchmark reports are reset. Do
 not interpret the second process as a cold-start absolute measurement; compare
-within-pair deltas and inspect the alternating-order metadata. This mode is a
-diagnostic for the fresh-VM variance seen in ordinary A/B, not a replacement
-for the cold-start and physical-laptop gates.
+within-pair deltas and inspect the alternating-order metadata. The paired job
+also stores a low-overhead `host-vmstat.log` covering both launches, so runner
+run-queue, I/O-wait, swap and stolen-CPU spikes can be correlated with a mixed
+pair. This mode is a diagnostic for the fresh-VM variance seen in ordinary
+A/B, not a replacement for the cold-start and physical-laptop gates.
 
 PR-body triggering is the durable contract because `agent/integration-current` is not the repository default branch. `workflow_dispatch` is also defined for environments where the workflow is available from the default branch.
 

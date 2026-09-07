@@ -45,6 +45,39 @@ def clear_runtime_logs(root: Path) -> None:
             target.unlink(missing_ok=True)
 
 
+def start_host_trace(root: Path):
+    """Capture low-overhead runner pressure while one pair is executing."""
+    trace_path = root / "paired-results" / "host-vmstat.log"
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    trace_handle = trace_path.open("w", encoding="utf-8", errors="replace")
+    try:
+        process = subprocess.Popen(
+            ["vmstat", "-w", "1"],
+            stdout=trace_handle,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except (FileNotFoundError, OSError) as exc:
+        trace_handle.write(f"vmstat unavailable: {exc}\n")
+        trace_handle.flush()
+        trace_handle.close()
+        return None, None
+    return process, trace_handle
+
+
+def stop_host_trace(process, trace_handle) -> None:
+    if process is None:
+        return
+    try:
+        process.terminate()
+        process.wait(timeout=5)
+    except (subprocess.TimeoutExpired, OSError):
+        process.kill()
+        process.wait(timeout=5)
+    finally:
+        trace_handle.close()
+
+
 def run_variant(
     root: Path,
     paired_root: Path,
@@ -161,6 +194,7 @@ def main() -> None:
             ("control", control_args, "candidate->control"),
         )
 
+    host_trace_process, host_trace_handle = start_host_trace(root)
     try:
         for variant, jvm_args, order_label in sequence:
             run_variant(
@@ -174,6 +208,7 @@ def main() -> None:
                 order_label,
             )
     finally:
+        stop_host_trace(host_trace_process, host_trace_handle)
         # Do not upload the last run a second time as root-level result.json.
         # The per-run copies above are the authoritative paired artifacts.
         clear_runtime_logs(root)
