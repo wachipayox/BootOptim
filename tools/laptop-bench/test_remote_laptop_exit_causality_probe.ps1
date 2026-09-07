@@ -20,8 +20,7 @@ public final class ExitTreeFixture {
       p.waitFor();
       Thread.sleep(30000L);
     } else {
-      Thread.sleep(5000L);
-      System.exit(9);
+      Thread.sleep(30000L);
     }
   }
 }
@@ -36,14 +35,31 @@ $c=Cim $java.Id;if(-not$c){throw 'fixture Java missing'};$creation=([DateTime]$c
 $out=Join-Path $root 'result.json'
 $job=Start-Job -ScriptBlock{param($p,$id,$cr,$o)& $p -JavaPid $id -JavaCreationDate $cr -OutputFile $o -PollMilliseconds 100 -PostExitEventGraceMilliseconds 0} -ArgumentList $probe,$java.Id,$creation,$out
 try{
-  $deadline=[DateTime]::UtcNow.AddSeconds(15);$s=$null
-  do{Start-Sleep -Milliseconds 200;if(Test-Path $out){try{$s=Get-Content $out -Raw|ConvertFrom-Json}catch{}};if($s -and @($s.processes|Where-Object{$_.parentPid-ne$java.Id}).Count-gt0){break}}while([DateTime]::UtcNow-lt$deadline)
+  $deadline=[DateTime]::UtcNow.AddSeconds(15);$s=$null;$grand=$null
+  do{
+    Start-Sleep -Milliseconds 200
+    if(Test-Path $out){try{$s=Get-Content $out -Raw|ConvertFrom-Json}catch{}}
+    if($s){
+      $directJava=@($s.processes|Where-Object{$_.parentPid-eq$java.Id -and $_.name-eq'java.exe'})|Select-Object -First 1
+      if($directJava){$grand=@($s.processes|Where-Object{$_.parentPid-eq$directJava.pid -and $_.name-eq'java.exe'})|Select-Object -First 1}
+      if($grand){break}
+    }
+  }while([DateTime]::UtcNow-lt$deadline)
   if(-not$s){throw 'observer produced no checkpoint'}
-  $grand=@($s.processes|Where-Object{$_.parentPid-ne$java.Id})
-  if($grand.Count-eq0){$diag=$s|ConvertTo-Json -Depth 8 -Compress;throw "recursive descendant was not observed; status=$($s.status) state=$diag"}
-  $deadline=[DateTime]::UtcNow.AddSeconds(15);$s=$null
-  do{Start-Sleep -Milliseconds 200;$s=Get-Content $out -Raw|ConvertFrom-Json;$bad=@($s.processes|Where-Object{$_.exitCode-eq9});if($bad.Count-gt0){break}}while([DateTime]::UtcNow-lt$deadline)
-  if(@($s.processes|Where-Object{$_.exitCode-eq9}).Count-eq0){$diag=$s|ConvertTo-Json -Depth 8 -Compress;throw "descendant exit code 9 was not persisted while parent stayed alive; state=$diag"}
+  if(-not$grand){$diag=$s|ConvertTo-Json -Depth 8 -Compress;throw "recursive Java grandchild was not observed; status=$($s.status) state=$diag"}
+
+  Stop-Process -Id ([int]$grand.pid) -Force -ErrorAction Stop
+  $deadline=[DateTime]::UtcNow.AddSeconds(10);$s=$null;$grandExit=$null
+  do{
+    Start-Sleep -Milliseconds 200
+    $s=Get-Content $out -Raw|ConvertFrom-Json
+    $grandExit=@($s.processes|Where-Object{$_.pid-eq$grand.pid -and $_.exitedUtc})|Select-Object -First 1
+    if($grandExit){break}
+  }while([DateTime]::UtcNow-lt$deadline)
+  if(-not$grandExit){$diag=$s|ConvertTo-Json -Depth 8 -Compress;throw "grandchild exit was not persisted while root stayed alive; state=$diag"}
+  if([int]$grandExit.exitCode-eq0){throw "force-killed grandchild unexpectedly recorded exit 0"}
+  if(@($s.timeline|Where-Object{$_.event-eq'process_exit' -and $_.pid-eq$grand.pid -and $_.exitCode-ne0}).Count-eq0){throw 'timeline lost nonzero grandchild exit'}
+
   Stop-Process -Id $java.Id -Force
   if(-not(Wait-Job $job -Timeout 20)){throw 'observer did not finish'}
   Receive-Job $job -ErrorAction SilentlyContinue|Out-Null
@@ -51,7 +67,6 @@ try{
   if($s.status-ne'complete'){throw "observer status $($s.status)"}
   if($s.exitCode-eq0){throw 'forced parent exit unexpectedly recorded zero'}
   if($s.exitClassification-ne'java_nonzero_exit'){throw "classification $($s.exitClassification)"}
-  if(@($s.timeline|Where-Object{$_.event-eq'process_exit' -and $_.exitCode-eq9}).Count-eq0){throw 'timeline lost descendant exit'}
   Write-Host 'Exit causality observer tests passed.'
 }finally{
   try{Stop-Process -Id $java.Id -Force -ErrorAction SilentlyContinue}catch{}
