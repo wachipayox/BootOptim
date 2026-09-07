@@ -11,13 +11,15 @@ abstract class BlockModelStrictElementsPlanMixin implements StrictElementsBakePl
     @Unique
     private StrictElementsBakePlan bootoptim$strictElementsBakePlan;
 
+    @Unique
+    private boolean bootoptim$strictElementsPlanCompiled;
+
     @Override
     public StrictElementsBakePlan bootoptim$getStrictElementsBakePlan() {
-        StrictElementsBakePlan plan = bootoptim$strictElementsBakePlan;
-        if (plan == null) {
-            plan = StrictElementsBakePlan.compile((BlockModel) (Object) this);
-            bootoptim$strictElementsBakePlan = plan;
+        if (!bootoptim$strictElementsPlanCompiled) {
+            bootoptim$strictElementsPlanCompiled = true;
+            bootoptim$strictElementsBakePlan = StrictElementsBakePlan.compile((BlockModel) (Object) this);
         }
-        return plan;
+        return bootoptim$strictElementsBakePlan;
     }
 }

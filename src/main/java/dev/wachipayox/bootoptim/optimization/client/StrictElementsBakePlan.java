@@ -17,7 +17,6 @@ import net.neoforged.neoforge.client.model.geometry.BlockGeometryBakingContext;
 import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
 import org.joml.Vector3f;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
@@ -35,7 +34,6 @@ public final class StrictElementsBakePlan {
     private static final String PROPERTY = "boot_optim.compiledElementsMaterialPlan";
     private static final FaceBakery FACE_BAKERY = new FaceBakery();
 
-    private final BlockElement[] elements;
     private final Direction[] directions;
     private final BlockElementFace[] faces;
     private final Material[] materials;
@@ -46,7 +44,6 @@ public final class StrictElementsBakePlan {
     private final Direction[] cullDirections;
 
     private StrictElementsBakePlan(
-            BlockElement[] elements,
             Direction[] directions,
             BlockElementFace[] faces,
             Material[] materials,
@@ -55,7 +52,6 @@ public final class StrictElementsBakePlan {
             BlockElementRotation[] rotations,
             boolean[] shades,
             Direction[] cullDirections) {
-        this.elements = elements;
         this.directions = directions;
         this.faces = faces;
         this.materials = materials;
@@ -68,6 +64,15 @@ public final class StrictElementsBakePlan {
 
     public static boolean enabled() {
         return Boolean.parseBoolean(System.getProperty(PROPERTY, "false"));
+    }
+
+    private static int minimumFaces() {
+        String value = System.getProperty(PROPERTY + ".minFaces", "8");
+        try {
+            return Math.max(1, Integer.parseInt(value));
+        } catch (NumberFormatException ignored) {
+            return 8;
+        }
     }
 
     /**
@@ -84,15 +89,7 @@ public final class StrictElementsBakePlan {
             return null;
         }
 
-        List<BlockElement> elements = new ArrayList<>();
-        List<Direction> directions = new ArrayList<>();
-        List<BlockElementFace> faces = new ArrayList<>();
-        List<Material> materials = new ArrayList<>();
-        List<Vector3f> from = new ArrayList<>();
-        List<Vector3f> to = new ArrayList<>();
-        List<BlockElementRotation> rotations = new ArrayList<>();
-        List<Boolean> shades = new ArrayList<>();
-        List<Direction> culls = new ArrayList<>();
+        int faceCount = 0;
 
         for (BlockElement element : sourceElements) {
             if (element == null || element.faces == null || element.faces.isEmpty()) {
@@ -101,43 +98,45 @@ public final class StrictElementsBakePlan {
             if (element.getFaceData() != null && !ExtraFaceData.DEFAULT.equals(element.getFaceData())) {
                 return null;
             }
-            for (Direction direction : element.faces.keySet()) {
-                BlockElementFace face = element.faces.get(direction);
-                if (face == null || face.faceData() != null && !ExtraFaceData.DEFAULT.equals(face.faceData())) {
+            for (BlockElementFace face : element.faces.values()) {
+                if (face == null || (face.faceData() != null && !ExtraFaceData.DEFAULT.equals(face.faceData()))) {
                     return null;
                 }
-                elements.add(element);
-                directions.add(direction);
-                faces.add(face);
-                materials.add(owner.getMaterial(face.texture()));
-                from.add(element.from);
-                to.add(element.to);
-                rotations.add(element.rotation);
-                shades.add(element.shade);
-                culls.add(face.cullForDirection());
+            }
+            faceCount += element.faces.size();
+            if (faceCount < 0) {
+                return null;
             }
         }
-        if (faces.isEmpty()) {
+        if (faceCount < minimumFaces()) {
             return null;
         }
-        return new StrictElementsBakePlan(
-                elements.toArray(BlockElement[]::new),
-                directions.toArray(Direction[]::new),
-                faces.toArray(BlockElementFace[]::new),
-                materials.toArray(Material[]::new),
-                from.toArray(Vector3f[]::new),
-                to.toArray(Vector3f[]::new),
-                rotations.toArray(BlockElementRotation[]::new),
-                toBooleanArray(shades),
-                culls.toArray(Direction[]::new));
-    }
 
-    private static boolean[] toBooleanArray(List<Boolean> values) {
-        boolean[] result = new boolean[values.size()];
-        for (int i = 0; i < result.length; i++) {
-            result[i] = values.get(i);
+        Direction[] directions = new Direction[faceCount];
+        BlockElementFace[] faces = new BlockElementFace[faceCount];
+        Material[] materials = new Material[faceCount];
+        Vector3f[] from = new Vector3f[faceCount];
+        Vector3f[] to = new Vector3f[faceCount];
+        BlockElementRotation[] rotations = new BlockElementRotation[faceCount];
+        boolean[] shades = new boolean[faceCount];
+        Direction[] culls = new Direction[faceCount];
+        int index = 0;
+        for (BlockElement element : sourceElements) {
+            for (Direction direction : element.faces.keySet()) {
+                BlockElementFace face = element.faces.get(direction);
+                directions[index] = direction;
+                faces[index] = face;
+                materials[index] = owner.getMaterial(face.texture());
+                from[index] = element.from;
+                to[index] = element.to;
+                rotations[index] = element.rotation;
+                shades[index] = element.shade;
+                culls[index] = face.cullForDirection();
+                index++;
+            }
         }
-        return result;
+        return new StrictElementsBakePlan(
+                directions, faces, materials, from, to, rotations, shades, culls);
     }
 
     /**
