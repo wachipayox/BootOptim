@@ -71,6 +71,14 @@ model cache from this smoke alone. The initial two hosted attempts failed for
 diagnostic lifecycle reasons (relative JFC path, then staging before the
 benchmark directory existed); both were fixed before this successful run.
 
+As a coarse phase check, using the startup report's real boundaries
+(`mod_entrypoint=32,577 ms`, `main_menu=94,807 ms`) places all 374
+ModelManager/ModelBakery/BlockModel execution-stack matches in the post-entry
+interval, but they are only 374/2,733 post-entry execution samples (13.7%).
+This is useful localization, not exclusive accounting: a sample can contain a
+frame from an overlapping future, and allocation weights still need a compact
+offline aggregator before any H1/H2/H3 decision.
+
 ## Decision gate
 
 Reopen a production candidate only if the diagnostic supports one of these
