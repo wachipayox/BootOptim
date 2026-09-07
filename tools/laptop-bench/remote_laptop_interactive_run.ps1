@@ -85,9 +85,17 @@ do{
 }while([DateTime]::UtcNow-lt$deadline)
 if(-not$java){try{Stop-PrismOwned $s}catch{};Fail $s 'no target java/javaw appeared within 90 s'}
 
-$javaHandle=$null
-try{$javaHandle=[Diagnostics.Process]::GetProcessById([int]$java.ProcessId)}catch{try{Stop-PrismOwned $s}catch{};Fail $s 'target Java exited before identity validation'}
-$s.javaPid=[int]$java.ProcessId;$s.javaCreationDate=([DateTime]$java.CreationDate).ToString('o');$s.effectiveJavaExe=[string]$java.ExecutablePath;$s.phase='validating';Save $s
+$javaHandle=$null;$javaIdentity=$null;$expectedJavaCreation=([DateTime]$java.CreationDate).ToString('o')
+try{
+    $javaHandle=[Diagnostics.Process]::GetProcessById([int]$java.ProcessId)
+    $javaIdentity=Get-CimInstance Win32_Process -Filter "ProcessId=$($java.ProcessId)" -ErrorAction Stop
+    $actualCreation=([DateTime]$javaIdentity.CreationDate).ToString('o')
+    if($javaIdentity.Name -notin @('java.exe','javaw.exe') -or $actualCreation-ne$expectedJavaCreation -or [int]$javaIdentity.SessionId-ne[int]$s.expectedSessionId){throw 'target Java identity changed before process handle validation'}
+}catch{
+    try{if($javaHandle){$javaHandle.Dispose()}}catch{};try{Stop-PrismOwned $s}catch{};Fail $s 'target Java exited or PID was reused before identity validation'
+}
+$java=$javaIdentity
+$s.javaPid=[int]$java.ProcessId;$s.javaCreationDate=$actualCreation;$s.effectiveJavaExe=[string]$java.ExecutablePath;$s.phase='validating';Save $s
 try{
     Assert-ExpectedSession $s
     if([int]$java.SessionId-ne[int]$s.expectedSessionId){throw 'Java is outside the expected interactive session'}
@@ -110,4 +118,5 @@ if(-not$exited){
     try{if(-not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{}
 }else{$s.javaExitedUtc=[DateTime]::UtcNow.ToString('o')}
 try{Stop-PrismOwned $s}catch{$s.valid=$false;$s.reason='prism_close_failed'}
+try{$javaHandle.Dispose()}catch{}
 $s.phase=$(if($s.valid){'finished'}else{'invalid'});$s.finishedUtc=[DateTime]::UtcNow.ToString('o');Save $s
