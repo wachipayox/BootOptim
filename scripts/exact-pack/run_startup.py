@@ -113,6 +113,11 @@ def main() -> None:
     parser.add_argument("--variant", required=True)
     parser.add_argument("--iteration", required=True, type=int)
     parser.add_argument("--timeout", type=int, default=1200)
+    parser.add_argument(
+        "--rerun-tasks",
+        action="store_true",
+        help="Force Gradle's pack preparation task to run again; useful for same-VM paired diagnostics.",
+    )
     args = parser.parse_args()
 
     root = Path.cwd()
@@ -139,6 +144,8 @@ def main() -> None:
         mirror_server, _ = start_mcef_mirror()
         gradle = "gradlew.bat" if os.name == "nt" else "./gradlew"
         command = [gradle, "runPackBenchmarkClient", "--no-daemon", "--console=plain"]
+        if args.rerun_tasks:
+            command.append("--rerun-tasks")
         print(
             f"Launching exact-pack benchmark variant={args.variant} iteration={args.iteration} "
             f"timeout={args.timeout}s",
