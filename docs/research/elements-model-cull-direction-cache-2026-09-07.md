@@ -65,6 +65,22 @@ attribute the median movement to a direction-map micro-optimization. No laptop
 run is justified from this A/B, and the broader `ElementsModel` section remains
 open for a more discriminating premise or measurement.
 
+The same branch was rerun after moving the cache-access interface out of the
+Mixin package (commit `f412e7a`), which removed the earlier
+`IllegalClassLoadError`. The exact-pack workflow completed all six jobs with
+zero BootOptim Mixin errors and unchanged atlas dimensions. Its medians were:
+
+| variant | main-menu ms | reload→FancyMenu ms | panorama ms |
+| --- | ---: | ---: | ---: |
+| candidate | 90,204 | 41,453 | 4,563.6 |
+| control | 90,423 | 42,743 | 4,445.3 |
+
+The `-219 ms` total delta and `-1,290 ms` reload-to-FancyMenu delta are too
+small for the hosted variance, and the candidate did not emit an
+`elements_cull_direction_cache` marker in the exact-pack logs. This is a
+successful compatibility/build gate, not evidence that the direction loop is
+on the hosted critical path.
+
 ## Reopening
 
 The current implementations are not production candidates, but the broader
