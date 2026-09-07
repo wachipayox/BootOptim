@@ -15,7 +15,7 @@ public final class ExitTreeFixture {
       new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), "ExitTreeFixture", "child").start();
       Thread.sleep(30000L);
     } else {
-      Process p = new ProcessBuilder("cmd.exe", "/c", "ping 127.0.0.1 -n 2 >nul & exit /b 9").start();
+      Process p = new ProcessBuilder("cmd.exe", "/c", "ping 127.0.0.1 -n 6 >nul & exit /b 9").start();
       p.waitFor();
       Thread.sleep(30000L);
     }
@@ -37,7 +37,7 @@ try{
   if(-not$s){throw 'observer produced no checkpoint'}
   $grand=@($s.processes|Where-Object{$_.parentPid-ne$java.Id})
   if($grand.Count-eq0){throw 'recursive descendant was not observed'}
-  $deadline=[DateTime]::UtcNow.AddSeconds(10);$s=$null
+  $deadline=[DateTime]::UtcNow.AddSeconds(12);$s=$null
   do{Start-Sleep -Milliseconds 200;$s=Get-Content $out -Raw|ConvertFrom-Json;$bad=@($s.processes|Where-Object{$_.exitCode-eq9});if($bad.Count-gt0){break}}while([DateTime]::UtcNow-lt$deadline)
   if(@($s.processes|Where-Object{$_.exitCode-eq9}).Count-eq0){throw 'descendant exit code 9 was not persisted while parent stayed alive'}
   Stop-Process -Id $java.Id -Force
