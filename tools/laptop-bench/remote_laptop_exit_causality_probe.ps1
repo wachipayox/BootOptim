@@ -41,7 +41,7 @@ public static class BootOptimWindowProbe {
 }
 '@
 }
-function Window-State([int]$pid){try{@([BootOptimWindowProbe]::VisibleForPid($pid))}catch{@()}}
+function Window-State([int]$processId){try{@([BootOptimWindowProbe]::VisibleForPid($processId))}catch{@()}}
 function Read-ControllerEvents{if(-not$ControllerEventFile -or -not(Test-Path -LiteralPath $ControllerEventFile -PathType Leaf)){return @()};$out=@();foreach($line in @(Get-Content -LiteralPath $ControllerEventFile -ErrorAction SilentlyContinue)){if([string]::IsNullOrWhiteSpace($line)){continue};try{$out+=($line|ConvertFrom-Json)}catch{$out+=[pscustomobject]@{event='controller_event_parse_error';raw=$line}}};@($out)}
 function Read-LifecycleMarkers{
     $found=[ordered]@{minecraftStop=$false;jvmShutdownHook=$false;joinedGame=$false;levelLoadingScreen=$false;mcefInitialized=$false;mcefLast=$null;lines=@()}
@@ -63,9 +63,6 @@ $records=@{};$handles=@{};$timeline=New-Object System.Collections.Generic.List[o
 function Timeline([object]$e){$timeline.Add($e);$state.timeline=$timeline.ToArray()}
 function Snapshot-Records{$state.processes=@($records.Values|ForEach-Object{[pscustomobject]@{pid=$_.pid;parentPid=$_.parentPid;creationDate=$_.creationDate;name=$_.name;kind=$_.kind;cefType=$_.cefType;firstSeenUtc=$_.firstSeenUtc;exitedUtc=$_.exitedUtc;exitCode=$_.exitCode;exitCodeHex=$_.exitCodeHex;stillRunning=$_.stillRunning}})}
 function Observe-Descendants{
-    # Windows PowerShell 5.1 has fragile generic-type construction semantics.
-    # Use the non-generic Queue so the observer itself cannot fail before its
-    # first process-tree checkpoint merely from Queue[int] construction.
     $parents=New-Object System.Collections.Queue;$parents.Enqueue([int]$JavaPid);foreach($r in $records.Values){if($r.stillRunning){$parents.Enqueue([int]$r.pid)}}
     $visited=@{};$seenChanged=$false
     while($parents.Count-gt0){$ppid=[int]$parents.Dequeue();if($visited.ContainsKey($ppid)){continue};$visited[$ppid]=$true
