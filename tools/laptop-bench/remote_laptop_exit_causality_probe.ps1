@@ -26,12 +26,7 @@ function Exit-Hex([int]$code){$bits=[BitConverter]::ToUInt32([BitConverter]::Get
 function Same-Creation([object]$p,[string]$iso){if(-not$p -or -not$iso){return $false};try{return ([DateTime]$p.CreationDate).ToString('o')-eq$iso}catch{return $false}}
 function Safe-Creation([object]$p){try{if($null-ne$p.CreationDate){return ([DateTime]$p.CreationDate).ToString('o')}}catch{};return $null}
 function Cef-Type([string]$cmd){if([string]::IsNullOrWhiteSpace($cmd)){return $null};$m=[regex]::Match($cmd,'(?:^|\s)--type=([^\s\"]+)');if($m.Success){return $m.Groups[1].Value};return $null}
-function Process-Kind([string]$name,[string]$cmd){
-    if($name -ieq 'jcef_helper.exe'){return 'jcef_helper'}
-    if($name -match '^(java|javaw)\.exe$'){return 'java'}
-    $t=Cef-Type $cmd;if($t){return 'cef_'+$t}
-    return 'other'
-}
+function Process-Kind([string]$name,[string]$cmd){if($name -ieq 'jcef_helper.exe'){return 'jcef_helper'};if($name -match '^(java|javaw)\.exe$'){return 'java'};$t=Cef-Type $cmd;if($t){return 'cef_'+$t};return 'other'}
 function Ensure-WindowsApi{
     if('BootOptimWindowProbe' -as [type]){return}
     Add-Type -TypeDefinition @'
@@ -47,10 +42,7 @@ public static class BootOptimWindowProbe {
 '@
 }
 function Window-State([int]$pid){try{@([BootOptimWindowProbe]::VisibleForPid($pid))}catch{@()}}
-function Read-ControllerEvents{
-    if(-not$ControllerEventFile -or -not(Test-Path -LiteralPath $ControllerEventFile -PathType Leaf)){return @()}
-    $out=@();foreach($line in @(Get-Content -LiteralPath $ControllerEventFile -ErrorAction SilentlyContinue)){if([string]::IsNullOrWhiteSpace($line)){continue};try{$out+=($line|ConvertFrom-Json)}catch{$out+=[pscustomobject]@{event='controller_event_parse_error';raw=$line}}};@($out)
-}
+function Read-ControllerEvents{if(-not$ControllerEventFile -or -not(Test-Path -LiteralPath $ControllerEventFile -PathType Leaf)){return @()};$out=@();foreach($line in @(Get-Content -LiteralPath $ControllerEventFile -ErrorAction SilentlyContinue)){if([string]::IsNullOrWhiteSpace($line)){continue};try{$out+=($line|ConvertFrom-Json)}catch{$out+=[pscustomobject]@{event='controller_event_parse_error';raw=$line}}};@($out)}
 function Read-LifecycleMarkers{
     $found=[ordered]@{minecraftStop=$false;jvmShutdownHook=$false;joinedGame=$false;levelLoadingScreen=$false;mcefInitialized=$false;mcefLast=$null;lines=@()}
     foreach($path in $LogPath){if(-not(Test-Path -LiteralPath $path -PathType Leaf)){continue};foreach($line in @(Get-Content -LiteralPath $path -ErrorAction SilentlyContinue)){
@@ -73,19 +65,19 @@ function Timeline([object]$e){$timeline.Add($e);$state.timeline=$timeline.ToArra
 function Snapshot-Records{$state.processes=@($records.Values|ForEach-Object{[pscustomobject]@{pid=$_.pid;parentPid=$_.parentPid;creationDate=$_.creationDate;name=$_.name;kind=$_.kind;cefType=$_.cefType;firstSeenUtc=$_.firstSeenUtc;exitedUtc=$_.exitedUtc;exitCode=$_.exitCode;exitCodeHex=$_.exitCodeHex;stillRunning=$_.stillRunning}})}
 function Observe-Descendants{
     $parents=New-Object System.Collections.Generic.Queue[int];$parents.Enqueue($JavaPid);foreach($r in $records.Values){if($r.stillRunning){$parents.Enqueue([int]$r.pid)}}
-    $visited=@{}
+    $visited=@{};$seenChanged=$false
     while($parents.Count-gt0){$ppid=$parents.Dequeue();if($visited.ContainsKey($ppid)){continue};$visited[$ppid]=$true
         foreach($c in @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$ppid" -ErrorAction SilentlyContinue)){
             $id=[int]$c.ProcessId;$created=Safe-Creation $c;$key="$id|$created";$cmd=[string]$c.CommandLine
             if(-not$records.ContainsKey($key)){
-                $h=$null;try{$h=[Diagnostics.Process]::GetProcessById($id)}catch{}
-                if($h){$handles[$key]=$h}
+                $h=$null;try{$h=[Diagnostics.Process]::GetProcessById($id)}catch{};if($h){$handles[$key]=$h}
                 $rec=[pscustomobject]@{pid=$id;parentPid=[int]$c.ParentProcessId;creationDate=$created;name=[string]$c.Name;kind=Process-Kind ([string]$c.Name) $cmd;cefType=Cef-Type $cmd;firstSeenUtc=[DateTime]::UtcNow.ToString('o');exitedUtc=$null;exitCode=$null;exitCodeHex=$null;stillRunning=$true}
-                $records[$key]=$rec;Timeline([pscustomobject]@{event='process_seen';utc=$rec.firstSeenUtc;pid=$id;parentPid=$rec.parentPid;name=$rec.name;kind=$rec.kind;cefType=$rec.cefType})
+                $records[$key]=$rec;$seenChanged=$true;Timeline([pscustomobject]@{event='process_seen';utc=$rec.firstSeenUtc;pid=$id;parentPid=$rec.parentPid;name=$rec.name;kind=$rec.kind;cefType=$rec.cefType})
             }
             $parents.Enqueue($id)
         }
     }
+    if($seenChanged){Snapshot-Records;Write-JsonAtomic $OutputFile $state}
     foreach($key in @($records.Keys)){$r=$records[$key];if(-not$r.stillRunning){continue};$h=$handles[$key];if(-not$h){continue};try{if($h.WaitForExit(0)){$r.stillRunning=$false;$r.exitedUtc=[DateTime]::UtcNow.ToString('o');try{$r.exitCode=[int]$h.ExitCode;$r.exitCodeHex=Exit-Hex $r.exitCode}catch{};Timeline([pscustomobject]@{event='process_exit';utc=$r.exitedUtc;pid=$r.pid;name=$r.name;kind=$r.kind;exitCode=$r.exitCode;exitCodeHex=$r.exitCodeHex});Snapshot-Records;Write-JsonAtomic $OutputFile $state}}catch{}}
 }
 
@@ -106,7 +98,7 @@ try{
     $state.status='parent_exited';$state.stage='post_exit';$state.javaWindows=@(Window-State $JavaPid);Snapshot-Records;$state.controllerEvents=Read-ControllerEvents;$state.lifecycle=Read-LifecycleMarkers;Write-JsonAtomic $OutputFile $state
     if($PostExitEventGraceMilliseconds-gt0){Start-Sleep -Milliseconds $PostExitEventGraceMilliseconds}
     try{$state.applicationEvents=@(Get-WinEvent -FilterHashtable @{LogName='Application';StartTime=([DateTime]$state.startedUtc);Id=1000,1001} -ErrorAction Stop|Where-Object{$_.Message-match'(?i)(javaw?\.exe|jcef_helper\.exe|libcef\.dll|OpenAL\.dll|soft_oal\.dll)'}|Select-Object -First 30|ForEach-Object{[pscustomobject]@{id=$_.Id;provider=$_.ProviderName;timeCreated=$_.TimeCreated.ToUniversalTime().ToString('o');message=$_.Message}})}catch{$state.warnings+=('application_events: '+$_.Exception.Message)}
-    $parentWer=@($state.applicationEvents|Where-Object{$_.message-match("(?i)(javaw?\.exe).*"+[regex]::Escape([string]$JavaPid))})
+    $pidHex=('0x{0:x}' -f $JavaPid);$parentWer=@($state.applicationEvents|Where-Object{$_.message-match'(?i)javaw?\.exe' -and ($_.message-match([regex]::Escape([string]$JavaPid)) -or $_.message-match([regex]::Escape($pidHex)))})
     $helperBad=@($state.processes|Where-Object{$_.kind-like'jcef_helper*' -or $_.kind-like'cef_*'}|Where-Object{$null-ne$_.exitCode -and [int]$_.exitCode-ne0})
     if($parentWer.Count-gt0){$state.exitClassification='java_crash_wer'}
     elseif($state.exitCode-ne0 -and $null-ne$state.exitCode){$state.exitClassification='java_nonzero_exit'}
@@ -116,6 +108,6 @@ try{
     elseif($state.exitCode-eq0){$state.exitClassification='parent_zero_without_shutdown_provenance'}
     else{$state.exitClassification='insufficient_evidence'}
     $state.status='complete';$state.stage='complete';Write-JsonAtomic $OutputFile $state
-}catch{$fatal=$_;$state.status='observer_error';$state.stage='observer_error';try{Snapshot-Records;$state.timeline=$timeline.ToArray();Write-JsonAtomic $OutputFile $state}catch{};try{Write-JsonAtomic $ErrorFile (Error-Snapshot $fatal $state.stage)}catch{}}
+}catch{$fatal=$_;$failedStage=[string]$state.stage;$state.status='observer_error';$state.stage=$failedStage;try{Snapshot-Records;$state.timeline=$timeline.ToArray();Write-JsonAtomic $OutputFile $state}catch{};try{Write-JsonAtomic $ErrorFile (Error-Snapshot $fatal $failedStage)}catch{}}
 finally{foreach($h in @($handles.Values)){try{$h.Dispose()}catch{}};try{if($javaHandle){$javaHandle.Dispose()}}catch{};try{if($prismHandle){$prismHandle.Dispose()}}catch{}}
 if($fatal){throw $fatal}
