@@ -6,8 +6,8 @@ param(
     [string]$CreationDate,
     [Parameter(Mandatory = $true)]
     [string]$OutputPath,
-    [ValidateRange(250, 10000)]
-    [int]$SampleIntervalMs = 1000,
+    [ValidateRange(500, 10000)]
+    [int]$SampleIntervalMs = 2000,
     [ValidateRange(30, 3600)]
     [int]$TimeoutSeconds = 1200
 )
@@ -49,14 +49,17 @@ while ([DateTime]::UtcNow -lt $deadline) {
     # These are read-only Windows performance snapshots. They deliberately do
     # not read Minecraft logs or query Prism, so they can run alongside a
     # transaction without changing its lifecycle or measurement endpoint.
-    $procPerf = Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -ErrorAction SilentlyContinue |
-        Where-Object { [int]$_.IDProcess -eq $TargetPid } | Select-Object -First 1
+    # Use WMI filters instead of enumerating every process/disk/core.  The
+    # difference matters on the target's 2C/4T HDD: a diagnostic must not turn
+    # each one-second sample into a multi-second all-process scan.
+    $procPerf = Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -Filter "IDProcess=$TargetPid" -ErrorAction SilentlyContinue |
+        Select-Object -First 1
     $memory = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction SilentlyContinue |
         Select-Object -First 1
-    $disk = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -eq '_Total' } | Select-Object -First 1
-    $cpu = Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -eq '_Total' } | Select-Object -First 1
+    $disk = Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    $cpu = Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction SilentlyContinue |
+        Select-Object -First 1
 
     $sample = [ordered]@{
         utc = $now.ToString('o')
@@ -84,6 +87,7 @@ while ([DateTime]::UtcNow -lt $deadline) {
     creationDate = $CreationDate
     output = [IO.Path]::GetFullPath($OutputPath)
     samples = $count
+    sampleIntervalMs = $SampleIntervalMs
     stopReason = $stopReason
     startedUtc = $started.ToString('o')
     finishedUtc = [DateTime]::UtcNow.ToString('o')

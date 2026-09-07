@@ -24,7 +24,9 @@ JSON object per sample. It records read-only WMI performance counters for:
 It never reads Minecraft logs, controls Prism, kills Java, changes the instance,
 or changes the startup measurement boundary. The PID/creation tuple prevents a
 later process from being mistaken for the target. It stops when that process
-exits or after a bounded timeout and writes a completion summary to stdout.
+exits or after a bounded timeout and writes a completion summary to stdout. The
+default sample period is two seconds; callers may request 500 ms or more when
+the extra WMI overhead is justified.
 
 ## Use and interpretation
 
