@@ -140,6 +140,7 @@ function Register-BenchTask([object]$st,[string]$stateFile) {
     Register-ScheduledTask -TaskName $st.taskName -Action $a -Principal $pr -Settings $set -Force|Out-Null
 }
 
+if($RunId -and $RunId -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$'){Fail 'RunId must be 1-64 path-safe characters: letters, digits, dot, underscore, hyphen'}
 $stateFile=if($RunId){Join-Path (Full $StateRoot) (Join-Path $RunId 'state.json')}else{$null}
 if($Action -in @('Status','Postflight','Recover') -and -not$stateFile){Fail 'RunId is required'}
 
