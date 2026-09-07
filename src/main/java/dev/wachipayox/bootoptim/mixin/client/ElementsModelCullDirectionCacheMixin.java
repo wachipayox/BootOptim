@@ -44,6 +44,10 @@ abstract class ElementsModelCullDirectionCacheMixin {
             System.getProperty("boot_optim.elementsCullDirectionCache", "false"));
     private static final boolean FIELD_CACHE_ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.elementsCullDirectionFieldCache", "false"));
+    private static final String RAW_CACHE_PROPERTY = System.getProperty(
+            "boot_optim.elementsCullDirectionCache", "<unset>");
+    private static final String RAW_FIELD_PROPERTY = System.getProperty(
+            "boot_optim.elementsCullDirectionFieldCache", "<unset>");
     private static final AtomicBoolean REPORTED = new AtomicBoolean();
     private static final AtomicBoolean FIELD_CACHE_REPORTED = new AtomicBoolean();
     private static final AtomicBoolean FLAGS_REPORTED = new AtomicBoolean();
@@ -64,7 +68,9 @@ abstract class ElementsModelCullDirectionCacheMixin {
             StartupReport.optimization(
                     "elements_cull_direction_flags",
                     ENABLED,
-                    "cache=" + ENABLED + ";field=" + FIELD_CACHE_ENABLED);
+                    "cache=" + ENABLED + ";field=" + FIELD_CACHE_ENABLED
+                            + ";rawCache=" + RAW_CACHE_PROPERTY
+                            + ";rawField=" + RAW_FIELD_PROPERTY);
         }
         if (!ENABLED) {
             return;

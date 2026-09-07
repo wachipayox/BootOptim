@@ -152,3 +152,44 @@ next iteration adds separate invocation and table-hit markers and clears the
 report between diagnostic runs. Until those markers are observed, treat this
 candidate as inconclusive rather than as evidence that the entire direction is
 unoptimizable.
+
+## Clean laptop attribution rerun (2026-09-07)
+
+The Prism harness was then made reproducible for this comparison: Prism was
+stopped before each edit, `JvmArgs` and `OverrideJavaArgs` were placed in the
+`[General]` section before `[UI]`, exactly one BootOptim JAR was left in
+`mods/`, and the actual Java command line was checked. These details matter on
+this laptop because an already-running Prism process can write its in-memory
+arguments back over `instance.cfg`.
+
+The first clean field-cache candidate had the requested effective command line
+(`cache=false`, `redirect=false`, `field=true`) and reached the menu in
+`348,106 ms`. Its report contained:
+
+```text
+elements_cull_direction_flags status=disabled reason=cache=false;field=true
+elements_cull_direction_field_cache status=enabled reason=per_transformation_lazy_direction_map
+```
+
+There was no actual-path marker from `ElementsModel`; therefore the field
+cache was enabled in the class but not proven to be called for this startup.
+A fresh production-JAR control reached the menu in `366,377 ms`. The nominal
+`-18,271 ms` difference is not a promotion result: it is one candidate/control
+pair with no confirmed field-cache invocation, and the laptop's known variance
+is larger than this mechanism can safely claim.
+
+The first redirect attempt was invalid because its report showed
+`cache=true` after Prism reused stale state. It reached `381,096 ms`, but the
+time is discarded. A second attempt verified the Java command line contained
+`cache=false`, `redirect=true`, and `field=false`; nevertheless the report
+again showed `cache=true` and entered the full-loop identity path, reaching
+`582,081 ms`. This is also discarded as a redirect measurement. The
+disagreement between the verified JVM arguments and the mixin's effective
+static flag is now itself a harness/class-initialization diagnostic finding;
+the next build records raw property values and a separate redirect-flag marker
+at the first `ElementsModel.addQuads` invocation.
+
+These results do not close the broader cull-direction route. They close only
+the current un-attributed field-cache sample and leave the stock-loop redirect
+open until its invocation and raw-property markers agree with the command
+line. No experimental JAR is left installed on the laptop after the run.

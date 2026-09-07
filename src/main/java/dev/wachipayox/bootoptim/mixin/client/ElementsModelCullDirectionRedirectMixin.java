@@ -8,8 +8,10 @@ import net.minecraft.client.resources.model.BlockModelRotation;
 import net.minecraft.core.Direction;
 import net.neoforged.neoforge.client.model.ElementsModel;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -26,6 +28,13 @@ abstract class ElementsModelCullDirectionRedirectMixin {
             System.getProperty("boot_optim.elementsCullDirectionRedirectCache", "false"));
     private static final boolean FIELD_CACHE_ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.elementsCullDirectionFieldCache", "false"));
+    private static final String RAW_REDIRECT_PROPERTY = System.getProperty(
+            "boot_optim.elementsCullDirectionRedirectCache", "<unset>");
+    private static final String RAW_CACHE_PROPERTY = System.getProperty(
+            "boot_optim.elementsCullDirectionCache", "<unset>");
+    private static final String RAW_FIELD_PROPERTY = System.getProperty(
+            "boot_optim.elementsCullDirectionFieldCache", "<unset>");
+    private static final AtomicBoolean FLAGS_REPORTED = new AtomicBoolean();
     private static final AtomicBoolean INVOCATION_REPORTED = new AtomicBoolean();
     private static final AtomicBoolean REPORTED = new AtomicBoolean();
     private static final Map<Transformation, Direction[]> VANILLA_ROTATIONS = createVanillaRotations();
@@ -41,6 +50,18 @@ abstract class ElementsModelCullDirectionRedirectMixin {
             result.put(rotation.getRotation(), mapped);
         }
         return result;
+    }
+
+    @Inject(method = "addQuads", at = @At("HEAD"), require = 0)
+    private void bootoptim$reportFlags(CallbackInfo ci) {
+        if (FLAGS_REPORTED.compareAndSet(false, true)) {
+            StartupReport.optimization(
+                    "elements_cull_direction_redirect_flags",
+                    ENABLED,
+                    "redirect=" + ENABLED + ";cache=" + RAW_CACHE_PROPERTY
+                            + ";field=" + RAW_FIELD_PROPERTY
+                            + ";rawRedirect=" + RAW_REDIRECT_PROPERTY);
+        }
     }
 
     @Redirect(
