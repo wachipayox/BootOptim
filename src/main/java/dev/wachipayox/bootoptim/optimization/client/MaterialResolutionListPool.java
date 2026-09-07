@@ -11,6 +11,7 @@ import java.util.Deque;
  */
 public final class MaterialResolutionListPool {
     private static final String PROPERTY = "boot_optim.materialResolutionListPool";
+    private static final boolean ENABLED = Boolean.getBoolean(PROPERTY);
     private static final ThreadLocal<State> STATES = ThreadLocal.withInitial(State::new);
 
     private static final class State {
@@ -22,7 +23,7 @@ public final class MaterialResolutionListPool {
     }
 
     public static boolean enabled() {
-        return Boolean.parseBoolean(System.getProperty(PROPERTY, "false"));
+        return ENABLED;
     }
 
     public static void begin() {
