@@ -215,3 +215,33 @@ The fields are now `@Unique` and have distinct `BOOTOPTIM_CACHE_*` and
 redirect measurement after this fix; all earlier redirect timings remain
 discarded. This also explains why the earlier field-only run did not reveal
 the issue: both colliding `ENABLED` values happened to be false.
+
+## Fixed-field physical validation (2026-09-07)
+
+The corrected build (`fc9eb54`) was exercised with fresh Prism launches and
+the effective Java arguments checked before timing. The stock-loop redirect
+was genuinely isolated:
+
+```text
+cache=false;field=false;rawCache=false;rawField=false
+redirect=true;cache=false;field=false;rawRedirect=true
+redirect_invoked
+redirect_cache vanilla_block_model_rotation_table
+```
+
+It reached the menu in `365,989 ms`, versus `366,377 ms` for the clean
+production control. The `-388 ms` movement is neutral at this laptop's noise
+level, despite the route being proven active. The full-loop candidate was also
+rerun with `cache=true`, `redirect=false`, `field=false`; it reached the menu
+in `345,229 ms` and reported `identity_rotation` with raw and parsed values in
+agreement. This is inside the observed production band and does not establish
+a win over the nearby production baseline (`341,420 ms`) or the earlier lazy
+candidate (`349,752 ms`).
+
+Disposition: the identity-table redirect and the current full-loop
+per-model direction cache are rejected as startup optimizations for this
+pack, but the broader direction remains reopenable with a materially different
+premise (for example a count/timing diagnostic or a proven critical-path
+consumer). The `@Unique` field isolation is retained as a correctness fix for
+the experimental branch. The laptop is restored to exactly one production
+BootOptim JAR with experimental properties removed.
