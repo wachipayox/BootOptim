@@ -27,9 +27,9 @@ class PhaseReplayTests(unittest.TestCase):
             self.assertEqual((fixture_id, variant), ("test", None))
             one = replay(tasks, 1)
             two = replay(tasks, 2)
-            self.assertEqual(one["makespan_ms"], 10.0)
-            self.assertEqual(two["makespan_ms"], 7.0)
-            self.assertEqual(two["critical_path_ms"], 7.0)
+            self.assertEqual(one["makespan_units"], 10.0)
+            self.assertEqual(two["makespan_units"], 7.0)
+            self.assertEqual(two["critical_path_units"], 7.0)
             self.assertEqual(two["critical_path"], ["parse", "states", "barrier"])
         finally:
             directory.cleanup()

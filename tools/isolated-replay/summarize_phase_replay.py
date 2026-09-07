@@ -33,8 +33,8 @@ def main() -> None:
         speedup = row.get("parallelism_speedup_vs_single")
         lines.append(
             f"| {row.get('policy', 'n/a')} | {row.get('workers', 'n/a')} | "
-            f"{row.get('makespan_ms', 'n/a')} | {row.get('critical_path_ms', 'n/a')} | "
-            f"{row.get('queue_wait_ms', 'n/a')} | {speedup if speedup is not None else 'n/a'} |"
+            f"{row.get('makespan_units', 'n/a')} | {row.get('critical_path_units', 'n/a')} | "
+            f"{row.get('queue_wait_units', 'n/a')} | {speedup if speedup is not None else 'n/a'} |"
         )
     lines.extend(["", f"Fixture: `{next(iter(fixture_ids), 'n/a')}`", ""])
     args.output.write_text("\n".join(lines), encoding="utf-8")

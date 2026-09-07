@@ -193,9 +193,9 @@ def replay(tasks: list[Task], workers: int, policy: str = "stock") -> dict[str, 
             end = start + task.duration_ms
             records[task_id] = {
                 "worker": worker_id,
-                "start_ms": start,
-                "end_ms": end,
-                "queue_wait_ms": max(0.0, start - dependency_ready),
+                "start_units": start,
+                "end_units": end,
+                "queue_wait_units": max(0.0, start - dependency_ready),
             }
             heapq.heappush(running, (end, worker_id, task_id))
             assigned = True
@@ -219,17 +219,17 @@ def replay(tasks: list[Task], workers: int, policy: str = "stock") -> dict[str, 
 
     critical_ms, critical_path = _critical_path(tasks)
     total_work_ms = sum(task.duration_ms for task in tasks)
-    makespan_ms = max((record["end_ms"] for record in records.values()), default=0.0)
-    queue_wait_ms = sum(record["queue_wait_ms"] for record in records.values())
+    makespan_ms = max((record["end_units"] for record in records.values()), default=0.0)
+    queue_wait_units = sum(record["queue_wait_units"] for record in records.values())
     return {
         "workers": workers,
         "policy": policy,
         "task_count": len(tasks),
-        "total_work_ms": total_work_ms,
-        "critical_path_ms": critical_ms,
+        "total_work_units": total_work_ms,
+        "critical_path_units": critical_ms,
         "critical_path": critical_path,
-        "makespan_ms": makespan_ms,
-        "queue_wait_ms": queue_wait_ms,
+        "makespan_units": makespan_ms,
+        "queue_wait_units": queue_wait_units,
         "parallelism_speedup_vs_single": (total_work_ms / makespan_ms) if makespan_ms else None,
         "critical_path_ratio": (critical_ms / makespan_ms) if makespan_ms else None,
         "tasks": records,
