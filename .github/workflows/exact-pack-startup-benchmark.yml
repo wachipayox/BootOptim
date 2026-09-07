@@ -357,6 +357,13 @@ jobs:
             --extract .exact-pack-run \
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 
+      - name: Stage optional ModelManager JFR settings
+        shell: bash
+        run: |
+          mkdir -p .exact-pack-run/config/boot_optim
+          cp scripts/exact-pack/modelmanager-attribution.jfc \
+             .exact-pack-run/config/boot_optim/modelmanager-attribution.jfc
+
       - name: Launch exact pack to main menu
         if: needs.plan.outputs.mode != 'paired'
         shell: bash
@@ -403,6 +410,8 @@ jobs:
             run-pack-benchmark/config/fml.toml
             run-pack-benchmark/config/mcef/mcef.properties
             run-pack-benchmark/options.txt
+            diagnostics/**/*.jfr
+            run-pack-benchmark/**/*.jfr
           if-no-files-found: ignore
           retention-days: 14
 
