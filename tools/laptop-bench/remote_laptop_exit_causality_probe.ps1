@@ -58,15 +58,17 @@ function Read-LifecycleMarkers{
 }
 function Error-Snapshot([System.Management.Automation.ErrorRecord]$e,[string]$stage){[ordered]@{schema=1;diagnosticOnly=$true;observerPid=$PID;javaPid=$JavaPid;stage=$stage;utc=[DateTime]::UtcNow.ToString('o');exceptionType=if($e.Exception){$e.Exception.GetType().FullName}else{$null};message=if($e.Exception){$e.Exception.Message}else{[string]$e};category=[string]$e.CategoryInfo;scriptStackTrace=[string]$e.ScriptStackTrace}}
 
-Ensure-WindowsApi
-$state=[ordered]@{schema=4;diagnosticOnly=$true;observerEffect=("{0}ms recursive Win32_Process/window polling plus checkpoints; not valid for clean timing"-f$PollMilliseconds);status='starting';stage='starting';observerPid=$PID;javaPid=$JavaPid;javaCreationDate=$JavaCreationDate;startedUtc=[DateTime]::UtcNow.ToString('o');attachedUtc=$null;exitedUtc=$null;exitCode=$null;exitCodeHex=$null;exitClassification='insufficient_evidence';prism=$null;javaWindows=@();processes=@();timeline=@();controllerEvents=@();lifecycle=$null;applicationEvents=@();warnings=@()}
+$state=[ordered]@{schema=4;diagnosticOnly=$true;observerEffect=("{0}ms recursive Win32_Process/window polling plus checkpoints; not valid for clean timing"-f$PollMilliseconds);status='starting';stage='starting';observerPid=$PID;javaPid=$JavaPid;javaCreationDate=$JavaCreationDate;startedUtc=[DateTime]::UtcNow.ToString('o');attachedUtc=$null;exitedUtc=$null;exitCode=$null;exitCodeHex=$null;exitClassification='insufficient_evidence';prism=$null;javaWindows=@();processes=@();timeline=@();controllerEvents=@();lifecycle=$null;applicationEvents=@();warnings=@();error=$null}
 $records=@{};$handles=@{};$timeline=New-Object System.Collections.Generic.List[object];$fatal=$null;$javaHandle=$null;$prismHandle=$null
 function Timeline([object]$e){$timeline.Add($e);$state.timeline=$timeline.ToArray()}
 function Snapshot-Records{$state.processes=@($records.Values|ForEach-Object{[pscustomobject]@{pid=$_.pid;parentPid=$_.parentPid;creationDate=$_.creationDate;name=$_.name;kind=$_.kind;cefType=$_.cefType;firstSeenUtc=$_.firstSeenUtc;exitedUtc=$_.exitedUtc;exitCode=$_.exitCode;exitCodeHex=$_.exitCodeHex;stillRunning=$_.stillRunning}})}
 function Observe-Descendants{
-    $parents=New-Object System.Collections.Generic.Queue[int];$parents.Enqueue($JavaPid);foreach($r in $records.Values){if($r.stillRunning){$parents.Enqueue([int]$r.pid)}}
+    # Windows PowerShell 5.1 has fragile generic-type construction semantics.
+    # Use the non-generic Queue so the observer itself cannot fail before its
+    # first process-tree checkpoint merely from Queue[int] construction.
+    $parents=New-Object System.Collections.Queue;$parents.Enqueue([int]$JavaPid);foreach($r in $records.Values){if($r.stillRunning){$parents.Enqueue([int]$r.pid)}}
     $visited=@{};$seenChanged=$false
-    while($parents.Count-gt0){$ppid=$parents.Dequeue();if($visited.ContainsKey($ppid)){continue};$visited[$ppid]=$true
+    while($parents.Count-gt0){$ppid=[int]$parents.Dequeue();if($visited.ContainsKey($ppid)){continue};$visited[$ppid]=$true
         foreach($c in @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$ppid" -ErrorAction SilentlyContinue)){
             $id=[int]$c.ProcessId;$created=Safe-Creation $c;$key="$id|$created";$cmd=[string]$c.CommandLine
             if(-not$records.ContainsKey($key)){
@@ -78,10 +80,11 @@ function Observe-Descendants{
         }
     }
     if($seenChanged){Snapshot-Records;Write-JsonAtomic $OutputFile $state}
-    foreach($key in @($records.Keys)){$r=$records[$key];if(-not$r.stillRunning){continue};$h=$handles[$key];if(-not$h){continue};try{if($h.WaitForExit(0)){$r.stillRunning=$false;$r.exitedUtc=[DateTime]::UtcNow.ToString('o');try{$r.exitCode=[int]$h.ExitCode;$r.exitCodeHex=Exit-Hex $r.exitCode}catch{};Timeline([pscustomobject]@{event='process_exit';utc=$r.exitedUtc;pid=$r.pid;name=$r.name;kind=$r.kind;exitCode=$r.exitCode;exitCodeHex=$r.exitCodeHex});Snapshot-Records;Write-JsonAtomic $OutputFile $state}}catch{}}
+    foreach($key in @($records.Keys)){$r=$records[$key];if(-not$r.stillRunning){continue};$h=$null;if($handles.ContainsKey($key)){$h=$handles[$key]};if(-not$h){continue};try{if($h.WaitForExit(0)){$r.stillRunning=$false;$r.exitedUtc=[DateTime]::UtcNow.ToString('o');try{$r.exitCode=[int]$h.ExitCode;$r.exitCodeHex=Exit-Hex $r.exitCode}catch{};Timeline([pscustomobject]@{event='process_exit';utc=$r.exitedUtc;pid=$r.pid;name=$r.name;kind=$r.kind;exitCode=$r.exitCode;exitCodeHex=$r.exitCodeHex});Snapshot-Records;Write-JsonAtomic $OutputFile $state}}catch{}}
 }
 
 try{
+    Ensure-WindowsApi
     Write-JsonAtomic $OutputFile $state
     $state.stage='identity_query';$j=Get-CimInstance Win32_Process -Filter "ProcessId=$JavaPid" -ErrorAction Stop
     if(-not$j -or $j.Name -notin @('java.exe','javaw.exe') -or -not(Same-Creation $j $JavaCreationDate)){throw 'Java PID/creation identity mismatch'}
@@ -108,6 +111,10 @@ try{
     elseif($state.exitCode-eq0){$state.exitClassification='parent_zero_without_shutdown_provenance'}
     else{$state.exitClassification='insufficient_evidence'}
     $state.status='complete';$state.stage='complete';Write-JsonAtomic $OutputFile $state
-}catch{$fatal=$_;$failedStage=[string]$state.stage;$state.status='observer_error';$state.stage=$failedStage;try{Snapshot-Records;$state.timeline=$timeline.ToArray();Write-JsonAtomic $OutputFile $state}catch{};try{Write-JsonAtomic $ErrorFile (Error-Snapshot $fatal $failedStage)}catch{}}
-finally{foreach($h in @($handles.Values)){try{$h.Dispose()}catch{}};try{if($javaHandle){$javaHandle.Dispose()}}catch{};try{if($prismHandle){$prismHandle.Dispose()}}catch{}}
+}catch{
+    $fatal=$_;$failedStage=[string]$state.stage;$snapshot=Error-Snapshot $fatal $failedStage
+    $state.status='observer_error';$state.error=[pscustomobject]@{stage=$snapshot.stage;utc=$snapshot.utc;exceptionType=$snapshot.exceptionType;message=$snapshot.message;category=$snapshot.category;scriptStackTrace=$snapshot.scriptStackTrace}
+    try{Snapshot-Records;$state.timeline=$timeline.ToArray();Write-JsonAtomic $OutputFile $state}catch{}
+    try{Write-JsonAtomic $ErrorFile $snapshot}catch{}
+}finally{foreach($h in @($handles.Values)){try{$h.Dispose()}catch{}};try{if($javaHandle){$javaHandle.Dispose()}}catch{};try{if($prismHandle){$prismHandle.Dispose()}}catch{}}
 if($fatal){throw $fatal}
