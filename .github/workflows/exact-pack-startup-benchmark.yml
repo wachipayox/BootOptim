@@ -359,7 +359,10 @@ jobs:
 
       - name: Stage optional ModelManager JFR settings
         shell: bash
-        run: cp scripts/exact-pack/modelmanager-attribution.jfc run-pack-benchmark/modelmanager-attribution.jfc
+        run: |
+          mkdir -p .exact-pack-run/config/boot_optim
+          cp scripts/exact-pack/modelmanager-attribution.jfc \
+             .exact-pack-run/config/boot_optim/modelmanager-attribution.jfc
 
       - name: Launch exact pack to main menu
         if: needs.plan.outputs.mode != 'paired'
