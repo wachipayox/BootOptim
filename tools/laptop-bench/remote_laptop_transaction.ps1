@@ -156,7 +156,9 @@ switch($Action){
     $st=[ordered]@{schema=3;phase='staging';valid=$false;reason=$null;runId=$c.runId;instanceRoot=$c.instanceRoot;gameRoot=$c.gameRoot;modsDir=$c.modsDir;instanceCfg=$c.instanceCfg;prismExe=$c.prismExe;prismRoot=$c.prismRoot;instanceId=$c.instanceId;interactiveUser=$c.interactiveUser;expectedSessionId=$p.session.sessionId;candidateSha256=$c.candidateSha;requiredJvmArgs=@($c.required);forbiddenJvmArgs=@($c.forbidden);expectedJavaExe=$c.expectedJava;timeoutSeconds=$c.timeout;originalCfgSha256=Sha $c.instanceCfg;cfgBackup=$cfgBak;originalJarPath=$p.jar.path;originalJarSha256=$p.jar.sha256;jarBackup=$jarBak;stagedJar=$null;stagedCfgSha256=$null;runner=$runner;taskName=('BootOptimBench-'+($c.runId-replace'[^A-Za-z0-9_.-]','_'));prismPid=0;prismCreationDate=$null;javaPid=0;javaCreationDate=$null;effectiveCommandLineSha256=$null;observedBootOptimPropertyKeys=@();validatedRequiredJvmArgs=@();effectiveJavaExe=$null;createdUtc=[DateTime]::UtcNow.ToString('o')};Save $st $stateFile
     Remove-Item -LiteralPath $p.jar.path
     $safeRun=($c.runId-replace'[^A-Za-z0-9_.-]','_');$target=Join-Path $c.modsDir ('bootoptim-bench-'+$safeRun+'-'+$c.candidateSha.Substring(0,12)+'.jar');if($target.Equals($p.jar.path,[StringComparison]::OrdinalIgnoreCase)){$target=Join-Path $c.modsDir ('bootoptim-bench-staged-'+$c.candidateSha.Substring(0,12)+'.jar')}
-    $tmp="$target.partial-$PID";Copy-Item -LiteralPath $c.artifactJar -Destination $tmp;if((Sha $tmp)-ne$c.candidateSha){Fail 'candidate copy hash mismatch'};Move-Item -LiteralPath $tmp -Destination $target -Force
+    if(Test-Path -LiteralPath $target){Fail "staged target path already exists: $target"}
+    $tmp=$target+'.partial-'+[Guid]::NewGuid().ToString('N')
+    try{Copy-Item -LiteralPath $c.artifactJar -Destination $tmp;if((Sha $tmp)-ne$c.candidateSha){Fail 'candidate copy hash mismatch'};Move-Item -LiteralPath $tmp -Destination $target}catch{throw}finally{if(Test-Path -LiteralPath $tmp){Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue}}
     $live=One-Wrapper $c.modsDir $c.candidateSha
     $txt=[IO.File]::ReadAllText($c.instanceCfg);$txt=Set-CfgKey $txt 'OverrideJavaArgs' 'true';$txt=Set-CfgKey $txt 'JvmArgs' (Qs $c.jvmArgs);[IO.File]::WriteAllText($c.instanceCfg,$txt,$Utf8)
     $st.stagedJar=$target;$st.stagedCfgSha256=Sha $c.instanceCfg;$st.phase='staged';Save $st $stateFile;$st|ConvertTo-Json -Depth 10;break
@@ -172,7 +174,8 @@ switch($Action){
     [pscustomobject]@{status='dispatched';taskName=$st.taskName;expectedSessionId=$st.expectedSessionId;phase=$st.phase}|ConvertTo-Json;break
 }
 'Status'{
-    $st=Load $stateFile;$ts=$null;try{$ts=(Get-ScheduledTask -TaskName $st.taskName -ErrorAction Stop).State.ToString()}catch{}
+    $st=Load $stateFile;$ts=$null
+    if($st.phase -in @('launching','validating','measuring')){$ts='suppressed_during_run'}else{try{$ts=(Get-ScheduledTask -TaskName $st.taskName -ErrorAction Stop).State.ToString()}catch{}}
     [pscustomobject]@{runId=$st.runId;phase=$st.phase;valid=$st.valid;reason=$st.reason;taskState=$ts;sessionId=$st.expectedSessionId;javaPid=$st.javaPid;javaCreationDate=$st.javaCreationDate;prismPid=$st.prismPid;prismCreationDate=$st.prismCreationDate;effectiveJavaExe=$st.effectiveJavaExe;effectiveCommandLineSha256=$st.effectiveCommandLineSha256;observedBootOptimPropertyKeys=$st.observedBootOptimPropertyKeys;validatedRequiredJvmArgs=$st.validatedRequiredJvmArgs}|ConvertTo-Json -Depth 6;break
 }
 {$_ -in @('Postflight','Recover')}{
