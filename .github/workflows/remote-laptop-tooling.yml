@@ -1,0 +1,38 @@
+name: Remote Laptop Tooling
+
+on:
+  pull_request:
+    paths:
+      - 'tools/laptop-bench/remote_laptop_*.ps1'
+      - '.github/workflows/remote-laptop-tooling.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  powershell-syntax:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows PowerShell scripts
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($path in @(
+            'tools/laptop-bench/remote_laptop_transaction.ps1',
+            'tools/laptop-bench/remote_laptop_interactive_run.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              Write-Host "Parser errors in $path"
+              $errors | ForEach-Object { Write-Host $_.Message }
+            }
+          }
+          if ($failed) { throw 'Remote laptop PowerShell syntax validation failed' }
