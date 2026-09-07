@@ -53,3 +53,37 @@ source-level redesign.
 
 Build validation: `./gradlew build` passed on the clean integration-derived
 worktree before the hosted run.
+
+## Hosted exact-pack result (run `34158346876`)
+
+All six benchmark jobs completed and reported zero BootOptim Mixin errors. The
+published aggregate artifact incorrectly said `Runs: 1` because the workflow
+reused one artifact name per variant; the six individual artifacts were
+recovered by artifact ID. The collision is fixed separately in PR #176 and is
+documented in `docs/research/exact-pack-artifact-collision-2026-09-07.md`.
+
+Recovered values (milliseconds):
+
+| variant | repetition 1 | repetition 2 | repetition 3 | median |
+| --- | ---: | ---: | ---: | ---: |
+| candidate main-menu | 89,702 | 93,174 | 92,115 | 92,115 |
+| control main-menu | 92,920 | 82,879 | 58,789 | 82,879 |
+| candidate mod entrypoint | 30,110 | 30,579 | 31,291 | 30,579 |
+| control mod entrypoint | 31,812 | 27,609 | 20,077 | 27,609 |
+| candidate reload→FancyMenu | 42,293 | 43,979 | 42,059 | 42,293 |
+| control reload→FancyMenu | 41,889 | 37,842 | 26,273 | 37,842 |
+| candidate panorama | 4,456.9 | 4,633.8 | 4,132.2 | 4,456.9 |
+| control panorama | 4,144.7 | 3,795.2 | 2,573.4 | 3,795.2 |
+
+Candidate minus control medians were **+9,236 ms main-menu** (+11.1%),
+**+2,970 ms mod entrypoint**, **+4,451 ms reload→FancyMenu**, and **+662 ms
+panorama**. Candidate did not produce a coherent win in any critical-path
+field; it was slower in every median. The control distribution is noisy, but
+the candidate is not merely a small phase-only change and is not eligible for
+the laptop gate.
+
+Decision: reject this implementation and close the experiment PR. Keep the
+allocation-light/thresholded material-plan concept as a future redesign lead,
+not as a promotion or claim that the underlying bottleneck is solved. Do not
+repeat the same direct plan premise without a different scheduling or ownership
+model and a fresh semantic/performance hypothesis.
