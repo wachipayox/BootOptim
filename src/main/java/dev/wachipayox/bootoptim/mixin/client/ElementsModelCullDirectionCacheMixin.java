@@ -46,6 +46,7 @@ abstract class ElementsModelCullDirectionCacheMixin {
             System.getProperty("boot_optim.elementsCullDirectionFieldCache", "false"));
     private static final AtomicBoolean REPORTED = new AtomicBoolean();
     private static final AtomicBoolean FIELD_CACHE_REPORTED = new AtomicBoolean();
+    private static final AtomicBoolean FLAGS_REPORTED = new AtomicBoolean();
 
     @Shadow
     @Final
@@ -59,6 +60,12 @@ abstract class ElementsModelCullDirectionCacheMixin {
             Function<Material, TextureAtlasSprite> spriteGetter,
             ModelState modelState,
             CallbackInfo ci) {
+        if (FLAGS_REPORTED.compareAndSet(false, true)) {
+            StartupReport.optimization(
+                    "elements_cull_direction_flags",
+                    ENABLED,
+                    "cache=" + ENABLED + ";field=" + FIELD_CACHE_ENABLED);
+        }
         if (!ENABLED) {
             return;
         }
