@@ -43,4 +43,4 @@ $p=[Diagnostics.Process]::GetProcessById([int]$s.javaPid)
 $exited=$p.WaitForExit(([int]$s.timeoutSeconds)*1000)
 if(-not$exited){$s.valid=$false;$s.reason='java_timeout';$s.phase='invalid';Save $s;Stop-Pid ([int]$s.javaPid)}else{$s.javaExitedUtc=[DateTime]::UtcNow.ToString('o')}
 Stop-Pid ([int]$s.prismPid) $true
-$s.phase=if($s.valid){'finished'}else{'invalid'};$s.finishedUtc=[DateTime]::UtcNow.ToString('o');Save $s
+$s.phase=$(if($s.valid){'finished'}else{'invalid'});$s.finishedUtc=[DateTime]::UtcNow.ToString('o');Save $s
