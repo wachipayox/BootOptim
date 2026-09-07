@@ -34,6 +34,24 @@ A green build is necessary but not sufficient.
 6. A microphase improvement is not accepted as an end-to-end win unless it moves time-to-main-menu or removes CPU for a mechanism the project deliberately chooses to keep.
 7. Real laptop/fast-PC runs remain the final gate for small/noisy effects and hardware-sensitive mechanisms, but agents should not ask for repetitive laptop A/B runs when hosted exact-pack CI can reject or validate the premise first.
 
+## Measurement-origin invariants
+
+Every startup result must state its measurement origin (hosted exact-pack,
+physical laptop, fast PC, or another diagnostic harness), its start marker and
+its endpoint (`main_menu` versus `main_menu_presented`). Compare candidates
+only when those origins, pack/config/JVM state, and endpoints match. Keep
+launcher/Gradle/fixture warm-up, mod entrypoint, resource-reload barriers,
+post-menu presentation and listener/task-sum durations in separate buckets;
+never add overlapping listener durations or compare a stale-JVM run with a
+fresh process. A result with missing/duplicated markers, a stale Prism
+`instance.cfg`, or a surviving previous Java process is invalid/inconclusive.
+
+When editing the laptop Prism instance, stop Prism before changing
+`instance.cfg`, then verify the effective Java command line on the next run.
+Prism can rewrite its in-memory `JvmArgs` on exit and silently restore an old
+candidate property. Leave exactly one BootOptim JAR in the instance `mods`
+directory before every benchmark.
+
 The distributable JAR is the packaged bootstrap from `bootstrap/build/libs/`. A normal `./gradlew build` is expected to produce it. The root `build/libs` JAR is the inner regular mod and is not the standalone distributable.
 
 ## Hosted exact-pack CI
