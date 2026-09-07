@@ -1,46 +1,113 @@
 [CmdletBinding()]
 param([Parameter(Mandatory=$true)][string]$StateFile)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $Utf8=New-Object System.Text.UTF8Encoding($false)
-function Save([object]$o){$t="$StateFile.tmp-$PID";[IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 8),$Utf8);Move-Item -LiteralPath $t -Destination $StateFile -Force}
+
+function Save([object]$o){$t="$StateFile.tmp-$PID";[IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8);Move-Item -LiteralPath $t -Destination $StateFile -Force}
 function Load{Get-Content -LiteralPath $StateFile -Raw|ConvertFrom-Json}
 function Fail([object]$s,[string]$m){$s.valid=$false;$s.reason=$m;$s.phase='invalid';Save $s;throw "BOOTOPTIM_REMOTE_INVALID: $m"}
-function Target-Java([string]$game,[string]$root){@(Get-CimInstance Win32_Process|Where-Object{$_.Name -in @('java.exe','javaw.exe')}|Where-Object{$c=[string]$_.CommandLine;$c -and (($c.IndexOf($game,[StringComparison]::OrdinalIgnoreCase)-ge 0)-or($c.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge 0))})}
+function Text-Sha256([string]$text){$h=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($text)))).Replace('-','')}finally{$h.Dispose()}}
+
+function Ensure-Native {
+    if('BootOptimRemoteNative' -as [type]){return}
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class BootOptimRemoteNative {
+  enum W { InitialProgram,ApplicationName,WorkingDirectory,OEMId,SessionId,UserName,WinStationName,DomainName,ConnectState }
+  [DllImport("Wtsapi32.dll",SetLastError=true)] static extern bool WTSQuerySessionInformation(IntPtr s,int id,W i,out IntPtr p,out int n);
+  [DllImport("Wtsapi32.dll")] static extern void WTSFreeMemory(IntPtr p);
+  [DllImport("shell32.dll",SetLastError=true)] static extern IntPtr CommandLineToArgvW([MarshalAs(UnmanagedType.LPWStr)] string cmd,out int argc);
+  [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr p);
+  static string S(int id,W i){IntPtr p;int n;if(!WTSQuerySessionInformation(IntPtr.Zero,id,i,out p,out n))return null;try{return Marshal.PtrToStringUni(p);}finally{WTSFreeMemory(p);}}
+  public static string User(int id){return S(id,W.UserName);} public static string Domain(int id){return S(id,W.DomainName);}
+  public static int State(int id){IntPtr p;int n;if(!WTSQuerySessionInformation(IntPtr.Zero,id,W.ConnectState,out p,out n))return -1;try{return Marshal.ReadInt32(p);}finally{WTSFreeMemory(p);}}
+  public static string[] Args(string cmd){int n;IntPtr p=CommandLineToArgvW(cmd,out n);if(p==IntPtr.Zero)throw new Win32Exception();try{var a=new string[n];for(int i=0;i<n;i++)a[i]=Marshal.PtrToStringUni(Marshal.ReadIntPtr(p,i*IntPtr.Size));return a;}finally{LocalFree(p);}}
+}
+'@
+}
+function Assert-ExpectedSession([object]$s){
+    if([BootOptimRemoteNative]::State([int]$s.expectedSessionId)-ne0){throw "expected desktop session $($s.expectedSessionId) is not WTSActive"}
+    $spec=[string]$s.interactiveUser;$dom=$null;$usr=$spec;if($spec.Contains('\')){$x=$spec.Split('\',2);$dom=$x[0];$usr=$x[1]}
+    $u=[BootOptimRemoteNative]::User([int]$s.expectedSessionId);$d=[BootOptimRemoteNative]::Domain([int]$s.expectedSessionId)
+    if(-not$u -or -not$u.Equals($usr,[StringComparison]::OrdinalIgnoreCase)){throw "active session user '$u' does not match '$usr'"}
+    if($dom -and (-not$d -or -not$d.Equals($dom,[StringComparison]::OrdinalIgnoreCase))){throw "active session domain '$d' does not match '$dom'"}
+}
+function Target-Java([string]$game,[string]$root){
+    $all=@(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'")
+    @($all|Where-Object{$c=[string]$_.CommandLine;$c -and (($c.IndexOf($game,[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge0))})
+}
 function Prism-Procs([string]$exe){$n=@('prismlauncher.exe','PrismLauncher.exe',[IO.Path]::GetFileName($exe))|Select-Object -Unique;@(Get-CimInstance Win32_Process|Where-Object{$n -contains $_.Name})}
-function Stop-Pid([int]$id,[bool]$gui=$false){if($id-le0){return};$p=Get-Process -Id $id -ErrorAction SilentlyContinue;if(-not$p){return};if($gui){try{[void]$p.CloseMainWindow();if($p.WaitForExit(10000)){return}}catch{}};Stop-Process -Id $id -Force -ErrorAction SilentlyContinue}
-function Quote([string]$v){if($v -notmatch '[\s"]'){return $v};if($v.Contains('"')){throw 'quote in Prism argument'};'"'+$v.TrimEnd('\')+'"'}
+function Quote-Arg([string]$v){
+    if($null-eq$v -or $v.Length-eq0){return '""'}
+    if($v.Contains('"')){throw 'Prism path/instance argument contains an unsupported double quote'}
+    if($v -notmatch '\s'){return $v}
+    $m=[regex]::Match($v,'\\+$');$trail=$m.Value.Length;$body=if($trail){$v.Substring(0,$v.Length-$trail)}else{$v};$tail=if($trail){(('\' * ($trail*2))-join'')}else{''}
+    '"'+$body+$tail+'"'
+}
+function Exact-Count([object[]]$a,[string]$needle){$n=0;foreach($x in $a){if([string]::Equals([string]$x,$needle,[StringComparison]::Ordinal)){$n++}};$n}
+function Stop-PrismOwned([object]$s){
+    if([int]$s.prismPid-le0 -or -not$s.prismCreationDate){return}
+    $c=Get-CimInstance Win32_Process -Filter "ProcessId=$($s.prismPid)" -ErrorAction SilentlyContinue;if(-not$c){return}
+    if(([DateTime]$c.CreationDate).ToString('o')-ne[string]$s.prismCreationDate){return}
+    $p=Get-Process -Id ([int]$s.prismPid) -ErrorAction SilentlyContinue;if(-not$p){return}
+    try{[void]$p.CloseMainWindow();if($p.WaitForExit(15000)){return}}catch{}
+    $p=Get-Process -Id ([int]$s.prismPid) -ErrorAction SilentlyContinue;if($p){Stop-Process -Id ([int]$s.prismPid) -Force -ErrorAction Stop}
+}
 
 $s=Load
+try{Ensure-Native}catch{Fail $s ("native helper setup failed: "+$_.Exception.Message)}
+if([int]$s.schema-ne3){Fail $s "unsupported transaction schema $($s.schema)"}
+try{Assert-ExpectedSession $s}catch{Fail $s $_.Exception.Message}
 $self=Get-CimInstance Win32_Process -Filter "ProcessId=$PID"
 if([int]$self.SessionId-ne[int]$s.expectedSessionId){Fail $s "task session $($self.SessionId) != expected active session $($s.expectedSessionId)"}
 if(@(Prism-Procs $s.prismExe).Count){Fail $s 'Prism already running before interactive launch'}
 if(@(Target-Java $s.gameRoot $s.instanceRoot).Count){Fail $s 'target java/javaw already running before interactive launch'}
-$s.phase='launching';$s.launchStartedUtc=[DateTime]::UtcNow.ToString('o');Save $s
 
-$args=@();if($s.prismRoot){$args+='-d';$args+=Quote([string]$s.prismRoot)};$args+='-l';$args+=Quote([string]$s.instanceId)
-$prism=Start-Process -FilePath $s.prismExe -ArgumentList $args -PassThru
-$s.prismPid=$prism.Id;Save $s
+$s.phase='launching';$s.launchStartedUtc=[DateTime]::UtcNow.ToString('o');Save $s
+try{
+    $parts=@();if($s.prismRoot){$parts+='-d';$parts+=Quote-Arg([string]$s.prismRoot)};$parts+='-l';$parts+=Quote-Arg([string]$s.instanceId);$argLine=$parts-join' '
+    $prism=Start-Process -FilePath $s.prismExe -ArgumentList $argLine -PassThru
+    $pc=Get-CimInstance Win32_Process -Filter "ProcessId=$($prism.Id)" -ErrorAction Stop
+    if([int]$pc.SessionId-ne[int]$s.expectedSessionId){throw "Prism started in session $($pc.SessionId), expected $($s.expectedSessionId)"}
+    $s.prismPid=[int]$pc.ProcessId;$s.prismCreationDate=([DateTime]$pc.CreationDate).ToString('o');Save $s
+}catch{Fail $s ("Prism launch failed: "+$_.Exception.Message)}
 
 $java=$null;$deadline=[DateTime]::UtcNow.AddSeconds(90)
-do{Start-Sleep -Milliseconds 250;$c=@(Target-Java $s.gameRoot $s.instanceRoot|Where-Object{[int]$_.SessionId-eq[int]$s.expectedSessionId});if($c.Count-gt1){Fail $s "multiple target Java processes: $($c.Count)"};if($c.Count-eq1){$java=$c[0];break}}while([DateTime]::UtcNow-lt$deadline)
-if(-not$java){Stop-Pid ([int]$s.prismPid) $true;Fail $s 'no target java/javaw appeared within 90 s'}
+do{
+    Start-Sleep -Milliseconds 1000
+    $c=@(Target-Java $s.gameRoot $s.instanceRoot|Where-Object{[int]$_.SessionId-eq[int]$s.expectedSessionId})
+    if($c.Count-gt1){try{Stop-PrismOwned $s}catch{};Fail $s "multiple target Java processes: $($c.Count)"}
+    if($c.Count-eq1){$java=$c[0];break}
+}while([DateTime]::UtcNow-lt$deadline)
+if(-not$java){try{Stop-PrismOwned $s}catch{};Fail $s 'no target java/javaw appeared within 90 s'}
 
-$s.javaPid=[int]$java.ProcessId;$s.javaCreationDate=([DateTime]$java.CreationDate).ToString('o');$s.effectiveCommandLine=[string]$java.CommandLine;$s.effectiveJavaExe=[string]$java.ExecutablePath;$s.phase='validating';Save $s
+$javaHandle=$null
+try{$javaHandle=[Diagnostics.Process]::GetProcessById([int]$java.ProcessId)}catch{try{Stop-PrismOwned $s}catch{};Fail $s 'target Java exited before identity validation'}
+$s.javaPid=[int]$java.ProcessId;$s.javaCreationDate=([DateTime]$java.CreationDate).ToString('o');$s.effectiveJavaExe=[string]$java.ExecutablePath;$s.phase='validating';Save $s
 try{
-    $cmd=[string]$s.effectiveCommandLine;if([string]::IsNullOrWhiteSpace($cmd)){throw 'effective Win32_Process.CommandLine unavailable'}
+    Assert-ExpectedSession $s
     if([int]$java.SessionId-ne[int]$s.expectedSessionId){throw 'Java is outside the expected interactive session'}
-    if($s.expectedJavaExe){$actual=[IO.Path]::GetFullPath([string]$java.ExecutablePath);if(-not$actual.Equals([string]$s.expectedJavaExe,[StringComparison]::OrdinalIgnoreCase)){throw "Java executable mismatch: $actual"}}
-    foreach($r in @($s.requiredJvmArgs)){if($cmd.IndexOf([string]$r,[StringComparison]::Ordinal)-lt0){throw "missing required JVM arg: $r"};if(([string]$r)-match'^(-D[^=]+)='){$key=$Matches[1]+'=';if([regex]::Matches($cmd,[regex]::Escape($key)).Count-ne1){throw "property key not exactly once: $key"}}}
-    foreach($f in @($s.forbiddenJvmArgs)){if($cmd.IndexOf([string]$f,[StringComparison]::Ordinal)-ge0){throw "forbidden/stale JVM arg present: $f"}}
-    $keys=[regex]::Matches($cmd,'-Dboot_optim\.[A-Za-z0-9_.-]+=')|ForEach-Object{$_.Value};foreach($g in @($keys|Group-Object)){if($g.Count-gt1){throw "duplicate BootOptim JVM property: $($g.Name)"}}
+    $cmd=[string]$java.CommandLine;if([string]::IsNullOrWhiteSpace($cmd)){throw 'effective Win32_Process.CommandLine unavailable'}
+    $argv=@([BootOptimRemoteNative]::Args($cmd));if($argv.Count-lt2){throw 'effective command line could not be tokenized'}
+    if($s.expectedJavaExe){if([string]::IsNullOrWhiteSpace([string]$java.ExecutablePath)){throw 'effective Java executable path unavailable'};$actual=[IO.Path]::GetFullPath([string]$java.ExecutablePath);if(-not$actual.Equals([string]$s.expectedJavaExe,[StringComparison]::OrdinalIgnoreCase)){throw "Java executable mismatch: $actual"}}
+    foreach($r in @($s.requiredJvmArgs)){if((Exact-Count $argv ([string]$r))-ne1){throw "required JVM argument is not present exactly once: $r"}}
+    foreach($f in @($s.forbiddenJvmArgs)){if((Exact-Count $argv ([string]$f))-gt0){throw "forbidden/stale JVM argument present: $f"}}
+    $bootKeys=@();foreach($a in $argv){if(([string]$a)-match'^-D(boot_optim\.[A-Za-z0-9_.-]+)(?:=.*)?$'){$bootKeys+=$Matches[1]}}
+    foreach($g in @($bootKeys|Group-Object)){if($g.Count-gt1){throw "duplicate BootOptim JVM property key: $($g.Name)"}}
+    foreach($family in @('^-Xmx','^-Xms','^-XX:ActiveProcessorCount=')){if(@($argv|Where-Object{([string]$_)-match$family}).Count-gt1){throw "duplicate JVM singleton option family: $family"}}
+    $s.effectiveCommandLineSha256=Text-Sha256 $cmd;$s.observedBootOptimPropertyKeys=@($bootKeys|Sort-Object -Unique);$s.validatedRequiredJvmArgs=@($s.requiredJvmArgs);$s.valid=$true;$s.reason=$null;$s.phase='measuring';Save $s
 }catch{
-    $m=$_.Exception.Message;Stop-Pid ([int]$s.javaPid);Stop-Pid ([int]$s.prismPid) $true;Fail $s $m
+    $m=$_.Exception.Message;try{if($javaHandle -and -not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{};try{Stop-PrismOwned $s}catch{};Fail $s $m
 }
 
-$s.valid=$true;$s.reason=$null;$s.phase='measuring';Save $s
-$p=[Diagnostics.Process]::GetProcessById([int]$s.javaPid)
-$exited=$p.WaitForExit(([int]$s.timeoutSeconds)*1000)
-if(-not$exited){$s.valid=$false;$s.reason='java_timeout';$s.phase='invalid';Save $s;Stop-Pid ([int]$s.javaPid)}else{$s.javaExitedUtc=[DateTime]::UtcNow.ToString('o')}
-Stop-Pid ([int]$s.prismPid) $true
+$exited=$javaHandle.WaitForExit(([int]$s.timeoutSeconds)*1000)
+if(-not$exited){
+    $s.valid=$false;$s.reason='java_timeout';$s.phase='invalid';Save $s
+    try{if(-not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{}
+}else{$s.javaExitedUtc=[DateTime]::UtcNow.ToString('o')}
+try{Stop-PrismOwned $s}catch{$s.valid=$false;$s.reason='prism_close_failed'}
 $s.phase=$(if($s.valid){'finished'}else{'invalid'});$s.finishedUtc=[DateTime]::UtcNow.ToString('o');Save $s
