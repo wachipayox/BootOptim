@@ -33,6 +33,13 @@ This is why the transaction checks both `java.exe` and `javaw.exe` and refuses a
 
 `AGENTS.md`, PR #157 and the corrected P0.2 variance record establish the operational rule: stop Prism before editing `instance.cfg`, then verify the *effective* Java command line on the next launch. The first P0.2 launch was discarded because Prism rewrote the JVM options without the intended variance property. Only the corrected run is evidence.
 
+The slow laptop also exposed a separate detector hazard: Prism can take longer
+than the old 90-second Java-appearance grace to materialize the instance. The
+interactive runner now uses a bounded 90–300 second launch grace (300 seconds
+for the normal 900-second transaction) before declaring that no target Java
+appeared. This grace is outside the startup measurement and does not poll logs;
+it prevents a valid late Java child from becoming an orphaned, untracked run.
+
 Correct sequence:
 
 `Prism stopped -> Preflight -> Stage -> interactive launch -> effective command-line validation -> blocking Java wait -> Prism close -> Postflight/Recover`

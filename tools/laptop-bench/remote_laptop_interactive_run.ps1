@@ -76,14 +76,22 @@ try{
     $s.prismPid=[int]$pc.ProcessId;$s.prismCreationDate=([DateTime]$pc.CreationDate).ToString('o');Save $s
 }catch{Fail $s ("Prism launch failed: "+$_.Exception.Message)}
 
-$java=$null;$deadline=[DateTime]::UtcNow.AddSeconds(90)
+# Prism can spend several minutes materializing the instance before it creates
+# the Java child on the slow HDD laptop.  A short detector timeout is unsafe:
+# it marks the transaction invalid, may close only Prism, and can then leave a
+# late Java process outside the transaction's identity record.  Keep this
+# launch grace separate from the measured-process timeout and cap it so a truly
+# failed Prism launch is still reported promptly.
+$java=$null
+$appearanceTimeoutSeconds=[Math]::Min(300,[Math]::Max(90,[int]$s.timeoutSeconds-60))
+$deadline=[DateTime]::UtcNow.AddSeconds($appearanceTimeoutSeconds)
 do{
     Start-Sleep -Milliseconds 1000
     $c=@(Target-Java $s.gameRoot $s.instanceRoot|Where-Object{[int]$_.SessionId-eq[int]$s.expectedSessionId})
     if($c.Count-gt1){try{Stop-PrismOwned $s}catch{};Fail $s "multiple target Java processes: $($c.Count)"}
     if($c.Count-eq1){$java=$c[0];break}
 }while([DateTime]::UtcNow-lt$deadline)
-if(-not$java){try{Stop-PrismOwned $s}catch{};Fail $s 'no target java/javaw appeared within 90 s'}
+if(-not$java){try{Stop-PrismOwned $s}catch{};Fail $s "no target java/javaw appeared within $appearanceTimeoutSeconds s"}
 
 $javaHandle=$null;$javaIdentity=$null;$expectedJavaCreation=([DateTime]$java.CreationDate).ToString('o')
 try{
