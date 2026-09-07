@@ -80,7 +80,7 @@ public static class BootOptimWts {
   enum I { InitialProgram,ApplicationName,WorkingDirectory,OEMId,SessionId,UserName,WinStationName,DomainName,ConnectState }
   [DllImport("Wtsapi32.dll",SetLastError=true)] static extern bool WTSQuerySessionInformation(IntPtr s,int id,I i,out IntPtr p,out int n);
   [DllImport("Wtsapi32.dll")] static extern void WTSFreeMemory(IntPtr p);
-  static string S(int id,I i){IntPtr p;int n;if(!WTSQuerySessionInformation(IntPtr.Zero,id,i,out p,out n))return null;try{return Marshal.PtrToStringUni(p);}finally{WTSFreeMemory(p);}}
+  static string S(int id,I i){IntPtr p;int n;if(!WTSQuerySessionInformation(IntPtr.Zero,id,i,out p,out n))return null;try{return Marshal.PtrToStringAnsi(p);}finally{WTSFreeMemory(p);}}
   public static string User(int id){return S(id,I.UserName);} public static string Domain(int id){return S(id,I.DomainName);}
   public static int State(int id){IntPtr p;int n;if(!WTSQuerySessionInformation(IntPtr.Zero,id,I.ConnectState,out p,out n))return -1;try{return Marshal.ReadInt32(p);}finally{WTSFreeMemory(p);}}
 }
