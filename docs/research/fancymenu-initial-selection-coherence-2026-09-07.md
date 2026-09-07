@@ -77,6 +77,23 @@ registered panorama without changing later-screen random semantics. It is
 staged in the PC beta as the next validation candidate; the prior active JAR is
 preserved with a `.before-cache-persist-20260907` suffix.
 
+## Validation of the cache-only follow-up
+
+The next PC run used the exact active JAR for fork commit `03fd534b2` (SHA-256
+`47C89189F7F312704E7220CC150152A7C2B12F0C88FD7DA00A411AD0206D76A1`) and
+still showed the defect. The log coherently selected and applied
+`bg_alvarin_house_2`, but about 1.3 seconds later registered
+`alvaro_zone_night`. Therefore the ordinary runtime-id cache is not sufficient
+to survive the title-screen rebuild in this pack; the rebuild is entering a
+fresh selection path despite the explicit cache write.
+
+The new fork commit `aba93bf5b` keeps the stable initial layout-name marker
+authoritative for all same-title-screen rebuilds until the next resource
+reload. It is staged as the active PC beta JAR with SHA-256
+`12C42F3AF62265DE5BEFB8E688B6CC668A8365F004BC4D22C664ED24D4E5BB97`; exactly
+one active FancyMenu JAR is present. The previous candidate is preserved as
+`.before-persistent-title-lock-20260907`.
+
 ## Gate
 
 Run the PC beta with exactly one FancyMenu JAR and the full configured
