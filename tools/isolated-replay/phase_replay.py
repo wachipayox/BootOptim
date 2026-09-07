@@ -88,8 +88,12 @@ def load_fixture(path: Path) -> tuple[str, str | None, list[Task], dict[str, Any
     return fixture_id, variant, tasks, data.get("metadata", {})
 
 
-def _ready_key(task: Task) -> tuple[int, str]:
-    return task.order, task.task_id
+def _ready_key(task: Task, policy: str, downstream: dict[str, float]) -> tuple[float | int, int, str]:
+    if policy == "critical-first":
+        return (-downstream[task.task_id], task.order, task.task_id)
+    if policy == "small-first":
+        return (task.duration_ms, task.order, task.task_id)
+    return (task.order, 0, task.task_id)
 
 
 def _critical_path(tasks: list[Task]) -> tuple[float, list[str]]:
@@ -101,7 +105,7 @@ def _critical_path(tasks: list[Task]) -> tuple[float, list[str]]:
     while pending:
         ready = sorted(
             (by_id[task_id] for task_id, deps in pending.items() if not deps),
-            key=_ready_key,
+            key=lambda task: (task.order, task.task_id),
         )
         if not ready:
             raise ValueError("task dependency graph contains a cycle")
@@ -121,20 +125,56 @@ def _critical_path(tasks: list[Task]) -> tuple[float, list[str]]:
     return end[final], path[final]
 
 
-def replay(tasks: list[Task], workers: int) -> dict[str, Any]:
+def _downstream_spans(tasks: list[Task]) -> dict[str, float]:
+    dependents: dict[str, list[str]] = {task.task_id: [] for task in tasks}
+    by_id = {task.task_id: task for task in tasks}
+    for task in tasks:
+        for dependency in task.dependencies:
+            dependents[dependency].append(task.task_id)
+    _, critical_path = _critical_path(tasks)
+    # The topological order is recovered from the critical-path helper's
+    # dependency algorithm, then evaluated in reverse using a simple Kahn pass.
+    remaining = {task.task_id: set(task.dependencies) for task in tasks}
+    order: list[str] = []
+    while remaining:
+        ready = sorted(task_id for task_id, deps in remaining.items() if not deps)
+        if not ready:
+            raise ValueError("task dependency graph contains a cycle")
+        order.extend(ready)
+        for task_id in ready:
+            del remaining[task_id]
+        for deps in remaining.values():
+            deps.difference_update(ready)
+    downstream: dict[str, float] = {}
+    for task_id in reversed(order):
+        children = dependents[task_id]
+        downstream[task_id] = by_id[task_id].duration_ms + max(
+            (downstream[child] for child in children), default=0.0
+        )
+    # Keep the local variable explicit so a malformed/unused path cannot make
+    # the policy silently depend on a different graph calculation.
+    if not critical_path:
+        raise ValueError("task graph has no terminal path")
+    return downstream
+
+
+def replay(tasks: list[Task], workers: int, policy: str = "stock") -> dict[str, Any]:
     if workers < 1:
         raise ValueError("workers must be at least 1")
+    if policy not in {"stock", "critical-first", "small-first"}:
+        raise ValueError(f"unsupported policy: {policy}")
     by_id = {task.task_id: task for task in tasks}
+    downstream = _downstream_spans(tasks)
     dependents: dict[str, list[str]] = {task.task_id: [] for task in tasks}
     remaining = {task.task_id: set(task.dependencies) for task in tasks}
     for task in tasks:
         for dependency in task.dependencies:
             dependents[dependency].append(task.task_id)
 
-    ready: list[tuple[int, str]] = []
+    ready: list[tuple[float | int, int, str]] = []
     for task in tasks:
         if not remaining[task.task_id]:
-            heapq.heappush(ready, _ready_key(task))
+            heapq.heappush(ready, _ready_key(task, policy, downstream))
     available_workers = [(0.0, worker_id) for worker_id in range(workers)]
     heapq.heapify(available_workers)
     running: list[tuple[float, int, str]] = []
@@ -146,7 +186,7 @@ def replay(tasks: list[Task], workers: int) -> dict[str, Any]:
         assigned = False
         while ready and available_workers and available_workers[0][0] <= now:
             _, worker_id = heapq.heappop(available_workers)
-            _, task_id = heapq.heappop(ready)
+            task_id = heapq.heappop(ready)[-1]
             task = by_id[task_id]
             dependency_ready = max((completed_at[item] for item in task.dependencies), default=0.0)
             start = max(now, dependency_ready)
@@ -172,7 +212,7 @@ def replay(tasks: list[Task], workers: int) -> dict[str, Any]:
                 for dependent in dependents[task_id]:
                     remaining[dependent].discard(task_id)
                     if not remaining[dependent]:
-                        heapq.heappush(ready, _ready_key(by_id[dependent]))
+                        heapq.heappush(ready, _ready_key(by_id[dependent], policy, downstream))
         elif ready and not assigned:
             # A worker is busy in the future; advance to its earliest release.
             now = available_workers[0][0]
@@ -183,6 +223,7 @@ def replay(tasks: list[Task], workers: int) -> dict[str, Any]:
     queue_wait_ms = sum(record["queue_wait_ms"] for record in records.values())
     return {
         "workers": workers,
+        "policy": policy,
         "task_count": len(tasks),
         "total_work_ms": total_work_ms,
         "critical_path_ms": critical_ms,
@@ -199,6 +240,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("fixture", type=Path)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument(
+        "--policy",
+        choices=("stock", "critical-first", "small-first"),
+        default="stock",
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     fixture_id, variant, tasks, metadata = load_fixture(args.fixture)
@@ -208,7 +254,7 @@ def main() -> None:
         "fixture_id": fixture_id,
         "variant": variant,
         "metadata": metadata,
-        **replay(tasks, args.workers),
+        **replay(tasks, args.workers, args.policy),
     }
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:

@@ -1,0 +1,170 @@
+name: Isolated Phase Replay
+
+on:
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - tools/isolated-replay/**
+      - .github/workflows/isolated-phase-replay.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: isolated-phase-replay-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+  EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+  EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+  EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd90497a4d-linux
+
+jobs:
+  fixture:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Restore exact-pack ZIP cache
+        id: pack-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .exact-pack-cache/bootoptim-exact-pack.zip
+          key: ${{ env.EXACT_PACK_CACHE_KEY }}
+
+      - name: Download pinned exact-pack release asset
+        if: steps.pack-cache.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .exact-pack-cache
+          gh release download "$EXACT_PACK_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$EXACT_PACK_ASSET" \
+            --dir .exact-pack-cache \
+            --clobber
+
+      - name: Verify pinned exact-pack SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(sha256sum .exact-pack-cache/bootoptim-exact-pack.zip | awk '{print $1}')
+          test "$actual" = "$EXACT_PACK_SHA256"
+
+      - name: Extract exact-pack and build model graph fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/exact-pack/prepare_fixture.py \
+            --zip .exact-pack-cache/bootoptim-exact-pack.zip \
+            --sha256 "$EXACT_PACK_SHA256" \
+            --extract exact-pack-run
+          python tools/isolated-replay/pack_graph.py \
+            --pack-root "$BOOTOPTIM_PACK_DIR" \
+            --output pack-graph.json
+          gzip -9 pack-graph.json
+
+      - name: Upload immutable replay fixture
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-phase-fixture
+          path: pack-graph.json.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  replay:
+    needs: fixture
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - profile: stock-1
+            workers: 1
+            policy: stock
+          - profile: stock-4
+            workers: 4
+            policy: stock
+          - profile: critical-first-4
+            workers: 4
+            policy: critical-first
+          - profile: small-first-4
+            workers: 4
+            policy: small-first
+          - profile: critical-first-2
+            workers: 2
+            policy: critical-first
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download immutable replay fixture
+        uses: actions/download-artifact@v4
+        with:
+          name: isolated-phase-fixture
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Replay phase graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          gzip -d pack-graph.json.gz
+          python tools/isolated-replay/phase_replay.py pack-graph.json \
+            --workers '${{ matrix.workers }}' \
+            --policy '${{ matrix.policy }}' \
+            --output result.json
+
+      - name: Upload replay result
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-phase-replay-${{ matrix.profile }}
+          path: result.json
+          if-no-files-found: error
+          retention-days: 14
+
+  summarize:
+    needs: replay
+    if: always() && needs.replay.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download replay results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: isolated-phase-replay-*
+          path: replay-results
+
+      - name: Summarize independent VM results
+        run: |
+          python tools/isolated-replay/summarize_phase_replay.py \
+            --results-dir replay-results \
+            --output isolated-phase-summary.md
+          cat isolated-phase-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload replay summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-phase-summary
+          path: isolated-phase-summary.md
+          if-no-files-found: error
+          retention-days: 30
