@@ -96,6 +96,12 @@ whose stack contains one of the broad model markers. Both are far below the
 50% reopening threshold, and the marker matching is intentionally conservative
 evidence rather than an exclusive CPU/byte claim.
 
+The follow-up hosted run `34105197161` reproduced the same conclusion with a
+different startup timing (`main_menu=79,369 ms`): 269/2,272 post-entry
+execution samples (11.84%) and 4.26 GiB / 41.14 GiB weighted allocation
+samples (10.36%) matched the broad markers. This consistency is useful for
+triage, but two observer runs are still not a production performance A/B.
+
 ## Decision gate
 
 Reopen a production candidate only if the diagnostic supports one of these
