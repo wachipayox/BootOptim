@@ -22,7 +22,7 @@ public static class BootOptimRemoteNative {
   [DllImport("Wtsapi32.dll")] static extern void WTSFreeMemory(IntPtr p);
   [DllImport("shell32.dll",SetLastError=true)] static extern IntPtr CommandLineToArgvW([MarshalAs(UnmanagedType.LPWStr)] string cmd,out int argc);
   [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr p);
-  static string S(int id,W i){IntPtr p;int n;if(!WTSQuerySessionInformation(IntPtr.Zero,id,i,out p,out n))return null;try{return Marshal.PtrToStringUni(p);}finally{WTSFreeMemory(p);}}
+  static string S(int id,W i){IntPtr p;int n;if(!WTSQuerySessionInformation(IntPtr.Zero,id,i,out p,out n))return null;try{return Marshal.PtrToStringAnsi(p);}finally{WTSFreeMemory(p);}}
   public static string User(int id){return S(id,W.UserName);} public static string Domain(int id){return S(id,W.DomainName);}
   public static int State(int id){IntPtr p;int n;if(!WTSQuerySessionInformation(IntPtr.Zero,id,W.ConnectState,out p,out n))return -1;try{return Marshal.ReadInt32(p);}finally{WTSFreeMemory(p);}}
   public static string[] Args(string cmd){int n;IntPtr p=CommandLineToArgvW(cmd,out n);if(p==IntPtr.Zero)throw new Win32Exception();try{var a=new string[n];for(int i=0;i<n;i++)a[i]=Marshal.PtrToStringUni(Marshal.ReadIntPtr(p,i*IntPtr.Size));return a;}finally{LocalFree(p);}}
