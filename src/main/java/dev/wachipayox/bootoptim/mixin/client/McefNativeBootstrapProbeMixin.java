@@ -27,7 +27,7 @@ abstract class McefNativeBootstrapProbeMixin {
     private static final Logger BOOTOPTIM$LOGGER = LogUtils.getLogger();
     private static final String BOOTOPTIM$PROPERTY = "boot_optim.mcefNativeBootstrapProbe";
     private static final String BOOTOPTIM$EXPECTED_VERSION = "2.1.6-1.21.1";
-    private static final String BOOTOPTIM$EXPECTED_JAVA_CEF_COMMIT = "eaeb3d4370aa3526ee237ad1981ad59af3de4dd1";
+    private static final String BOOTOPTIM$EXPECTED_JAVA_CEF_COMMIT = "a78e832f9f13c2c688caea3d04d8b84fcd238d94";
     private static final AtomicBoolean BOOTOPTIM$WATCHING = new AtomicBoolean(false);
     private static volatile boolean BOOTOPTIM$COMPATIBILITY_CHECKED;
     private static volatile boolean BOOTOPTIM$COMPATIBLE;
