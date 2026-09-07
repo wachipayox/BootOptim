@@ -26,6 +26,14 @@ sourceSets.main.resources {
     exclude('src/generated/**/.cache')
 }
 
+sourceSets {
+    mcefHarness {
+        java.srcDir('src/mcefHarness/java')
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
 repositories {
 }
 
@@ -190,6 +198,16 @@ tasks.named('runPackBenchmarkClient').configure {
 
 configurations {
     runtimeClasspath.extendsFrom localRuntime
+}
+
+var mcefCoordinatorHarness = tasks.register('mcefCoordinatorHarness', JavaExec) {
+    dependsOn sourceSets.mcefHarness.classesTaskName
+    classpath = sourceSets.mcefHarness.runtimeClasspath
+    mainClass.set('dev.wachipayox.bootoptim.compat.client.McefInitializationStateMachineHarness')
+}
+
+tasks.named('check').configure {
+    dependsOn mcefCoordinatorHarness
 }
 
 var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
