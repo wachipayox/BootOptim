@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim;
 
+import dev.wachipayox.bootoptim.diagnostic.client.NativeExitProbe;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
 import net.neoforged.api.distmarker.Dist;
@@ -19,8 +20,11 @@ public final class BootOptim {
 
     public BootOptim() {
         StartupProfiler.markModEntrypoint();
-        if (StartupProfiler.isEnabled() && FMLEnvironment.dist == Dist.CLIENT) {
-            ClientStartupHooks.install();
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            NativeExitProbe.installIfEnabled();
+            if (StartupProfiler.isEnabled()) {
+                ClientStartupHooks.install();
+            }
         }
     }
 }
