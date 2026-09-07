@@ -121,6 +121,12 @@ callbacks and custom loaders are not yet represented. The tool is useful
 for visualising dependency and scheduling designs and for rejecting obviously bad
 policies, but it cannot promote a runtime optimization.
 
+The Actions fixture currently applies a reference scaling file containing the
+single physical run's inclusive `block_states`, `block_models` and `bake_models`
+totals. This gives the simulated work a meaningful target magnitude without
+pretending that overlapping phase totals are additive or that one laptop run is a
+hardware distribution. A later multi-run trace can replace this calibration.
+
 The next fidelity step is to export per-task durations and barrier membership from
 the existing ModelManager boundary profiler and feed those measurements into the
 same graph schema. A later class-level replay can replace the estimator for a

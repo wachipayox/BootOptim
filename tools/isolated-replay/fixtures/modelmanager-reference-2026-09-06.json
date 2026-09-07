@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "source": "docs/research/p0.2-variance-harness-2026-09-06.md physical run",
+  "semantics": "single physical laptop reference; inclusive phase boundaries, not additive wall time",
+  "phase_totals_ms": {
+    "block_states": 9657.986,
+    "block_models": 24960.395,
+    "bake_models": 41152.538
+  }
+}

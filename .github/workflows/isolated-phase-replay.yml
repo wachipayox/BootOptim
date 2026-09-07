@@ -79,6 +79,7 @@ jobs:
           test -n "$pack_root"
           python tools/isolated-replay/pack_graph.py \
             --pack-root "$pack_root" \
+            --calibration tools/isolated-replay/fixtures/modelmanager-reference-2026-09-06.json \
             --output pack-graph.json
           gzip -9 pack-graph.json
 

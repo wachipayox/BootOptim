@@ -35,6 +35,30 @@ class PackGraphTests(unittest.TestCase):
             self.assertIn("model:demo:block/parent", tasks["model:demo:block/child"]["depends_on"])
             self.assertIn("model:demo:block/child", tasks["blockstate:demo:thing"]["depends_on"])
 
+    def test_scales_task_families_to_reference_phase_totals(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_dir = root / "assets" / "demo" / "models"
+            model_dir.mkdir(parents=True)
+            (model_dir / "one.json").write_text(json.dumps({}), encoding="utf-8")
+            fixture = build_fixture(
+                root,
+                {
+                    "source": "test",
+                    "phase_totals_ms": {
+                        "block_models": 10.0,
+                        "bake_models": 20.0,
+                    },
+                },
+            )
+            tasks = fixture["tasks"]
+            self.assertEqual(
+                sum(task["duration_ms"] for task in tasks if task["kind"] in {"model_enumeration", "model_parse"}),
+                10.0,
+            )
+            self.assertEqual(sum(task["duration_ms"] for task in tasks if task["kind"] == "model_bake"), 20.0)
+            self.assertEqual(fixture["metadata"]["calibration_source"], "test")
+
 
 if __name__ == "__main__":
     unittest.main()

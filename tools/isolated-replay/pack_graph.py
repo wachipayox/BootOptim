@@ -136,7 +136,35 @@ def break_cycles(tasks: dict[str, dict[str, Any]]) -> int:
     return removed
 
 
-def build_fixture(pack_root: Path) -> dict[str, Any]:
+def apply_calibration(tasks: dict[str, dict[str, Any]], calibration: dict[str, Any]) -> dict[str, float]:
+    phase_totals = calibration.get("phase_totals_ms")
+    if not isinstance(phase_totals, dict):
+        raise ValueError("calibration.phase_totals_ms must be an object")
+    groups = {
+        "block_models": {"model_enumeration", "model_parse"},
+        "block_states": {"blockstate_enumeration", "blockstate_parse"},
+        "bake_models": {"model_bake"},
+    }
+    applied: dict[str, float] = {}
+    for phase, kinds in groups.items():
+        target = phase_totals.get(phase)
+        if target is None:
+            continue
+        target = float(target)
+        if not math.isfinite(target) or target < 0:
+            raise ValueError(f"calibration phase {phase} must be finite and non-negative")
+        members = [task for task in tasks.values() if task["kind"] in kinds]
+        current = sum(float(task["duration_ms"]) for task in members)
+        if current <= 0:
+            raise ValueError(f"calibration phase {phase} has no work in the graph")
+        scale = target / current
+        for task in members:
+            task["duration_ms"] = round(float(task["duration_ms"]) * scale, 6)
+        applied[phase] = target
+    return applied
+
+
+def build_fixture(pack_root: Path, calibration: dict[str, Any] | None = None) -> dict[str, Any]:
     entries = resource_names(pack_root)
     selected: dict[str, dict[str, Any]] = {}
     shadowed_resources = 0
@@ -238,6 +266,7 @@ def build_fixture(pack_root: Path) -> dict[str, Any]:
                 "order": index + 20_000,
             }
 
+    calibrated_phase_totals = apply_calibration(tasks, calibration) if calibration else {}
     cycle_edges_removed = break_cycles(tasks)
     manifest_hash = hashlib.sha256()
     manifest_hash.update(source_digest.digest())
@@ -263,6 +292,8 @@ def build_fixture(pack_root: Path) -> dict[str, Any]:
             "endpoint": "model_blockstate_dependency_graph",
             "pack_root": str(pack_root),
             "duration_semantics": "relative_model_complexity_work_units",
+            "calibration_source": calibration.get("source") if calibration else None,
+            "calibrated_phase_totals_ms": calibrated_phase_totals,
             "resource_entries_considered": len(entries),
             "logical_resources_selected": len(selected),
             "shadowed_logical_resources": shadowed_resources,
@@ -279,8 +310,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pack-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--calibration", type=Path)
     args = parser.parse_args()
-    fixture = build_fixture(args.pack_root.resolve())
+    calibration = None
+    if args.calibration:
+        calibration = json.loads(args.calibration.read_text(encoding="utf-8"))
+    fixture = build_fixture(args.pack_root.resolve(), calibration)
     args.output.write_text(json.dumps(fixture, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"fixture_id": fixture["fixture_id"], **fixture["metadata"]}, indent=2, sort_keys=True))
 
