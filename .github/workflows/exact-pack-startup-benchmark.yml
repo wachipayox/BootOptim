@@ -399,6 +399,8 @@ jobs:
             run-pack-benchmark/config/fml.toml
             run-pack-benchmark/config/mcef/mcef.properties
             run-pack-benchmark/options.txt
+            diagnostics/**/*.jfr
+            run-pack-benchmark/**/*.jfr
           if-no-files-found: ignore
           retention-days: 14
 
