@@ -39,14 +39,41 @@ function Start-Fixture {
 }
 
 try {
-    # Abrupt termination: the observer must still produce a final primary JSON.
+    # Abrupt termination after proven attach: the observer must still produce a final primary JSON.
     $fixture = Start-Fixture
     $successOut = Join-Path $root 'forced-exit.json'
     $job = Start-Job -ScriptBlock {
         param($Probe, $JavaPid, $Creation, $Out)
         & $Probe -JavaPid $JavaPid -JavaCreationDate $Creation -OutputFile $Out -PollMilliseconds 50 -PostExitEventGraceMilliseconds 0
     } -ArgumentList $probe, $fixture.process.Id, $fixture.creation, $successOut
-    Start-Sleep -Milliseconds 750
+
+    $attachDeadline = [DateTime]::UtcNow.AddSeconds(15)
+    $attached = $false
+    $checkpoint = $null
+    do {
+        Start-Sleep -Milliseconds 100
+        if (Test-Path -LiteralPath $successOut -PathType Leaf) {
+            try {
+                $checkpoint = Get-Content -LiteralPath $successOut -Raw | ConvertFrom-Json
+                if ($checkpoint.status -eq 'attached') { $attached = $true; break }
+                if ($checkpoint.status -eq 'observer_error') { break }
+            } catch {
+                # Atomic replacement can briefly race the test's open; retry until deadline.
+            }
+        }
+        if ($job.State -in @('Completed','Failed','Stopped')) { break }
+    } while ([DateTime]::UtcNow -lt $attachDeadline)
+
+    if (-not $attached) {
+        $jobDiagnostic = Receive-Job -Job $job -Keep -ErrorAction SilentlyContinue
+        $sidecarDiagnostic = $null
+        if (Test-Path -LiteralPath "$successOut.observer-error.json" -PathType Leaf) {
+            $sidecarDiagnostic = Get-Content -LiteralPath "$successOut.observer-error.json" -Raw
+        }
+        $status = if ($checkpoint) { [string]$checkpoint.status } else { '<none>' }
+        throw "Observer never reached attached before forced-exit test; job=$($job.State) checkpoint=$status output=$jobDiagnostic sidecar=$sidecarDiagnostic"
+    }
+
     Stop-Process -Id $fixture.process.Id -Force -ErrorAction Stop
     if (-not (Wait-Job -Job $job -Timeout 30)) { throw 'Observer job did not finish after forced Java termination' }
     $jobOutput = Receive-Job -Job $job -ErrorAction SilentlyContinue
