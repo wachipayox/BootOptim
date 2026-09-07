@@ -40,17 +40,24 @@ import java.util.function.Function;
  */
 @Mixin(ElementsModel.class)
 abstract class ElementsModelCullDirectionCacheMixin {
-    private static final boolean ENABLED = Boolean.parseBoolean(
+    @Unique
+    private static final boolean BOOTOPTIM_CACHE_ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.elementsCullDirectionCache", "false"));
-    private static final boolean FIELD_CACHE_ENABLED = Boolean.parseBoolean(
+    @Unique
+    private static final boolean BOOTOPTIM_CACHE_FIELD_ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.elementsCullDirectionFieldCache", "false"));
-    private static final String RAW_CACHE_PROPERTY = System.getProperty(
+    @Unique
+    private static final String BOOTOPTIM_CACHE_RAW_PROPERTY = System.getProperty(
             "boot_optim.elementsCullDirectionCache", "<unset>");
-    private static final String RAW_FIELD_PROPERTY = System.getProperty(
+    @Unique
+    private static final String BOOTOPTIM_CACHE_RAW_FIELD_PROPERTY = System.getProperty(
             "boot_optim.elementsCullDirectionFieldCache", "<unset>");
-    private static final AtomicBoolean REPORTED = new AtomicBoolean();
-    private static final AtomicBoolean FIELD_CACHE_REPORTED = new AtomicBoolean();
-    private static final AtomicBoolean FLAGS_REPORTED = new AtomicBoolean();
+    @Unique
+    private static final AtomicBoolean BOOTOPTIM_CACHE_REPORTED = new AtomicBoolean();
+    @Unique
+    private static final AtomicBoolean BOOTOPTIM_CACHE_FIELD_REPORTED = new AtomicBoolean();
+    @Unique
+    private static final AtomicBoolean BOOTOPTIM_CACHE_FLAGS_REPORTED = new AtomicBoolean();
 
     @Shadow
     @Final
@@ -64,15 +71,15 @@ abstract class ElementsModelCullDirectionCacheMixin {
             Function<Material, TextureAtlasSprite> spriteGetter,
             ModelState modelState,
             CallbackInfo ci) {
-        if (FLAGS_REPORTED.compareAndSet(false, true)) {
+        if (BOOTOPTIM_CACHE_FLAGS_REPORTED.compareAndSet(false, true)) {
             StartupReport.optimization(
                     "elements_cull_direction_flags",
-                    ENABLED,
-                    "cache=" + ENABLED + ";field=" + FIELD_CACHE_ENABLED
-                            + ";rawCache=" + RAW_CACHE_PROPERTY
-                            + ";rawField=" + RAW_FIELD_PROPERTY);
+                    BOOTOPTIM_CACHE_ENABLED,
+                    "cache=" + BOOTOPTIM_CACHE_ENABLED + ";field=" + BOOTOPTIM_CACHE_FIELD_ENABLED
+                            + ";rawCache=" + BOOTOPTIM_CACHE_RAW_PROPERTY
+                            + ";rawField=" + BOOTOPTIM_CACHE_RAW_FIELD_PROPERTY);
         }
-        if (!ENABLED) {
+        if (!BOOTOPTIM_CACHE_ENABLED) {
             return;
         }
 
@@ -82,7 +89,7 @@ abstract class ElementsModelCullDirectionCacheMixin {
         }
 
         Transformation rotation = modelState.getRotation();
-        TransformationDirectionCacheAccess fieldCache = FIELD_CACHE_ENABLED
+        TransformationDirectionCacheAccess fieldCache = BOOTOPTIM_CACHE_FIELD_ENABLED
                 && ((Object) rotation) instanceof TransformationDirectionCacheAccess access
                 ? access
                 : null;
@@ -124,12 +131,12 @@ abstract class ElementsModelCullDirectionCacheMixin {
             }
         }
 
-        if (usedFieldCache && FIELD_CACHE_REPORTED.compareAndSet(false, true)) {
+        if (usedFieldCache && BOOTOPTIM_CACHE_FIELD_REPORTED.compareAndSet(false, true)) {
             StartupReport.optimization(
                     "elements_cull_direction_field_cache", true,
                     "per_transformation_lazy_direction_map");
         }
-        if (REPORTED.compareAndSet(false, true)) {
+        if (BOOTOPTIM_CACHE_REPORTED.compareAndSet(false, true)) {
             StartupReport.optimization(
                     "elements_cull_direction_cache", true,
                     discreteRotation != null

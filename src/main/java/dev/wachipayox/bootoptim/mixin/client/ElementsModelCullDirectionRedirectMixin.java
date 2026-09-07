@@ -8,6 +8,7 @@ import net.minecraft.client.resources.model.BlockModelRotation;
 import net.minecraft.core.Direction;
 import net.neoforged.neoforge.client.model.ElementsModel;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -24,20 +25,29 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Mixin(ElementsModel.class)
 abstract class ElementsModelCullDirectionRedirectMixin {
-    private static final boolean ENABLED = Boolean.parseBoolean(
+    @Unique
+    private static final boolean BOOTOPTIM_REDIRECT_ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.elementsCullDirectionRedirectCache", "false"));
-    private static final boolean FIELD_CACHE_ENABLED = Boolean.parseBoolean(
+    @Unique
+    private static final boolean BOOTOPTIM_REDIRECT_FIELD_ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.elementsCullDirectionFieldCache", "false"));
-    private static final String RAW_REDIRECT_PROPERTY = System.getProperty(
+    @Unique
+    private static final String BOOTOPTIM_REDIRECT_RAW_PROPERTY = System.getProperty(
             "boot_optim.elementsCullDirectionRedirectCache", "<unset>");
-    private static final String RAW_CACHE_PROPERTY = System.getProperty(
+    @Unique
+    private static final String BOOTOPTIM_REDIRECT_RAW_CACHE_PROPERTY = System.getProperty(
             "boot_optim.elementsCullDirectionCache", "<unset>");
-    private static final String RAW_FIELD_PROPERTY = System.getProperty(
+    @Unique
+    private static final String BOOTOPTIM_REDIRECT_RAW_FIELD_PROPERTY = System.getProperty(
             "boot_optim.elementsCullDirectionFieldCache", "<unset>");
-    private static final AtomicBoolean FLAGS_REPORTED = new AtomicBoolean();
-    private static final AtomicBoolean INVOCATION_REPORTED = new AtomicBoolean();
-    private static final AtomicBoolean REPORTED = new AtomicBoolean();
-    private static final Map<Transformation, Direction[]> VANILLA_ROTATIONS = createVanillaRotations();
+    @Unique
+    private static final AtomicBoolean BOOTOPTIM_REDIRECT_FLAGS_REPORTED = new AtomicBoolean();
+    @Unique
+    private static final AtomicBoolean BOOTOPTIM_REDIRECT_INVOCATION_REPORTED = new AtomicBoolean();
+    @Unique
+    private static final AtomicBoolean BOOTOPTIM_REDIRECT_REPORTED = new AtomicBoolean();
+    @Unique
+    private static final Map<Transformation, Direction[]> BOOTOPTIM_REDIRECT_VANILLA_ROTATIONS = createVanillaRotations();
 
     private static Map<Transformation, Direction[]> createVanillaRotations() {
         Map<Transformation, Direction[]> result = new IdentityHashMap<>();
@@ -54,13 +64,13 @@ abstract class ElementsModelCullDirectionRedirectMixin {
 
     @Inject(method = "addQuads", at = @At("HEAD"), require = 0)
     private void bootoptim$reportFlags(CallbackInfo ci) {
-        if (FLAGS_REPORTED.compareAndSet(false, true)) {
+        if (BOOTOPTIM_REDIRECT_FLAGS_REPORTED.compareAndSet(false, true)) {
             StartupReport.optimization(
                     "elements_cull_direction_redirect_flags",
-                    ENABLED,
-                    "redirect=" + ENABLED + ";cache=" + RAW_CACHE_PROPERTY
-                            + ";field=" + RAW_FIELD_PROPERTY
-                            + ";rawRedirect=" + RAW_REDIRECT_PROPERTY);
+                    BOOTOPTIM_REDIRECT_ENABLED,
+                    "redirect=" + BOOTOPTIM_REDIRECT_ENABLED + ";cache=" + BOOTOPTIM_REDIRECT_RAW_CACHE_PROPERTY
+                            + ";field=" + BOOTOPTIM_REDIRECT_RAW_FIELD_PROPERTY
+                            + ";rawRedirect=" + BOOTOPTIM_REDIRECT_RAW_PROPERTY);
         }
     }
 
@@ -71,22 +81,22 @@ abstract class ElementsModelCullDirectionRedirectMixin {
                     target = "Lcom/mojang/math/Transformation;rotateTransform(Lnet/minecraft/core/Direction;)Lnet/minecraft/core/Direction;"),
             require = 0)
     private Direction bootoptim$rotateCullDirection(Transformation transformation, Direction direction) {
-        if (ENABLED) {
-            if (INVOCATION_REPORTED.compareAndSet(false, true)) {
+        if (BOOTOPTIM_REDIRECT_ENABLED) {
+            if (BOOTOPTIM_REDIRECT_INVOCATION_REPORTED.compareAndSet(false, true)) {
                 StartupReport.optimization(
                         "elements_cull_direction_redirect_invoked", true, "transformation_rotate_transform");
             }
-            Direction[] mapped = VANILLA_ROTATIONS.get(transformation);
+            Direction[] mapped = BOOTOPTIM_REDIRECT_VANILLA_ROTATIONS.get(transformation);
             if (mapped != null) {
-                if (REPORTED.compareAndSet(false, true)) {
+                if (BOOTOPTIM_REDIRECT_REPORTED.compareAndSet(false, true)) {
                     StartupReport.optimization(
                             "elements_cull_direction_redirect_cache", true, "vanilla_block_model_rotation_table");
                 }
                 return mapped[direction.ordinal()];
             }
         }
-        if (FIELD_CACHE_ENABLED && ((Object) transformation) instanceof TransformationDirectionCacheAccess cache) {
-            if (REPORTED.compareAndSet(false, true)) {
+        if (BOOTOPTIM_REDIRECT_FIELD_ENABLED && ((Object) transformation) instanceof TransformationDirectionCacheAccess cache) {
+            if (BOOTOPTIM_REDIRECT_REPORTED.compareAndSet(false, true)) {
                 StartupReport.optimization(
                         "elements_cull_direction_field_cache", true, "per_transformation_lazy_direction_map");
             }

@@ -193,3 +193,25 @@ These results do not close the broader cull-direction route. They close only
 the current un-attributed field-cache sample and leave the stock-loop redirect
 open until its invocation and raw-property markers agree with the command
 line. No experimental JAR is left installed on the laptop after the run.
+
+## Root cause of the flag disagreement (2026-09-07)
+
+The diagnostic build resolved the contradiction. Both `ElementsModel` mixins
+declared identically named static fields such as `ENABLED`,
+`FIELD_CACHE_ENABLED`, `REPORTED`, and `FLAGS_REPORTED`. Those fields are
+merged into the target class by Mixin; they were not private storage isolated
+by source mixin. When `redirect=true` and `cache=false`, the redirect mixin's
+`ENABLED` field could therefore supply the value observed by the full-loop
+mixin. The diagnostic report proved this directly:
+
+```text
+elements_cull_direction_flags status=enabled reason=cache=true;field=false;rawCache=false;rawField=false
+```
+
+The JVM command line really did contain `cache=false`. This was a production
+diagnostic bug in the experimental mixins, not a Prism or Windows variation.
+The fields are now `@Unique` and have distinct `BOOTOPTIM_CACHE_*` and
+`BOOTOPTIM_REDIRECT_*` names. The next laptop run must be the first valid
+redirect measurement after this fix; all earlier redirect timings remain
+discarded. This also explains why the earlier field-only run did not reveal
+the issue: both colliding `ENABLED` values happened to be false.
