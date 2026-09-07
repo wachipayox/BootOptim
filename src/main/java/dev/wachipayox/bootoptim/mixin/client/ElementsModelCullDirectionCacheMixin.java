@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 
 import com.mojang.math.Transformation;
 import com.mojang.math.OctahedralGroup;
+import dev.wachipayox.bootoptim.optimization.client.TransformationDirectionCacheAccess;
 import dev.wachipayox.bootoptim.profiling.StartupReport;
 import net.minecraft.client.renderer.block.model.BlockElement;
 import net.minecraft.client.renderer.block.model.BlockElementFace;
@@ -41,6 +42,8 @@ import java.util.function.Function;
 abstract class ElementsModelCullDirectionCacheMixin {
     private static final boolean ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.elementsCullDirectionCache", "false"));
+    private static final boolean FIELD_CACHE_ENABLED = Boolean.parseBoolean(
+            System.getProperty("boot_optim.elementsCullDirectionFieldCache", "false"));
     private static final AtomicBoolean REPORTED = new AtomicBoolean();
 
     @Shadow
@@ -65,6 +68,10 @@ abstract class ElementsModelCullDirectionCacheMixin {
         }
 
         Transformation rotation = modelState.getRotation();
+        TransformationDirectionCacheAccess fieldCache = FIELD_CACHE_ENABLED
+                && ((Object) rotation) instanceof TransformationDirectionCacheAccess access
+                ? access
+                : null;
         OctahedralGroup discreteRotation = modelState instanceof BlockModelRotation blockModelRotation
                 ? blockModelRotation.actualRotation()
                 : null;
@@ -85,6 +92,8 @@ abstract class ElementsModelCullDirectionCacheMixin {
                     builder.addUnculledFace(quad);
                 } else if (discreteRotation != null) {
                     builder.addCulledFace(discreteRotation.rotate(cullDirection), quad);
+                } else if (fieldCache != null) {
+                    builder.addCulledFace(fieldCache.bootoptim$getCachedDirection(cullDirection), quad);
                 } else if (identityRotation) {
                     builder.addCulledFace(cullDirection, quad);
                 } else {
@@ -101,7 +110,8 @@ abstract class ElementsModelCullDirectionCacheMixin {
 
         if (REPORTED.compareAndSet(false, true)) {
             StartupReport.optimization(
-                    "elements_cull_direction_cache", true, "per_model_state_direction_map");
+                    "elements_cull_direction_cache", true,
+                    fieldCache != null ? "per_transformation_lazy_direction_map" : "per_model_state_direction_map");
         }
         ci.cancel();
     }
