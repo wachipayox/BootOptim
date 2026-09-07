@@ -71,8 +71,14 @@ jobs:
             --zip .exact-pack-cache/bootoptim-exact-pack.zip \
             --sha256 "$EXACT_PACK_SHA256" \
             --extract exact-pack-run
+          if test -d exact-pack-run/mods; then
+            pack_root=exact-pack-run
+          else
+            pack_root=$(find exact-pack-run -mindepth 2 -maxdepth 2 -type d -name mods -print -quit | sed 's#/mods$##')
+          fi
+          test -n "$pack_root"
           python tools/isolated-replay/pack_graph.py \
-            --pack-root "$BOOTOPTIM_PACK_DIR" \
+            --pack-root "$pack_root" \
             --output pack-graph.json
           gzip -9 pack-graph.json
 
