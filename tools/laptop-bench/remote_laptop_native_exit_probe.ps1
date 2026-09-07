@@ -171,7 +171,7 @@ try {
         $state.warnings += [pscustomobject]@{stage='parent_exit_code';utc=[DateTime]::UtcNow.ToString('o');message=$_.Exception.Message}
     }
     $state.children = @($children.Values)
-    $state.timeline = @($timeline)
+    $state.timeline = $timeline.ToArray()
     Write-JsonAtomic $OutputFile $state
 
     $childResults = @()
@@ -228,7 +228,7 @@ try {
         message = if ($_.Exception) { $_.Exception.Message } else { [string]$_ }
     }
     $state.children = @($children.Values)
-    $state.timeline = @($timeline)
+    $state.timeline = $timeline.ToArray()
     $primarySaved = $false
     try {
         Write-JsonAtomic $OutputFile $state
