@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 abstract class ElementsModelCullDirectionRedirectMixin {
     private static final boolean ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.elementsCullDirectionRedirectCache", "false"));
+    private static final boolean FIELD_CACHE_ENABLED = Boolean.parseBoolean(
+            System.getProperty("boot_optim.elementsCullDirectionFieldCache", "false"));
     private static final AtomicBoolean INVOCATION_REPORTED = new AtomicBoolean();
     private static final AtomicBoolean REPORTED = new AtomicBoolean();
     private static final Map<Transformation, Direction[]> VANILLA_ROTATIONS = createVanillaRotations();
@@ -60,6 +62,13 @@ abstract class ElementsModelCullDirectionRedirectMixin {
                 }
                 return mapped[direction.ordinal()];
             }
+        }
+        if (FIELD_CACHE_ENABLED && ((Object) transformation) instanceof TransformationDirectionCacheAccess cache) {
+            if (REPORTED.compareAndSet(false, true)) {
+                StartupReport.optimization(
+                        "elements_cull_direction_field_cache", true, "per_transformation_lazy_direction_map");
+            }
+            return cache.bootoptim$getCachedDirection(direction);
         }
         return transformation.rotateTransform(direction);
     }
