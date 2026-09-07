@@ -245,3 +245,21 @@ premise (for example a count/timing diagnostic or a proven critical-path
 consumer). The `@Unique` field isolation is retained as a correctness fix for
 the experimental branch. The laptop is restored to exactly one production
 BootOptim JAR with experimental properties removed.
+
+## Fixed exact-pack hosted A/B (2026-09-07)
+
+The corrected head `4043489` passed build, startup smoke, and the pinned
+exact-pack matrix (`34081636062`). Three fresh hosted VMs per side produced:
+
+| Variant | Median main menu | Median reload → FancyMenu |
+| --- | ---: | ---: |
+| control (`elementsCullDirectionCache=false`) | `90,525 ms` | `41,445 ms` |
+| candidate (`elementsCullDirectionCache=true`) | `89,512 ms` | `41,295 ms` |
+
+The candidate was `-1,013 ms` on total startup and `-150 ms` on the reload-to-
+FancyMenu interval, but its startup report contained only the flag marker and
+no `elements_cull_direction_cache` actual-path marker. Thus the measured delta
+cannot be attributed to this cache; it is normal hosted-run variance. There
+were zero BootOptim/Mixin errors and the pinned resource contract passed. This
+supports rejection of the current cache design, not closure of every possible
+cull-direction redesign.
