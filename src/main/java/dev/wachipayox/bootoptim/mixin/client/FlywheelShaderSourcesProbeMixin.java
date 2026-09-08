@@ -13,12 +13,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "dev.engine_room.flywheel.backend.glsl.ShaderSources", remap = false)
 abstract class FlywheelShaderSourcesProbeMixin {
     @Inject(method = "<init>", at = @At("HEAD"), require = 0)
-    private void bootoptim$sourcesStart(ResourceManager manager, CallbackInfo ci) {
+    private static void bootoptim$sourcesStart(ResourceManager manager, CallbackInfo ci) {
         FlywheelShaderSourcesProbe.sourcesPrepareStart(manager);
     }
 
     @Inject(method = "<init>", at = @At("RETURN"), require = 0)
-    private void bootoptim$sourcesEnd(ResourceManager manager, CallbackInfo ci) {
+    private static void bootoptim$sourcesEnd(ResourceManager manager, CallbackInfo ci) {
         FlywheelShaderSourcesProbe.sourcesPrepareEnd(manager);
     }
 }
