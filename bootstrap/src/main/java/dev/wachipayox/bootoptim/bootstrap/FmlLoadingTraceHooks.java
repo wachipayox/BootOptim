@@ -14,7 +14,8 @@ public final class FmlLoadingTraceHooks {
     public static void beginCommonModLoaderPrefix() {
         if (!TRACE.isEnabled() || COMMON_PREFIX_TASK.get() != 0L) return;
         try {
-            long predecessor = MinecraftBootstrapTraceHooks.validateTaskId();
+            long predecessor = NeoForgeLanguageTraceHooks.builtinLanguageTaskId();
+            if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.validateTaskId();
             if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.bootstrapTaskId();
             if (predecessor == 0L) predecessor = DiscoveryProfiler.dependencyTaskId();
             long[] dependencies = predecessor == 0L ? null : new long[] { predecessor };
@@ -43,6 +44,7 @@ public final class FmlLoadingTraceHooks {
         if (!TRACE.isEnabled() || GATHER_TASK.get() != 0L) return;
         try {
             long predecessor = COMMON_PREFIX_TASK.get();
+            if (predecessor == 0L) predecessor = NeoForgeLanguageTraceHooks.builtinLanguageTaskId();
             if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.validateTaskId();
             if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.bootstrapTaskId();
             if (predecessor == 0L) predecessor = DiscoveryProfiler.dependencyTaskId();
