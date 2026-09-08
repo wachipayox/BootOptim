@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Build a FilePackResources ZIP I/O replay from the exact-pack and PR #183 contract.
 
-This helper only reconstructs the user-selected external resource-pack precedence for
-ordinary model JSON resources. It deliberately does not parse model semantics. The
-PR #183 manifest/replay remains the semantic oracle for its bounded roots.
+The PR #183 bounded real-model manifest/replay is the selection/byte oracle for its
+models. This extension uses the same selected external resource-pack order but covers
+all valid `assets/<namespace>/<path>` entries so the expensive texture-heavy ZIPs are
+not accidentally excluded. It does not parse model or texture semantics.
 """
 from __future__ import annotations
 
@@ -16,14 +17,16 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-MODEL_RE = re.compile(r"^assets/([^/]+)/models/(.+)\.json$")
+ASSET_RE = re.compile(r"^assets/([^/]+)/(.+)$")
+VALID_NAMESPACE_RE = re.compile(r"^[a-z0-9_.-]+$")
+VALID_PATH_RE = re.compile(r"^[a-z0-9/._-]+$")
 EXPECTED_DIGEST = "502282f60acdc16beaaf312a81fd76958a8a7ca9504f1ee5305e970eb5fc2050"
 EXPECTED_EXACT_PACK = "7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639"
 
 
 @dataclass(frozen=True)
 class Candidate:
-    logical_id: str
+    resource_id: str
     pack_name: str
     archive: Path
     entry: str
@@ -33,9 +36,25 @@ class Candidate:
     compressed_size: int
 
 
-def model_id(entry: str) -> str | None:
-    match = MODEL_RE.match(entry.replace("\\", "/"))
-    return f"{match.group(1)}:{match.group(2)}" if match else None
+def resource_id(entry: str) -> str | None:
+    normalized = entry.replace("\\", "/")
+    match = ASSET_RE.match(normalized)
+    if not match:
+        return None
+    namespace, path = match.groups()
+    # Match ResourceLocation's lowercase namespace/path acceptance closely enough for
+    # this bounded replay; invalid asset names are counted and excluded rather than
+    # silently converted.
+    if not VALID_NAMESPACE_RE.fullmatch(namespace) or not VALID_PATH_RE.fullmatch(path):
+        return None
+    if "\t" in normalized or "\n" in normalized or "\r" in normalized:
+        return None
+    return f"{namespace}:{path}"
+
+
+def model_contract_resource_id(model_id: str) -> str:
+    namespace, path = model_id.split(":", 1)
+    return f"{namespace}:models/{path}.json"
 
 
 def selected_packs(options: str) -> list[str]:
@@ -80,30 +99,33 @@ def enumerate_external(pack_root: Path, names: list[str]) -> tuple[list[Candidat
         if path is None:
             raise RuntimeError(f"selected external pack missing: {name}")
         if not path.is_file() or path.suffix.lower() not in {".zip", ".jar"}:
-            # Directory packs are real resources but not FilePackResources ZIP targets.
             continue
         try:
             with zipfile.ZipFile(path) as zf:
-                infos = [i for i in zf.infolist() if not i.is_dir() and model_id(i.filename)]
+                all_infos = [i for i in zf.infolist() if not i.is_dir()]
+                asset_infos = [i for i in all_infos if i.filename.replace("\\", "/").startswith("assets/")]
                 counts: dict[str, int] = {}
-                for info in infos:
+                for info in asset_infos:
                     counts[info.filename] = counts.get(info.filename, 0) + 1
-                duplicate_names = {name for name, count in counts.items() if count > 1}
+                duplicate_names = {entry for entry, count in counts.items() if count > 1}
+                invalid_asset_entries = 0
                 accepted = 0
-                for info in infos:
-                    # Match #183: refuse duplicate model paths inside one archive rather than
-                    # inventing duplicate-name precedence.
+                for info in asset_infos:
                     if info.filename in duplicate_names:
                         continue
-                    logical = model_id(info.filename)
-                    assert logical is not None
+                    logical = resource_id(info.filename)
+                    if logical is None:
+                        invalid_asset_entries += 1
+                        continue
                     candidates.append(Candidate(logical, name, path.resolve(), info.filename,
                                                 priority, info.CRC, info.file_size, info.compress_size))
                     accepted += 1
                 archives.append({"pack": name, "path": str(path.resolve()),
                                  "central_entries": len(zf.infolist()),
-                                 "accepted_model_entries": accepted,
-                                 "duplicate_model_names_refused": len(duplicate_names),
+                                 "asset_entries": len(asset_infos),
+                                 "accepted_asset_entries": accepted,
+                                 "invalid_asset_entries": invalid_asset_entries,
+                                 "duplicate_asset_names_refused": len(duplicate_names),
                                  "size": path.stat().st_size,
                                  "mtime_ns": path.stat().st_mtime_ns})
         except (OSError, zipfile.BadZipFile) as exc:
@@ -133,23 +155,24 @@ def main() -> None:
     candidates, archives = enumerate_external(pack_root, selected)
     grouped: dict[str, list[Candidate]] = {}
     for c in candidates:
-        grouped.setdefault(c.logical_id, []).append(c)
+        grouped.setdefault(c.resource_id, []).append(c)
     for values in grouped.values():
         values.sort(key=lambda c: (c.priority, c.pack_name, c.entry))
 
-    contract_by_id = {e["id"]: e for e in contract["entries"]}
-    # First prove the bounded #183 winners still resolve to the exact same archive entry
-    # and bytes under the external-pack precedence reconstructed here.
+    contract_sha_by_resource: dict[str, str] = {}
     contract_verified = 0
-    for logical_id, expected in contract_by_id.items():
-        winner = grouped.get(logical_id, [None])[-1]
-        if winner is None:
-            raise RuntimeError(f"contract winner disappeared: {logical_id}")
+    for expected in contract["entries"]:
+        logical = model_contract_resource_id(expected["id"])
+        values = grouped.get(logical)
+        if not values:
+            raise RuntimeError(f"contract winner disappeared: {expected['id']} -> {logical}")
+        winner = values[-1]
         exp_winner = expected["winner"]
         if exp_winner["source_id"] != f"external-pack:{winner.pack_name}" or exp_winner["entry"] != winner.entry:
-            raise RuntimeError(f"winner provenance mismatch for {logical_id}")
+            raise RuntimeError(f"winner provenance mismatch for {expected['id']}")
         if sha_for(winner.archive, winner.entry) != expected["sha256"]:
-            raise RuntimeError(f"winner bytes mismatch for {logical_id}")
+            raise RuntimeError(f"winner bytes mismatch for {expected['id']}")
+        contract_sha_by_resource[logical] = expected["sha256"]
         contract_verified += 1
 
     out = args.output_dir.resolve()
@@ -157,24 +180,28 @@ def main() -> None:
     tsv = out / "requests.tsv"
     winner_count = 0
     shadow_count = 0
+    winner_uncompressed = 0
+    winner_compressed = 0
     with tsv.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh, delimiter="\t", lineterminator="\n")
         writer.writerow(["role", "logical_id", "pack", "archive", "entry", "priority",
                          "crc", "size", "compressed_size", "expected_sha256"])
-        for logical_id in sorted(grouped):
-            values = grouped[logical_id]
+        for logical in sorted(grouped):
+            values = grouped[logical]
             winner = values[-1]
-            expected_sha = contract_by_id.get(logical_id, {}).get("sha256", "")
-            writer.writerow(["winner", logical_id, winner.pack_name, winner.archive, winner.entry,
-                             winner.priority, winner.crc, winner.size, winner.compressed_size, expected_sha])
+            writer.writerow(["winner", logical, winner.pack_name, winner.archive, winner.entry,
+                             winner.priority, winner.crc, winner.size, winner.compressed_size,
+                             contract_sha_by_resource.get(logical, "")])
             winner_count += 1
+            winner_uncompressed += winner.size
+            winner_compressed += winner.compressed_size
             for shadow in values[:-1]:
-                writer.writerow(["shadowed", logical_id, shadow.pack_name, shadow.archive, shadow.entry,
+                writer.writerow(["shadowed", logical, shadow.pack_name, shadow.archive, shadow.entry,
                                  shadow.priority, shadow.crc, shadow.size, shadow.compressed_size, ""])
                 shadow_count += 1
 
     report = {
-        "schema": 1,
+        "schema": 2,
         "origin": "PR #183 artifact + pinned exact-pack fixture",
         "exact_pack_sha256": EXPECTED_EXACT_PACK,
         "semantic_contract_sha256": replay["semantic_sha256"],
@@ -183,11 +210,13 @@ def main() -> None:
         "contract_winners_verified_entry_and_sha": contract_verified,
         "selected_external_resource_packs_low_to_high": selected,
         "external_zip_archives": archives,
-        "external_model_candidates": len(candidates),
-        "external_logical_models": len(grouped),
+        "external_asset_candidates": len(candidates),
+        "external_logical_resources": len(grouped),
         "winner_requests": winner_count,
+        "winner_uncompressed_bytes": winner_uncompressed,
+        "winner_compressed_bytes": winner_compressed,
         "shadowed_candidates": shadow_count,
-        "request_semantics": "one winner read per logical external model; shadowed rows validate precedence but are excluded from timed winner reads",
+        "request_semantics": "one winning valid asset read per logical external resource; earlier external candidates retained only for precedence validation",
     }
     (out / "provenance.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(json.dumps(report, indent=2, sort_keys=True))
