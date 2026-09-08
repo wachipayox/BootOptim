@@ -32,6 +32,11 @@ final class DiscoveryProfiler {
         end("dependency_discovery", DEPENDENCY_START, DEPENDENCY_TASK);
     }
 
+    /** Causal predecessor for the first post-discovery FML task; zero means no trace task was emitted. */
+    static long dependencyTaskId() {
+        return DEPENDENCY_TASK.get();
+    }
+
     private static void begin(String phase, AtomicLong holder, AtomicLong taskHolder) {
         if (!ENABLED && !TRACE.isEnabled()) {
             return;
