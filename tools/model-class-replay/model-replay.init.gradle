@@ -1,0 +1,41 @@
+import org.gradle.api.tasks.JavaExec
+
+// Diagnostic/tooling-only source injection. The replay sources are added to the
+// normal dev main output only for Gradle invocations that explicitly pass this
+// init script, so FML/ModLauncher can discover the GatherDataEvent bridge during
+// runData. Normal builds/package tasks do not see src/modelReplay at all.
+gradle.afterProject { project, state ->
+    if (project != gradle.rootProject || state.failure != null) {
+        return
+    }
+
+    def sourceSets = project.extensions.findByName('sourceSets')
+    if (sourceSets == null || sourceSets.findByName('modelReplay') != null) {
+        return
+    }
+
+    def main = sourceSets.getByName('main')
+    main.java.srcDir(project.file('src/modelReplay/java'))
+
+    def replay = sourceSets.create('modelReplay')
+    replay.java.srcDir(project.file('src/modelReplay/java'))
+    replay.resources.srcDir(project.file('src/modelReplay/resources'))
+    replay.compileClasspath = project.files(main.output, main.compileClasspath)
+    replay.runtimeClasspath = project.files(replay.output, replay.compileClasspath, main.runtimeClasspath)
+
+    project.tasks.register('modelReplaySelfTest', JavaExec) {
+        group = 'verification'
+        description = 'Runs the proven pre-parent real BlockModel headless smoke test.'
+        dependsOn replay.classesTaskName
+        classpath = replay.runtimeClasspath
+        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplaySelfTest')
+    }
+
+    project.tasks.register('modelReplayBootstrapBoundary', JavaExec) {
+        group = 'verification'
+        description = 'Reproduces the clean-JavaExec NeoForge LoadingModList bootstrap blocker.'
+        dependsOn replay.classesTaskName
+        classpath = replay.runtimeClasspath
+        mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplayLauncher')
+    }
+}
