@@ -44,7 +44,7 @@ ModLauncher commit `901c6ea8` gives an exact ordering in `cpw.mods.modlauncher.L
 8. `LaunchServiceHandler.launch(...)` enters the chosen game launch target.
 9. game-layer class loading/transformation and Mixin processing occur before the first observed `Bootstrap.bootStrap()` entry.
 
-This matters because the previously attempted direct `ModLoader` target lives in `MC-BOOTSTRAP/fml_loader` and is not a reliable ordinary transformer target. The launcher classes above are themselves already active before a transformation-service transformer can safely target them; broadening a matcher into that layer previously broke FML and is not repeated.
+This matters because the previously attempted direct `ModLoader` target lives in `MC-BOOTSTRAP/fml_loader` and is not a reliable ordinary transformer target. The launcher classes above are already active before an ordinary transformation-service transformer can safely target them; broadening a matcher into that layer previously broke FML and is not repeated.
 
 ## Runtime corroboration from #203
 
@@ -69,22 +69,21 @@ No new launcher/FML class transformer is required. The existing BootOptim transf
 
 By the exact ModLauncher ordering above, this callback happens only after all `completeScan` callbacks have returned and GAME resources have been registered, while ModLauncher is in `initialiseServiceTransformers()`. It therefore provides a real post-scan SERVICE-layer edge without transforming `ModLoader`, `Launcher`, `TransformationServicesHandler`, or other already-active bootstrap classes.
 
-The new trace-only task is deliberately named for its literal boundaries:
+Schema-v1 task spans are intentionally lexical to one thread. The exact pack enters the SERVICE callback on `main` but reaches Minecraft Bootstrap on `pool-8-thread-1`; therefore the long cross-thread interval must **not** be represented as one task. Doing so would violate the existing analyzer contract and would be rejected as an out-of-order close.
 
-`modlauncher_transformers_to_minecraft_bootstrap`
+The final representation uses the existing schema without relaxing it:
 
-- begin: entry into BootOptim's existing `transformers()` callback in trace mode;
-- dependency: `dependency_discovery` task if present;
-- end: immediately before `minecraft_bootstrap` begins;
-- `minecraft_bootstrap` now depends on this task when present and falls back to `dependency_discovery` otherwise.
+- `bootoptim_transformation_service_transformers_callback`: a real same-thread task opened and closed entirely inside BootOptim's `transformers()` callback; dependency = `dependency_discovery` when present;
+- `modlauncher_transformers_to_minecraft_bootstrap`: a `phase_begin/phase_end` pair spanning from that callback to the exact Bootstrap entry. Phase pairs are allowed to cross threads and are not included in task CPU/critical-path sums;
+- `minecraft_bootstrap` depends on the already-closed callback task when present, falling back to `dependency_discovery` otherwise.
 
-The interval is inclusive monotonic wall between those exact observable edges. It includes whichever remaining service transformer registration follows BootOptim's callback, launch-plugin processing, launch-target validation, GAME transforming-classloader/module-layer construction, TCCL transition, launch-handler entry, and subsequent game-layer classloading/Mixin work before Bootstrap. It is **not** named as CPU time, a ModLauncher-exclusive phase, or a performance opportunity.
+The phase name states literal observable boundaries. Its duration is an inclusive monotonic interval, not CPU, not an exclusive ModLauncher phase, and not a performance opportunity. It may include whichever service transformer registration follows BootOptim's callback, launch-plugin processing, launch-target validation, GAME transforming-classloader/module-layer construction, TCCL transition, launch-handler entry, game-layer classloading/Mixin work and other work before Bootstrap.
 
-A residual temporal gap may remain between `dependency_discovery` end and this new task begin. That residual must remain an unnamed gap unless another semantically exact edge is proven.
+A residual temporal gap may remain between `dependency_discovery` end and the callback/phase begin. That residual stays an unnamed gap unless another semantically exact edge is proven.
 
 ## Safety and failure behavior
 
-- `boot_optim.bootTrace.mode=off` still returns no diagnostic transformers and emits no transition task.
+- `boot_optim.bootTrace.mode=off` still returns no diagnostic transformers and emits no transition phase/task.
 - profile/development tracing uses the existing #200 writer/schema; no second writer, buffer or JSON format is introduced.
 - the transition hooks catch `Throwable` and fail open.
 - no executor, thread, callback, classloading order, module ordering, Mixin ordering, launch target or game behavior is modified.
@@ -95,7 +94,7 @@ A residual temporal gap may remain between `dependency_discovery` end and this n
 
 `MinecraftBootstrapTraceTransformerTest` retains matcher/return/rejection coverage and adds structural ordering assertions that:
 
-1. `MinecraftBootstrapTraceHooks.beginBootstrap()` closes `ModLauncherTransitionTraceHooks` before calling `StructuredBootTrace.beginTask` for Bootstrap;
-2. `EarlyStartupProbeService.transformers()` starts the transition before constructing/returning the diagnostic Bootstrap transformer.
+1. `MinecraftBootstrapTraceHooks.beginBootstrap()` closes the transition phase before calling `StructuredBootTrace.beginTask` for Bootstrap;
+2. `EarlyStartupProbeService.transformers()` opens the transition/callback task before diagnostic transformer construction and closes the callback task on the same SERVICE thread afterwards.
 
 Hosted validation and final JSONL inspection are required before this entry can be closed. No A/B or laptop run is justified because this is diagnostic-only instrumentation.
