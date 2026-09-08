@@ -1,0 +1,145 @@
+name: Model Deserializer Allocation Diagnostic
+
+on:
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - 'src/modelReplay/**'
+      - 'tools/model-class-replay/**'
+      - '.github/workflows/model-deserializer-allocation.yml'
+
+permissions:
+  contents: read
+
+env:
+  EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+  EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+  EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+
+jobs:
+  allocation-stacks:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify replay helper tests
+        run: |
+          python -m unittest discover -s tools/model-class-replay -p 'test_*.py' -v
+          ./gradlew -I tools/model-class-replay/model-replay.init.gradle modelReplaySelfTest --stacktrace
+
+      - name: Download pinned exact-pack fixture
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .exact-pack-cache
+          gh release download "$EXACT_PACK_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$EXACT_PACK_ASSET" --dir .exact-pack-cache --clobber
+          actual=$(sha256sum .exact-pack-cache/bootoptim-exact-pack.zip | awk '{print $1}')
+          test "$actual" = "$EXACT_PACK_SHA256"
+          python scripts/exact-pack/prepare_fixture.py \
+            --zip .exact-pack-cache/bootoptim-exact-pack.zip \
+            --sha256 "$EXACT_PACK_SHA256" \
+            --extract exact-pack-run
+
+      - name: Build bounded provenance-preserving model fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -d exact-pack-run/mods; then
+            pack_root=exact-pack-run
+          else
+            pack_root=$(find exact-pack-run -mindepth 2 -maxdepth 2 -type d -name mods -print -quit | sed 's#/mods$##')
+          fi
+          test -n "$pack_root"
+          python tools/model-class-replay/prepare_fixture.py \
+            --pack-root "$pack_root" \
+            --output-dir model-replay-fixture \
+            --limit 24
+
+      - name: Run real FML replay with opt-in allocation stacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p model-replay-out/alloc
+          export BOOTOPTIM_MODEL_REPLAY_MANIFEST="$PWD/model-replay-fixture/manifest.json"
+          export BOOTOPTIM_MODEL_REPLAY_OUTPUT="$PWD/model-replay-out/alloc"
+          export BOOTOPTIM_MODEL_REPLAY_JFR_PATH="$PWD/model-replay-out/alloc/model-allocation.jfr"
+          ./gradlew -I tools/model-class-replay/model-replay.init.gradle runData --stacktrace
+          test -s model-replay-out/alloc/replay.json
+          test -s model-replay-out/alloc/controlled-fallback-error.json
+          test -s model-replay-out/alloc/model-allocation.jfr
+
+      - name: Attribute allocation samples to real deserializer stacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          jfr print --events jdk.ObjectAllocationSample --stack-depth 128 \
+            model-replay-out/alloc/model-allocation.jfr \
+            > model-replay-out/alloc/allocation-samples.txt
+          python tools/model-class-replay/analyze_allocation_jfr.py \
+            --jfr-text model-replay-out/alloc/allocation-samples.txt \
+            --replay-json model-replay-out/alloc/replay.json \
+            --output model-replay-out/alloc/allocation-summary.json
+
+      - name: Enforce semantic and diagnostic gates
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          replay = json.loads(Path('model-replay-out/alloc/replay.json').read_text())
+          alloc = json.loads(Path('model-replay-out/alloc/allocation-summary.json').read_text())
+          controlled = json.loads(Path('model-replay-out/alloc/controlled-fallback-error.json').read_text())
+          assert replay['semantic_sha256'] == '502282f60acdc16beaaf312a81fd76958a8a7ca9504f1ee5305e970eb5fc2050', replay['semantic_sha256']
+          assert replay['stock_repeat_equal'] and replay['identity_candidate_equal'] and replay['fault_probe_detected']
+          assert controlled['missing_parent_resolver_called'] and controlled['missing_parent_exception_class']
+          assert controlled['cycle_observed'] and controlled['cycle_exception_class']
+          assert controlled['invalid_json_exception_class']
+          assert alloc['deserializer_parse_path']['samples'] > 0
+          print('semantic digest:', replay['semantic_sha256'])
+          print('parse exact allocated bytes:', alloc['replay_scope']['stock_1_exact_current_thread_allocated_bytes'])
+          print('growth/resize sample weight %:', alloc['deserializer_parse_path']['growth_resize_percent'])
+          print('diagnostic decision:', alloc['decision_hint'])
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if test -f model-replay-out/alloc/summary.md; then cat model-replay-out/alloc/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+          if test -f model-replay-out/alloc/allocation-summary.json; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat model-replay-out/alloc/allocation-summary.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+
+          Allocation-stack weights are JFR sampled estimates from the headless real-class replay. They are not TTMM,
+          ModelManager inclusive wall, HDD/page-cache evidence, or a startup-saving claim.
+          EOF
+
+      - name: Upload allocation diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-deserializer-allocation-diagnostic
+          path: |
+            model-replay-fixture/manifest.json
+            model-replay-out/alloc/replay.json
+            model-replay-out/alloc/phases.csv
+            model-replay-out/alloc/controlled-fallback-error.json
+            model-replay-out/alloc/allocation-summary.json
+            model-replay-out/alloc/allocation-samples.txt
+            model-replay-out/alloc/model-allocation.jfr
+            model-replay-out/alloc/summary.md
+          if-no-files-found: warn
