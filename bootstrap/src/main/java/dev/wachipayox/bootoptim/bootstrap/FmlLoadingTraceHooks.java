@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.loading.FMLLoader;
+import net.neoforged.fml.loading.LoadingModList;
 
 /** Runtime hooks injected into FML by {@link FmlLoadingTraceTransformer}; profile-only and fail-open. */
 public final class FmlLoadingTraceHooks {
@@ -82,7 +82,7 @@ public final class FmlLoadingTraceHooks {
         // Benchmark mode keeps the trace-core no-clock/no-buffer contract and avoids dependency-array work.
         if (!TRACE.isDetailed()) return null;
         try {
-            var dependencies = FMLLoader.getCurrent().getLoadingModList().getDependencies(container.getModInfo());
+            var dependencies = LoadingModList.get().getDependencies(container.getModInfo());
             if (dependencies.isEmpty()) return predecessorOnly();
             var ids = new ArrayList<Long>(dependencies.size() + 1);
             for (var dependency : dependencies) {
