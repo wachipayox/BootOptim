@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import tempfile
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +19,24 @@ PHASES = (
     "modlauncher_transformers_to_minecraft_bootstrap",
     "modlauncher_transformers_to_minecraft_bootstrap_transform_accept",
     "minecraft_bootstrap_transform_accept_to_entry",
+)
+
+# Exclusive full-stack ownership. More-specific transformation owners precede
+# their generic ASM/JDK callees. Presence counters below remain non-exclusive.
+STACK_CATEGORY_ORDER = (
+    "mixin",
+    "sinytra",
+    "access_transformer",
+    "fml_neoforge",
+    "fml_loading",
+    "modlauncher",
+    "module_classloading",
+    "datafixer",
+    "minecraft",
+    "jpms",
+    "jdk_classloading",
+    "asm",
+    "zip_io",
 )
 
 
@@ -48,6 +67,16 @@ def load_phase_windows(trace_path: Path) -> dict[str, tuple[int, int]]:
 
 def parse_time_ns(value: str) -> int:
     text = value.strip()
+    # datetime is microsecond-based, but JFR prints nanoseconds. Preserve the
+    # fractional tail explicitly so phase-edge attribution does not lose it.
+    match = re.fullmatch(r"(.+?\.)(\d+)(Z|[+-]\d\d:\d\d)", text)
+    if match:
+        fraction_ns = int((match.group(2) + "000000000")[:9])
+        base_text = match.group(1) + ("+00:00" if match.group(3) == "Z" else match.group(3))
+        base = datetime.fromisoformat(base_text)
+        if base.tzinfo is None:
+            base = base.replace(tzinfo=timezone.utc)
+        return int(base.timestamp()) * 1_000_000_000 + fraction_ns
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
     dt = datetime.fromisoformat(text)
@@ -69,6 +98,7 @@ def frame_name(frame: dict) -> str:
 
 
 def category(name: str) -> str:
+    """Conservative top-frame category retained for backwards-readable output."""
     if name.startswith("org.spongepowered.asm."):
         return "mixin"
     if name.startswith("cpw.mods.modlauncher."):
@@ -86,6 +116,48 @@ def category(name: str) -> str:
     return "other"
 
 
+def stack_tags(names: list[str]) -> set[str]:
+    tags: set[str] = set()
+    for name in names:
+        if name.startswith("org.spongepowered.asm."):
+            tags.add("mixin")
+        if name.startswith("org.sinytra."):
+            tags.add("sinytra")
+        if name.startswith("net.neoforged.accesstransformer."):
+            tags.add("access_transformer")
+        if name.startswith("net.neoforged.fml.common.asm.") or name.startswith("net.neoforged.neoforge."):
+            tags.add("fml_neoforge")
+        if name.startswith("net.neoforged.fml.loading."):
+            tags.add("fml_loading")
+        if name.startswith("cpw.mods.modlauncher."):
+            tags.add("modlauncher")
+        if name.startswith("cpw.mods.cl.") or name.startswith("cpw.mods.jarhandling."):
+            tags.add("module_classloading")
+        if name.startswith("com.mojang.datafixers."):
+            tags.add("datafixer")
+        if name.startswith("net.minecraft."):
+            tags.add("minecraft")
+        if name.startswith("java.lang.module.") or name.startswith("jdk.internal.module."):
+            tags.add("jpms")
+        if (name.startswith("java.lang.ClassLoader.") or name.startswith("jdk.internal.loader.")
+                or name.startswith("java.lang.Class.") or name.startswith("java.lang.invoke.")):
+            tags.add("jdk_classloading")
+        if name.startswith("org.objectweb.asm."):
+            tags.add("asm")
+        if (name.startswith("jdk.nio.zipfs.") or name.startswith("java.util.zip.")
+                or name.startswith("java.io.") or name.startswith("sun.nio.ch.")):
+            tags.add("zip_io")
+    return tags
+
+
+def stack_category(names: list[str]) -> str:
+    tags = stack_tags(names)
+    for candidate in STACK_CATEGORY_ORDER:
+        if candidate in tags:
+            return candidate
+    return "other"
+
+
 def iter_events(document):
     if isinstance(document, dict):
         if document.get("type") == "jdk.ExecutionSample" and isinstance(document.get("values"), dict):
@@ -99,7 +171,15 @@ def iter_events(document):
 
 def summarize(jfr_json: dict, windows: dict[str, tuple[int, int]]) -> dict:
     buckets = {
-        phase: {"samples": 0, "threads": Counter(), "categories": Counter(), "top_frames": Counter()}
+        phase: {
+            "samples": 0,
+            "threads": Counter(),
+            "categories": Counter(),
+            "stack_categories": Counter(),
+            "stack_presence": Counter(),
+            "thread_stack_categories": defaultdict(Counter),
+            "top_frames": Counter(),
+        }
         for phase in PHASES
     }
     for event in iter_events(jfr_json):
@@ -110,7 +190,10 @@ def summarize(jfr_json: dict, windows: dict[str, tuple[int, int]]) -> dict:
         sample_ns = parse_time_ns(start)
         stack = values.get("stackTrace") or {}
         frames = stack.get("frames") or []
-        top = frame_name(frames[0]) if frames else "<no-java-frame>"
+        names = [frame_name(frame) for frame in frames]
+        top = names[0] if names else "<no-java-frame>"
+        owner = stack_category(names)
+        tags = stack_tags(names)
         sampled_thread = values.get("sampledThread") or {}
         thread = sampled_thread.get("javaName") or sampled_thread.get("osName") or "?"
         for phase, (begin_ns, end_ns) in windows.items():
@@ -119,16 +202,27 @@ def summarize(jfr_json: dict, windows: dict[str, tuple[int, int]]) -> dict:
                 bucket["samples"] += 1
                 bucket["threads"][thread] += 1
                 bucket["categories"][category(top)] += 1
+                bucket["stack_categories"][owner] += 1
+                bucket["thread_stack_categories"][thread][owner] += 1
+                for tag in tags:
+                    bucket["stack_presence"][tag] += 1
                 bucket["top_frames"][top] += 1
     result = {"schema": "bootoptim.prebootstrap_jfr.v1", "phases": {}}
     for phase in PHASES:
         begin_ns, end_ns = windows[phase]
         bucket = buckets[phase]
+        thread_categories = {
+            thread: dict(bucket["thread_stack_categories"][thread].most_common())
+            for thread, _ in bucket["threads"].most_common(12)
+        }
         result["phases"][phase] = {
             "wall_ms": round((end_ns - begin_ns) / 1_000_000, 6),
             "execution_samples": bucket["samples"],
             "categories": dict(bucket["categories"].most_common()),
+            "stack_categories": dict(bucket["stack_categories"].most_common()),
+            "stack_presence": dict(bucket["stack_presence"].most_common()),
             "threads": dict(bucket["threads"].most_common(12)),
+            "thread_stack_categories": thread_categories,
             "top_frames": [{"frame": k, "samples": v} for k, v in bucket["top_frames"].most_common(25)],
         }
     return result
