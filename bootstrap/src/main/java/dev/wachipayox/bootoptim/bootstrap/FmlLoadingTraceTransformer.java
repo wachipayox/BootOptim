@@ -14,7 +14,6 @@ import org.objectweb.asm.tree.MethodInsnNode;
 /** Injects the minimum causal post-discovery trace hooks into FML's ModLoader. */
 public final class FmlLoadingTraceTransformer implements ITransformer<ClassNode> {
     private static final String TARGET = "net/neoforged/fml/ModLoader";
-    private static final String MOD_CONTAINER = "net/neoforged/fml/ModContainer";
     private static final String HOOKS = "dev/wachipayox/bootoptim/bootstrap/FmlLoadingTraceHooks";
 
     @Override
@@ -23,7 +22,16 @@ public final class FmlLoadingTraceTransformer implements ITransformer<ClassNode>
 
         for (var method : input.methods) {
             var original = method.instructions.toArray();
-            if ("gatherAndInitializeMods".equals(method.name)) {
+            boolean ownsBackgroundScanBarrier = false;
+            for (var instruction : original) {
+                if (instruction instanceof MethodInsnNode invoke
+                        && "waitForScanToComplete".equals(invoke.name)) {
+                    ownsBackgroundScanBarrier = true;
+                    break;
+                }
+            }
+
+            if (ownsBackgroundScanBarrier) {
                 method.instructions.insert(call("beginGatherAndInitialize", "()V"));
                 for (var instruction : original) {
                     if (instruction instanceof MethodInsnNode invoke
@@ -39,10 +47,11 @@ public final class FmlLoadingTraceTransformer implements ITransformer<ClassNode>
 
             for (var instruction : original) {
                 if (!(instruction instanceof MethodInsnNode invoke)) continue;
-                if (!MOD_CONTAINER.equals(invoke.owner)
-                        || !"constructMod".equals(invoke.name)
-                        || !"()V".equals(invoke.desc)) continue;
+                if (!"constructMod".equals(invoke.name) || !"()V".equals(invoke.desc)) continue;
 
+                // The exact FML 4.0.x bytecode may statically own this call on a concrete container subtype.
+                // Matching the zero-arg constructMod call inside ModLoader is structural and avoids synthetic
+                // lambda numbering and static-owner drift while remaining scoped to this one target class.
                 var before = new InsnList();
                 before.add(new InsnNode(Opcodes.DUP));
                 before.add(call("beginModConstruction", "(Lnet/neoforged/fml/ModContainer;)V"));
