@@ -3,7 +3,6 @@ package dev.wachipayox.bootoptim.optimization.client;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-import java.util.IdentityHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -15,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class MoreCullingShapeFaceDedup {
     private static final String PROPERTY = "boot_optim.morecullingShapeFaceDedup";
-    private static final ThreadLocal<IdentityHashMap<VoxelShape, VoxelShape[]>> CACHE = new ThreadLocal<>();
+    private static final ThreadLocal<LastShapeCache> CACHE = ThreadLocal.withInitial(LastShapeCache::new);
     private static final AtomicBoolean ACTIVE = new AtomicBoolean();
     private static final ThreadLocal<Counters> COUNTERS = ThreadLocal.withInitial(Counters::new);
 
@@ -33,9 +32,8 @@ public final class MoreCullingShapeFaceDedup {
             return;
         }
         Counters counters = COUNTERS.get();
-        IdentityHashMap<VoxelShape, VoxelShape[]> cache = CACHE.get();
-        int entries = cache == null ? 0 : cache.size();
-        System.out.println("BOOTOPTIM_MORECULLING_SHAPE_DEDUP entries=" + entries
+        LastShapeCache cache = CACHE.get();
+        System.out.println("BOOTOPTIM_MORECULLING_SHAPE_DEDUP entries=" + cache.shapeCount
                 + " requested_faces=" + counters.requestedFaces
                 + " computed_faces=" + counters.computedFaces
                 + " reuse_hits=" + counters.reuseHits);
@@ -49,16 +47,14 @@ public final class MoreCullingShapeFaceDedup {
         }
         Counters counters = COUNTERS.get();
         counters.requestedFaces++;
-        IdentityHashMap<VoxelShape, VoxelShape[]> cache = CACHE.get();
-        if (cache == null) {
-            cache = new IdentityHashMap<>();
-            CACHE.set(cache);
-        }
-        VoxelShape[] faces = cache.get(shape);
-        if (faces == null) {
+        LastShapeCache cache = CACHE.get();
+        if (cache.shape != shape) {
+            cache.shape = shape;
+            cache.shapeCount++;
+            cache.clearFaces();
             return null;
         }
-        VoxelShape cached = faces[direction.ordinal()];
+        VoxelShape cached = cache.faces[direction.ordinal()];
         if (cached != null) {
             counters.reuseHits++;
         }
@@ -71,22 +67,30 @@ public final class MoreCullingShapeFaceDedup {
         }
         Counters counters = COUNTERS.get();
         counters.computedFaces++;
-        IdentityHashMap<VoxelShape, VoxelShape[]> cache = CACHE.get();
-        if (cache == null) {
-            cache = new IdentityHashMap<>();
-            CACHE.set(cache);
+        LastShapeCache cache = CACHE.get();
+        if (cache.shape != shape) {
+            cache.shape = shape;
+            cache.shapeCount++;
+            cache.clearFaces();
         }
-        VoxelShape[] faces = cache.get(shape);
-        if (faces == null) {
-            faces = new VoxelShape[Direction.values().length];
-            cache.put(shape, faces);
-        }
-        faces[direction.ordinal()] = result;
+        cache.faces[direction.ordinal()] = result;
     }
 
     private static final class Counters {
         private int requestedFaces;
         private int computedFaces;
         private int reuseHits;
+    }
+
+    private static final class LastShapeCache {
+        private VoxelShape shape;
+        private final VoxelShape[] faces = new VoxelShape[Direction.values().length];
+        private int shapeCount;
+
+        private void clearFaces() {
+            for (int i = 0; i < faces.length; i++) {
+                faces[i] = null;
+            }
+        }
     }
 }
