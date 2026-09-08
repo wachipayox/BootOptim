@@ -60,9 +60,19 @@ public final class MoreCullingParallelReload {
 
         ExecutorService executor = Executors.newFixedThreadPool(workers, new DaemonThreadFactory());
         try {
-            List<Future<?>> futures = new ArrayList<>(snapshot.size());
-            for (Object value : snapshot) {
-                futures.add(executor.submit(() -> action.accept(value)));
+            // A task per blockstate would turn the experiment into an allocation
+            // benchmark. Use a small multiple of the worker count instead.
+            int taskCount = Math.min(snapshot.size(), workers * 4);
+            int chunkSize = (snapshot.size() + taskCount - 1) / taskCount;
+            List<Future<?>> futures = new ArrayList<>(taskCount);
+            for (int start = 0; start < snapshot.size(); start += chunkSize) {
+                int from = start;
+                int to = Math.min(snapshot.size(), start + chunkSize);
+                futures.add(executor.submit(() -> {
+                    for (int index = from; index < to; index++) {
+                        action.accept(snapshot.get(index));
+                    }
+                }));
             }
             for (Future<?> future : futures) {
                 await(future);
