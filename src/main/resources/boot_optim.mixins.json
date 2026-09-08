@@ -9,11 +9,15 @@
     "client.FancyMenuMcefBrowserFirstConsumerMixin",
     "client.FancyMenuMcefVideoFirstConsumerMixin",
     "client.FancyMenuPanoramaPreloadMixin",
+    "client.FlywheelProgramsReloaderProbeMixin",
+    "client.FlywheelShaderSourcesProbeMixin",
     "client.McefFirstConsumerDeferMixin",
+    "client.MinecraftFlywheelProbePresentMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
+    "client.SimpleReloadInstanceFlywheelProbeMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
