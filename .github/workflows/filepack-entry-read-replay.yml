@@ -1,0 +1,182 @@
+name: FilePack Entry Read Replay
+
+on:
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - 'tools/filepack-entry-read-replay/**'
+      - '.github/workflows/filepack-entry-read-replay.yml'
+      - 'docs/research/filepack-entry-read-replay-2026-09-08.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+  EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+  EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+  CONTRACT_ARTIFACT_ID: '10036433904'
+  CONTRACT_SEMANTIC_SHA256: 502282f60acdc16beaaf312a81fd76958a8a7ca9504f1ee5305e970eb5fc2050
+
+jobs:
+  replay:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Restore exact-pack ZIP cache
+        id: pack-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .exact-pack-cache/bootoptim-exact-pack.zip
+          key: exact-pack-2026-09-02-v1-7f586ecd90497a4d-filepack-entry-read
+
+      - name: Download pinned exact-pack release asset
+        if: steps.pack-cache.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .exact-pack-cache
+          gh release download "$EXACT_PACK_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$EXACT_PACK_ASSET" --dir .exact-pack-cache --clobber
+
+      - name: Verify and extract exact-pack fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(sha256sum .exact-pack-cache/bootoptim-exact-pack.zip | awk '{print $1}')
+          test "$actual" = "$EXACT_PACK_SHA256"
+          python scripts/exact-pack/prepare_fixture.py \
+            --zip .exact-pack-cache/bootoptim-exact-pack.zip \
+            --sha256 "$EXACT_PACK_SHA256" \
+            --extract exact-pack-run
+
+      - name: Download PR 183 real-class replay artifact contract
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p pr183-contract
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/$GITHUB_REPOSITORY/actions/artifacts/$CONTRACT_ARTIFACT_ID/zip" > pr183-contract.zip
+          unzip -q pr183-contract.zip -d pr183-contract
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          expected = '502282f60acdc16beaaf312a81fd76958a8a7ca9504f1ee5305e970eb5fc2050'
+          replay = json.loads(Path('pr183-contract/model-replay-out/run1/replay.json').read_text())
+          assert replay['semantic_sha256'] == expected, replay['semantic_sha256']
+          print('PR183 semantic contract:', expected)
+          PY
+
+      - name: Build provenance-preserving external ZIP request trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/filepack-entry-read-replay/prepare_requests.py \
+            --pack-extract exact-pack-run \
+            --contract-artifact pr183-contract \
+            --output-dir filepack-entry-replay-out \
+            | tee filepack-entry-replay-out/prepare.log
+
+      - name: Compile JDK ZipFile replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p filepack-entry-replay-classes
+          javac -d filepack-entry-replay-classes tools/filepack-entry-read-replay/FilePackEntryReadReplay.java
+
+      - name: Run exclusive wall CPU byte replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -cp filepack-entry-replay-classes FilePackEntryReadReplay \
+            filepack-entry-replay-out/requests.tsv \
+            | tee filepack-entry-replay-out/replay.log
+
+      - name: Assert one-pass equivalence and cache hit ceiling
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+          text = Path('filepack-entry-replay-out/replay.log').read_text()
+          rows = {}
+          for line in text.splitlines():
+              if not line.startswith('FILEPACK_REPLAY phase='): continue
+              parts = dict(item.split('=', 1) for item in line.split()[1:])
+              rows[parts['phase']] = parts
+          stock = rows['stock_one_pass']
+          first = rows['cache_first_pass']
+          repeat = rows['cache_repeat_upper_bound']
+          assert int(first['cache_hits']) == 0, first
+          assert int(first['cache_misses']) == int(first['entries']), first
+          assert int(stock['bytes_read']) == int(first['bytes_read']), (stock, first)
+          assert int(stock['entries']) == int(first['entries']), (stock, first)
+          assert int(repeat['cache_hits']) == int(repeat['entries']), repeat
+          assert int(repeat['bytes_read']) == 0, repeat
+          assert 'semantic=invalidation status=pass' in text
+          assert 'semantic=bad_zip status=fail_open_no_cache_return' in text
+          assert 'semantic=shadow_order status=identical' in text
+          print('one-pass cache hits:', first['cache_hits'])
+          print('repeat-only upper-bound hits:', repeat['cache_hits'])
+
+      - name: Capture Linux I/O syscall stack separately
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v strace >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq strace
+          fi
+          strace -f -c -e trace=openat,read,pread64,lseek,close,mmap,munmap \
+            java -cp filepack-entry-replay-classes FilePackEntryReadReplay \
+            filepack-entry-replay-out/requests.tsv \
+            > filepack-entry-replay-out/strace-replay.log \
+            2> filepack-entry-replay-out/strace-summary.txt
+          cat filepack-entry-replay-out/strace-summary.txt
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## FilePack entry-read replay'
+            echo
+            echo 'PR #183 semantic digest is the selection/byte contract. Timings below are replay-only, not TTMM.'
+            echo 'The second cache pass is an artificial exact-repeat upper bound and is not startup evidence.'
+            echo
+            echo '```text'
+            cat filepack-entry-replay-out/replay.log 2>/dev/null || true
+            echo '```'
+            echo
+            echo '### I/O syscall summary'
+            echo '```text'
+            cat filepack-entry-replay-out/strace-summary.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload replay evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: filepack-entry-read-replay
+          path: |
+            filepack-entry-replay-out/provenance.json
+            filepack-entry-replay-out/requests.tsv
+            filepack-entry-replay-out/prepare.log
+            filepack-entry-replay-out/replay.log
+            filepack-entry-replay-out/strace-replay.log
+            filepack-entry-replay-out/strace-summary.txt
