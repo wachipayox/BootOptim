@@ -1,6 +1,6 @@
 # Pre-Minecraft bootstrap transition trace — 2026-09-08
 
-Status: **ACTIVE DIAGNOSTIC / NO PERFORMANCE CLAIM**
+Status: **PROFILED DIAGNOSTIC EDGE / NO PERFORMANCE CLAIM**
 
 ## Scope and stacking
 
@@ -63,9 +63,7 @@ Those timestamp separators show that the uncovered interval really contains post
 
 ## Minimum safe observable edge
 
-No new launcher/FML class transformer is required. The existing BootOptim transformation service itself already owns a safe callback in the exact place needed:
-
-`EarlyStartupProbeService.transformers()`
+No new launcher/FML class transformer is required. The existing BootOptim transformation service itself already owns a safe callback in the exact place needed: `EarlyStartupProbeService.transformers()`.
 
 By the exact ModLauncher ordering above, this callback happens only after all `completeScan` callbacks have returned and GAME resources have been registered, while ModLauncher is in `initialiseServiceTransformers()`. It therefore provides a real post-scan SERVICE-layer edge without transforming `ModLoader`, `Launcher`, `TransformationServicesHandler`, or other already-active bootstrap classes.
 
@@ -74,12 +72,45 @@ Schema-v1 task spans are intentionally lexical to one thread. The exact pack ent
 The final representation uses the existing schema without relaxing it:
 
 - `bootoptim_transformation_service_transformers_callback`: a real same-thread task opened and closed entirely inside BootOptim's `transformers()` callback; dependency = `dependency_discovery` when present;
-- `modlauncher_transformers_to_minecraft_bootstrap`: a `phase_begin/phase_end` pair spanning from that callback to the exact Bootstrap entry. Phase pairs are allowed to cross threads and are not included in task CPU/critical-path sums;
+- `modlauncher_transformers_to_minecraft_bootstrap`: a `phase_begin/phase_end` pair spanning from that callback to the exact Bootstrap entry. Phase pairs may cross threads and are not included in task CPU/critical-path sums;
 - `minecraft_bootstrap` depends on the already-closed callback task when present, falling back to `dependency_discovery` otherwise.
 
 The phase name states literal observable boundaries. Its duration is an inclusive monotonic interval, not CPU, not an exclusive ModLauncher phase, and not a performance opportunity. It may include whichever service transformer registration follows BootOptim's callback, launch-plugin processing, launch-target validation, GAME transforming-classloader/module-layer construction, TCCL transition, launch-handler entry, game-layer classloading/Mixin work and other work before Bootstrap.
 
-A residual temporal gap may remain between `dependency_discovery` end and the callback/phase begin. That residual stays an unnamed gap unless another semantically exact edge is proven.
+## Hosted validation
+
+Validated runtime-code commit: `69d3ae9f3695dbdeee36e3145c5eac5233a3dae2`.
+
+- Build/package run `34282585186`: **success**.
+- normal Startup Benchmark `34282585112`: **success**.
+- hosted exact-pack profile run `34282685222`: **success to `main_menu`**.
+- exact-pack artifact `10078383863`, digest `sha256:9f7b1b42a5fa8dae0d9528d65ae57c279c2bd2db92cd3233194f121eb7fa3898`.
+- result: `main_menu_ms=91220`, `mod_entrypoint_ms=31095`, `reload_to_fancymenu_finish_ms=41064`, `bootoptim_mixin_errors=0`.
+
+The JSONL has exactly one `bootoptim.boottrace` v1 header (`mode=profile`, origin `hosted_exact_pack`, endpoint `main_menu`) and one summary. It contains 12 events: 5 `task_begin`, 5 `task_end`, 1 `phase_begin`, 1 `phase_end`. All task pairs are balanced and thread-lexical; the phase pair intentionally crosses `main` -> `pool-8-thread-1`. Sequence is contiguous, `dropped_events=0`, `flush_failures=0`, `development_sink_failures=0`, trace `error=0`.
+
+Observed dependency chain and threads:
+
+- task 2 `dependency_discovery` on `main`;
+- task 3 `bootoptim_transformation_service_transformers_callback` on `main`, dependency `[2]`, inclusive wall `0.638301 ms`;
+- task 4 `minecraft_bootstrap` on `pool-8-thread-1`, dependency `[3]`, inclusive wall `4075.423190 ms`;
+- task 5 `fml_gather_and_initialize_mods` on `Render thread`, dependency `[4]`, inclusive wall `5459.203273 ms`.
+
+Same-run monotonic intervals around the requested boundary:
+
+| Boundary | Type | Wall |
+| --- | --- | ---: |
+| `dependency_discovery` | inclusive task wall | 7477.854396 ms |
+| Discovery end -> Bootstrap entry | direct monotonic temporal interval | 11501.525978 ms |
+| Discovery end -> transition phase begin | **remaining unnamed temporal gap** | 1428.590455 ms |
+| `modlauncher_transformers_to_minecraft_bootstrap` | inclusive monotonic phase interval | 10072.921316 ms |
+| `minecraft_bootstrap` | inclusive task wall | 4075.423190 ms |
+| Bootstrap end -> gather begin | **remaining unnamed temporal gap** | 2909.262013 ms |
+| `fml_gather_and_initialize_mods` | inclusive task wall | 5459.203273 ms |
+
+The direct Discovery-end -> Bootstrap-entry interval is reported from its two monotonic endpoints; the phase and residual gap describe internal boundaries in that same run. None of these intervals is a TTMM saving, CPU sum or A/B result. Do not compare the 11.502 s same-run interval numerically with #203's 10.939 s as a performance delta; they are separate hosted profile processes.
+
+The first attempted exact-pack workflow `34282585045` was cancelled because updating the PR body retriggered the same concurrency group; its partial artifact contained only build-console output and no game trace. The immediately retriggered run `34282685222` is the valid profile evidence above.
 
 ## Safety and failure behavior
 
@@ -90,11 +121,13 @@ A residual temporal gap may remain between `dependency_discovery` end and the ca
 - no GL/render work is moved.
 - Bootstrap's existing strict transformer remains unchanged: exact class `net/minecraft/server/Bootstrap`, exact `bootStrap()V`, exactly one method, at least one normal return; missing/ambiguous/wrong targets remain rejected without bytecode mutation.
 
-## Tests
+## Tests and disposition
 
 `MinecraftBootstrapTraceTransformerTest` retains matcher/return/rejection coverage and adds structural ordering assertions that:
 
 1. `MinecraftBootstrapTraceHooks.beginBootstrap()` closes the transition phase before calling `StructuredBootTrace.beginTask` for Bootstrap;
 2. `EarlyStartupProbeService.transformers()` opens the transition/callback task before diagnostic transformer construction and closes the callback task on the same SERVICE thread afterwards.
 
-Hosted validation and final JSONL inspection are required before this entry can be closed. No A/B or laptop run is justified because this is diagnostic-only instrumentation.
+Decision: **keep as a stacked diagnostic edge, not an optimization**. It safely attributes most of the pre-Bootstrap temporal gap to the concrete post-scan -> transformer registration -> launch/game-layer/Mixin transition without targeting untransformable `MC-BOOTSTRAP/fml_loader` classes. A remaining `1.428590 s` same-run pre-phase gap is deliberately unnamed. The next valid edge, if further attribution is required, must lie after dependency discovery and before BootOptim's `transformers()` callback (for example a proven `completeScan`/GAME-resource registration boundary) and must not be obtained by broadening a bootstrap-layer transformer matcher.
+
+No A/B and no physical-laptop run were performed or requested.
