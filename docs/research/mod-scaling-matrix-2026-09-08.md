@@ -110,3 +110,28 @@ must test high-value consumers and interaction groups with the corrected
 NeoForge dependency parser. FancyMenu/reload and panorama fields are absent in
 reduced variants, so those fields must not be compared as if they were present
 workloads.
+
+## Second hosted attribution smoke — 2026-09-08
+
+Run `34243601916` used the corrected planner and one fresh repetition for
+individual closures and three interaction groups. Every completed variant had
+`resource_contract_valid=true`, `diagnostic_only=false`, zero BootOptim/Mixin
+errors and the same process-origin endpoint:
+
+| variant | TTMM / startup (ms) | mod entrypoint (ms) | post-mod (ms) |
+| --- | ---: | ---: | ---: |
+| mod-moreculling | 13,827 | 9,702 | 4,125 |
+| mod-entity_model_features | 15,062 | 9,523 | 5,539 |
+| mod-modernfix | 14,994 | 10,731 | 4,263 |
+| mod-mcef | 15,391 | 9,278 | 6,113 |
+| mod-fancymenu | 16,263 | 9,251 | 7,012 |
+| group-render (MoreCulling + EMF) | 20,618 | 12,158 | 8,460 |
+| group-model (Decocraft + MoreCulling + EMF) | 27,559 | 12,778 | 14,781 |
+| group-early (ModernFix + MCEF) | 20,511 | 12,916 | 7,595 |
+
+The second smoke reinforces the interaction hypothesis: the known expensive
+listeners do not approach the full-pack 91,444 ms by themselves or in these
+small groups. This is not evidence that they are irrelevant in the full pack;
+it means the next experiment must partition the remaining 160 artifacts into
+larger functional groups (Create/content, client/render, resource/model and
+UI/utility) before selecting an optimization target.
