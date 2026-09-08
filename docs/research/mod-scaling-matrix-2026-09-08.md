@@ -391,6 +391,17 @@ step is repeated full/complement control and then narrower, contract-valid
 binary splits inside the block with the largest reproducible critical-path
 contribution.
 
+The matching full control in run `34257904410` was also valid on the same
+planner revision: `main_menu_ms=88,905`, `mod_entrypoint_ms=30,714`,
+`post_mod_entrypoint_ms=58,191`, `reload_to_fancymenu_finish_ms=40,056`, with
+the same exact-pack fingerprint, `resource_contract_valid=true`,
+`diagnostic_only=false` and zero BootOptim Mixin errors. This makes the
+32.5--38.8 second complement range a strong structural signal, but not yet a
+per-mod saving: removing a root block also removes all remaining roots whose
+declared contract reaches that block. The correct next attribution is a
+contract-valid binary split of the fastest complement's omitted roots, not
+subtracting its TTMM from the full control.
+
 For that next stage the planner exposes `--complement-group NAME=mod1,mod2`
 and the hosted equivalent `scaling_complement_groups`. Unlike a subset group,
 it removes only the requested block, expands declared runtime families, and
