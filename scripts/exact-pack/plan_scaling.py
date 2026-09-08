@@ -483,6 +483,7 @@ def build_plan(
                     key=lambda item: (item["id"], item["reason"]),
                 ),
                 "mod_ids": sorted(selected),
+                "artifacts": artifact_selection(records, selected),
                 "missing_dependencies": [],
             })
 
