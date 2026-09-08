@@ -4,64 +4,60 @@ import cpw.mods.modlauncher.api.ITransformer;
 import cpw.mods.modlauncher.api.ITransformerVotingContext;
 import cpw.mods.modlauncher.api.TargetType;
 import cpw.mods.modlauncher.api.TransformerVoteResult;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 
 /**
- * Instruments only NeoForge's patched Minecraft client bootstrap boundary in game-layer Main.main.
- * The matcher is intentionally fail-closed: exactly one BackgroundWaiter.runAndTick and one later
- * ClientModLoader.begin() anchor must exist in main(String[]), otherwise the class is left untouched.
+ * Instruments only Minecraft's exact {@code Bootstrap.bootStrap()V} body.
+ *
+ * <p>The earlier Main.main callsite candidate is deliberately not used: hosted exact-pack showed no hook from that
+ * target on NeoForge 21.1.248. This narrower game-class method has an independent semantic boundary and fails closed
+ * unless exactly one matching method with at least one normal RETURN exists.</p>
  */
 public final class MinecraftBootstrapTraceTransformer implements ITransformer<ClassNode> {
-    private static final String TARGET = "net/minecraft/client/main/Main";
-    private static final String BACKGROUND_WAITER = "net/neoforged/fml/loading/BackgroundWaiter";
-    private static final String CLIENT_MOD_LOADER = "net/neoforged/neoforge/client/loading/ClientModLoader";
+    private static final String TARGET = "net/minecraft/server/Bootstrap";
     private static final String HOOKS = "dev/wachipayox/bootoptim/bootstrap/MinecraftBootstrapTraceHooks";
 
     @Override
     public ClassNode transform(ClassNode input, ITransformerVotingContext context) {
         if (input == null || !TARGET.equals(input.name)) return input;
 
+        MethodNode bootstrap = null;
         for (var method : input.methods) {
-            if (!"main".equals(method.name) || !"([Ljava/lang/String;)V".equals(method.desc)) continue;
-
-            MethodInsnNode start = null;
-            MethodInsnNode end = null;
-            boolean duplicateStart = false;
-            boolean duplicateEnd = false;
-            boolean sawStart = false;
-
-            for (AbstractInsnNode instruction : method.instructions.toArray()) {
-                if (!(instruction instanceof MethodInsnNode invoke)) continue;
-                if (BACKGROUND_WAITER.equals(invoke.owner) && "runAndTick".equals(invoke.name)) {
-                    if (start != null) duplicateStart = true;
-                    else start = invoke;
-                    sawStart = true;
-                } else if (CLIENT_MOD_LOADER.equals(invoke.owner)
-                        && "begin".equals(invoke.name)
-                        && "()V".equals(invoke.desc)) {
-                    if (end != null) duplicateEnd = true;
-                    else if (sawStart) end = invoke;
-                    else end = invoke;
-                }
+            if ("bootStrap".equals(method.name) && "()V".equals(method.desc)) {
+                if (bootstrap != null) return input;
+                bootstrap = method;
             }
+        }
+        if (bootstrap == null) return input;
 
-            if (start == null || end == null || duplicateStart || duplicateEnd || !comesBefore(start, end)) return input;
-            method.instructions.insertBefore(start, call("beginBootstrapAndValidate"));
-            method.instructions.insertBefore(end, call("endBootstrapAndValidate"));
-            return input;
+        AbstractInsnNode firstExecutable = firstExecutable(bootstrap);
+        if (firstExecutable == null) return input;
+
+        List<AbstractInsnNode> normalReturns = new ArrayList<>();
+        for (var instruction : bootstrap.instructions.toArray()) {
+            if (instruction.getOpcode() == Opcodes.RETURN) normalReturns.add(instruction);
+        }
+        if (normalReturns.isEmpty()) return input;
+
+        bootstrap.instructions.insertBefore(firstExecutable, call("beginBootstrap"));
+        for (var normalReturn : normalReturns) {
+            bootstrap.instructions.insertBefore(normalReturn, call("endBootstrap"));
         }
         return input;
     }
 
-    private static boolean comesBefore(AbstractInsnNode first, AbstractInsnNode second) {
-        for (AbstractInsnNode current = first; current != null; current = current.getNext()) {
-            if (current == second) return true;
+    private static AbstractInsnNode firstExecutable(MethodNode method) {
+        for (AbstractInsnNode instruction = method.instructions.getFirst(); instruction != null; instruction = instruction.getNext()) {
+            if (instruction.getOpcode() >= 0) return instruction;
         }
-        return false;
+        return null;
     }
 
     private static MethodInsnNode call(String name) {
@@ -75,7 +71,7 @@ public final class MinecraftBootstrapTraceTransformer implements ITransformer<Cl
 
     @Override
     public Set<Target<ClassNode>> targets() {
-        return Set.of(Target.targetClass("net.minecraft.client.main.Main"));
+        return Set.of(Target.targetClass("net.minecraft.server.Bootstrap"));
     }
 
     @Override
