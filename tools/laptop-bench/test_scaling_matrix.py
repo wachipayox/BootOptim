@@ -167,6 +167,33 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertEqual(feature["required_dependencies"], [])
             self.assertEqual(feature["optional_dependencies"], ["optional"])
 
+    def test_nested_jarjar_metadata_satisfies_dependency_and_keeps_top_level_artifact(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            outer = io.BytesIO()
+            with zipfile.ZipFile(outer, "w") as nested:
+                nested.writestr(
+                    "META-INF/neoforge.mods.toml",
+                    'modLoader="javafml"\n'
+                    '[[mods]]\nmodId="embedded"\nversion="1.0"\n',
+                )
+            with zipfile.ZipFile(mods / "feature.jar", "w") as archive:
+                archive.writestr(
+                    "META-INF/neoforge.mods.toml",
+                    'modLoader="javafml"\n'
+                    '[[mods]]\nmodId="feature"\nversion="1.0"\n'
+                    '[[dependencies.feature]]\nmodId="embedded"\ntype="required"\n',
+                )
+                archive.writestr("META-INF/jarjar/embedded.jar", outer.getvalue())
+
+            plan = PLAN.build_plan(pack, [], [], balanced_partitions=1)
+            variant = next(item for item in plan["variants"] if item["id"] == "mod-feature")
+            self.assertEqual(variant["missing_dependencies"], [])
+            self.assertEqual(variant["artifacts"], ["feature.jar"])
+            self.assertIn("embedded", variant["mod_ids"])
+
     def test_source_pack_rejects_bootoptim_duplicate(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)

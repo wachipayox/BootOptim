@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
 import zipfile
@@ -48,19 +49,9 @@ def _value(raw: str) -> str | None:
     return match.group(1) if match else None
 
 
-def read_metadata(
-    jar: Path,
+def _parse_metadata_text(
+    text: str,
 ) -> tuple[list[tuple[str, str | None]], dict[str, set[str]], dict[str, set[str]]]:
-    metadata_name = None
-    with zipfile.ZipFile(jar) as archive:
-        for candidate in ("META-INF/neoforge.mods.toml", "META-INF/mods.toml"):
-            if candidate in archive.namelist():
-                metadata_name = candidate
-                break
-        if metadata_name is None:
-            return [], {}, {}
-        text = archive.read(metadata_name).decode("utf-8", errors="replace")
-
     section = ""
     current_mod: str | None = None
     current_dependency: str | None = None
@@ -143,6 +134,53 @@ def read_metadata(
                 )
                 record_dependency()
     return mods, dependencies, optional_dependencies
+
+
+def read_metadata(
+    jar: Path,
+) -> tuple[list[tuple[str, str | None]], dict[str, set[str]], dict[str, set[str]]]:
+    """Read top-level and nested NeoForge/FML metadata from one artifact.
+
+    Modern NeoForge mods commonly ship library mods such as Flywheel or Ponder
+    inside ``META-INF/jarjar``.  They are provided by the same top-level JAR,
+    so treating their dependency IDs as missing would create reduced variants
+    that the real pack never uses.  The planner keeps the top-level artifact as
+    the selection unit while exposing every embedded mod ID for closure checks.
+    """
+    metadata_names = ("META-INF/neoforge.mods.toml", "META-INF/mods.toml")
+    merged_mods: list[tuple[str, str | None]] = []
+    merged_required: dict[str, set[str]] = {}
+    merged_optional: dict[str, set[str]] = {}
+
+    def merge(payload: tuple[list[tuple[str, str | None]], dict[str, set[str]], dict[str, set[str]]]) -> None:
+        mods, required, optional = payload
+        merged_mods.extend(mods)
+        for owner, values in required.items():
+            merged_required.setdefault(owner, set()).update(values)
+        for owner, values in optional.items():
+            merged_optional.setdefault(owner, set()).update(values)
+
+    with zipfile.ZipFile(jar) as archive:
+        names = set(archive.namelist())
+        for candidate in metadata_names:
+            if candidate in names:
+                merge(_parse_metadata_text(archive.read(candidate).decode("utf-8", errors="replace")))
+                break
+        for nested_name in sorted(name for name in names if name.lower().endswith(".jar")):
+            try:
+                nested_bytes = archive.read(nested_name)
+                with zipfile.ZipFile(io.BytesIO(nested_bytes)) as nested:
+                    nested_names = set(nested.namelist())
+                    for candidate in metadata_names:
+                        if candidate in nested_names:
+                            merge(_parse_metadata_text(
+                                nested.read(candidate).decode("utf-8", errors="replace")
+                            ))
+                            break
+            except (OSError, zipfile.BadZipFile):
+                # A non-JAR payload with a .jar suffix is not a loader artifact.
+                continue
+    return merged_mods, merged_required, merged_optional
 
 
 def scan_pack(pack_dir: Path) -> tuple[dict[str, list[ModRecord]], dict[str, list[str]], str]:
