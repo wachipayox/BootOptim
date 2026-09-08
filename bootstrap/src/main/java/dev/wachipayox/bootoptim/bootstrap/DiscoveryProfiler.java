@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim.bootstrap;
 
+import dev.wachipayox.bootoptim.trace.StructuredBootTrace;
 import java.lang.management.ManagementFactory;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -9,38 +10,47 @@ final class DiscoveryProfiler {
             || Boolean.getBoolean("boot_optim.benchmark.exitOnTitle");
     private static final AtomicLong ROOT_START = new AtomicLong();
     private static final AtomicLong DEPENDENCY_START = new AtomicLong();
+    private static final AtomicLong ROOT_TASK = new AtomicLong();
+    private static final AtomicLong DEPENDENCY_TASK = new AtomicLong();
+    private static final StructuredBootTrace TRACE = StructuredBootTrace.global();
 
     private DiscoveryProfiler() {}
 
     static void beginRoot() {
-        begin("root_mod_discovery", ROOT_START);
+        begin("root_mod_discovery", ROOT_START, ROOT_TASK);
     }
 
     static void endRoot() {
-        end("root_mod_discovery", ROOT_START);
+        end("root_mod_discovery", ROOT_START, ROOT_TASK);
     }
 
     static void beginDependencies() {
-        begin("dependency_discovery", DEPENDENCY_START);
+        begin("dependency_discovery", DEPENDENCY_START, DEPENDENCY_TASK);
     }
 
     static void endDependencies() {
-        end("dependency_discovery", DEPENDENCY_START);
+        end("dependency_discovery", DEPENDENCY_START, DEPENDENCY_TASK);
     }
 
-    private static void begin(String phase, AtomicLong holder) {
-        if (!ENABLED) {
+    /** Causal predecessor for the first post-discovery FML task; zero means no trace task was emitted. */
+    static long dependencyTaskId() {
+        return DEPENDENCY_TASK.get();
+    }
+
+    private static void begin(String phase, AtomicLong holder, AtomicLong taskHolder) {
+        if (!ENABLED && !TRACE.isEnabled()) {
             return;
         }
         long start = System.nanoTime();
         if (holder.compareAndSet(0L, start)) {
+            taskHolder.compareAndSet(0L, TRACE.beginTask(phase, 0L, null, null, null, -1L));
             System.out.printf("BOOTOPTIM_STARTUP phase=%s_start uptime_ms=%d%n",
                     phase, ManagementFactory.getRuntimeMXBean().getUptime());
         }
     }
 
-    private static void end(String phase, AtomicLong holder) {
-        if (!ENABLED) {
+    private static void end(String phase, AtomicLong holder, AtomicLong taskHolder) {
+        if (!ENABLED && !TRACE.isEnabled()) {
             return;
         }
         long start = holder.get();
@@ -48,6 +58,10 @@ final class DiscoveryProfiler {
             return;
         }
         double elapsedMs = (System.nanoTime() - start) / 1_000_000.0;
+        long taskId = taskHolder.get();
+        if (taskId != 0L) {
+            TRACE.endTask(taskId, phase, -1L, "fml_discovery_end");
+        }
         System.out.printf("BOOTOPTIM_STARTUP phase=%s_end uptime_ms=%d elapsed_ms=%.3f%n",
                 phase, ManagementFactory.getRuntimeMXBean().getUptime(), elapsedMs);
     }
