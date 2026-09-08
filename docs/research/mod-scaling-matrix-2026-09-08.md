@@ -402,6 +402,21 @@ declared contract reaches that block. The correct next attribution is a
 contract-valid binary split of the fastest complement's omitted roots, not
 subtracting its TTMM from the full control.
 
+The first bisection of complement-2's 62 directly omitted roots was valid in
+run `34258425229`:
+
+| removed custom block | selected artifacts | TTMM (ms) | mod entrypoint (ms) | post-entrypoint (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| block2a (31 alternating roots) | 90 | 50,554 | 20,051 | 30,503 |
+| block2b (31 alternating roots) | 74 | 45,755 | 16,739 | 29,016 |
+
+Both runs have valid resource contracts, non-diagnostic endpoints and zero
+BootOptim Mixin errors. Removing both halves had reached 32,503 ms, so this
+does not justify a single-root claim: both halves retain material cost and
+their removal has a non-additive interaction through the closed remainder.
+`block2b` is the next bisection target because its removal retained the lower
+TTMM, while `block2a` remains an active sibling frontier.
+
 For that next stage the planner exposes `--complement-group NAME=mod1,mod2`
 and the hosted equivalent `scaling_complement_groups`. Unlike a subset group,
 it removes only the requested block, expands declared runtime families, and
