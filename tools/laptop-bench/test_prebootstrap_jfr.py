@@ -14,31 +14,58 @@ spec.loader.exec_module(mod)
 class PreBootstrapJfrTest(unittest.TestCase):
     def test_phase_windows_and_sample_attribution(self):
         records = [
-            {"record":"trace_header","trace_origin_epoch_ms":1000},
-            {"record":"event","type":"phase_begin","phase":"modlauncher_transformers_to_minecraft_bootstrap","mono_ns":0},
-            {"record":"event","type":"phase_begin","phase":"modlauncher_transformers_to_minecraft_bootstrap_transform_accept","mono_ns":0},
-            {"record":"event","type":"phase_end","phase":"modlauncher_transformers_to_minecraft_bootstrap_transform_accept","mono_ns":1_000_000_000},
-            {"record":"event","type":"phase_begin","phase":"minecraft_bootstrap_transform_accept_to_entry","mono_ns":1_000_000_000},
-            {"record":"event","type":"phase_end","phase":"minecraft_bootstrap_transform_accept_to_entry","mono_ns":2_000_000_000},
-            {"record":"event","type":"phase_end","phase":"modlauncher_transformers_to_minecraft_bootstrap","mono_ns":2_000_000_000},
+            {"record": "trace_header", "trace_origin_epoch_ms": 1000},
+            {"record": "event", "type": "phase_begin", "phase": "modlauncher_transformers_to_minecraft_bootstrap", "mono_ns": 0},
+            {"record": "event", "type": "phase_begin", "phase": "modlauncher_transformers_to_minecraft_bootstrap_transform_accept", "mono_ns": 0},
+            {"record": "event", "type": "phase_end", "phase": "modlauncher_transformers_to_minecraft_bootstrap_transform_accept", "mono_ns": 1_000_000_000},
+            {"record": "event", "type": "phase_begin", "phase": "minecraft_bootstrap_transform_accept_to_entry", "mono_ns": 1_000_000_000},
+            {"record": "event", "type": "phase_end", "phase": "minecraft_bootstrap_transform_accept_to_entry", "mono_ns": 2_000_000_000},
+            {"record": "event", "type": "phase_end", "phase": "modlauncher_transformers_to_minecraft_bootstrap", "mono_ns": 2_000_000_000},
         ]
         with tempfile.TemporaryDirectory() as td:
             trace = Path(td) / "trace.jsonl"
             trace.write_text("\n".join(json.dumps(x) for x in records), encoding="utf-8")
             windows = mod.load_phase_windows(trace)
+
         sample = {
-            "recording": {"events": [
-                {"type":"jdk.ExecutionSample","values":{
-                    "startTime":"1970-01-01T00:00:01.500000000Z",
-                    "sampledThread":{"javaName":"main"},
-                    "stackTrace":{"frames":[{"method":{"name":"applyMixins","type":{"name":"org/spongepowered/asm/mixin/transformer/MixinProcessor"}}}]},
-                }},
-                {"type":"jdk.ExecutionSample","values":{
-                    "startTime":"1970-01-01T00:00:02.500000000Z",
-                    "sampledThread":{"javaName":"pool-8-thread-1"},
-                    "stackTrace":{"frames":[{"method":{"name":"transform","type":{"name":"cpw/mods/modlauncher/ClassTransformer"}}}]},
-                }},
-            ]}}
+            "recording": {
+                "events": [
+                    {
+                        "type": "jdk.ExecutionSample",
+                        "values": {
+                            "startTime": "1970-01-01T00:00:01.500000000Z",
+                            "sampledThread": {"javaName": "main"},
+                            "stackTrace": {
+                                "frames": [
+                                    {
+                                        "method": {
+                                            "name": "applyMixins",
+                                            "type": {"name": "org/spongepowered/asm/mixin/transformer/MixinProcessor"},
+                                        }
+                                    }
+                                ]
+                            },
+                        },
+                    },
+                    {
+                        "type": "jdk.ExecutionSample",
+                        "values": {
+                            "startTime": "1970-01-01T00:00:02.500000000Z",
+                            "sampledThread": {"javaName": "pool-8-thread-1"},
+                            "stackTrace": {
+                                "frames": [
+                                    {
+                                        "method": {
+                                            "name": "transform",
+                                            "type": {"name": "cpw/mods/modlauncher/ClassTransformer"},
+                                        }
+                                    }
+                                ]
+                            },
+                        },
+                    },
+                ]
+            }
         }
         result = mod.summarize(sample, windows)
         parent = result["phases"]["modlauncher_transformers_to_minecraft_bootstrap"]
