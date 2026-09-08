@@ -77,7 +77,12 @@ def read_metadata(jar: Path) -> tuple[list[tuple[str, str | None]], dict[str, se
             current_dependency = None
             dependency_mandatory = True
             if section.startswith("dependencies."):
-                owner = section[len("dependencies."):].split(".", 1)[0]
+                owner = section[len("dependencies."):].split(".", 1)[0].strip()
+                # NeoForge's metadata commonly quotes the mod id in a
+                # [[dependencies."mod_id"]] table.  Keep closure lookup
+                # keyed by the same bare id used by [[mods]].
+                if len(owner) >= 2 and owner[0] == owner[-1] and owner[0] in {'"', "'"}:
+                    owner = owner[1:-1]
                 current_mod = owner
                 current_dependency = None
             continue

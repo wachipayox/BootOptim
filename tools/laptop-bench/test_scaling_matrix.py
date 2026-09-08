@@ -75,6 +75,25 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertEqual(variant["missing_dependencies"], ["missing"])
             self.assertEqual(variant["artifacts"], ["feature.jar"])
 
+    def test_quoted_dependency_table_owner_is_joined_to_mod(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            metadata = (
+                'modLoader="javafml"\n'
+                '[[mods]]\nmodId="feature"\nversion="1.0"\n'
+                '[[dependencies."feature"]]\n'
+                'modId="base"\ntype="required"\n'
+            )
+            with zipfile.ZipFile(mods / "feature.jar", "w") as archive:
+                archive.writestr("META-INF/neoforge.mods.toml", metadata)
+
+            plan = PLAN.build_plan(pack, [], [])
+            variant = next(item for item in plan["variants"] if item["id"] == "mod-feature")
+            self.assertEqual(variant["mod_ids"], ["feature"])
+            self.assertEqual(variant["missing_dependencies"], ["base"])
+
     def test_source_pack_rejects_bootoptim_duplicate(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)
