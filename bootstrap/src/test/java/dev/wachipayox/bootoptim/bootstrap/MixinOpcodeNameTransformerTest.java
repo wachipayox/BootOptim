@@ -39,8 +39,12 @@ class MixinOpcodeNameTransformerTest {
             String direct = MixinOpcodeNameTransformer.directOpcodeName(opcode);
             if (!stock.equals(direct)) mismatches.add(opcode + ":stock=" + stock + ",direct=" + direct);
         }
-        if (!mismatches.isEmpty()) System.out.println("BOOTOPTIM_OPCODE_EQUIVALENCE_MISMATCHES " + mismatches);
         assertTrue(mismatches.isEmpty(), "opcode mismatches=" + mismatches);
+    }
+
+    @Test
+    void runtimeAsmSemanticsMatchVersionGuard() {
+        assertTrue(MixinOpcodeNameTransformer.matchesRuntimeOpcodesSemantics());
     }
 
     @Test
@@ -52,7 +56,7 @@ class MixinOpcodeNameTransformerTest {
     }
 
     @Test
-    void exactRuntimeMixinClassMatchesGuard() throws Exception {
+    void exactRuntimeMixinClassMatchesGuardAndMeaningfulMutationFailsOpen() throws Exception {
         try (InputStream stream = Bytecode.class.getResourceAsStream("Bytecode.class")) {
             assertNotNull(stream);
             ClassNode node = new ClassNode();
@@ -70,12 +74,12 @@ class MixinOpcodeNameTransformerTest {
                 if (insn instanceof MethodInsnNode call) detail += " call=" + call.owner + "." + call.name + call.desc;
                 shape.add(detail);
             }
-            if (!MixinOpcodeNameTransformer.matchesMixin087Wrapper(method)) {
-                System.out.println("BOOTOPTIM_OPCODE_WRAPPER_SHAPE " + shape);
-            }
             assertTrue(MixinOpcodeNameTransformer.matchesMixin087Wrapper(method), "wrapper shape=" + shape);
 
-            method.instructions.remove(method.instructions.getFirst());
+            AbstractInsnNode firstReal = method.instructions.getFirst();
+            while (firstReal != null && firstReal.getOpcode() < 0) firstReal = firstReal.getNext();
+            assertNotNull(firstReal);
+            method.instructions.remove(firstReal);
             assertFalse(MixinOpcodeNameTransformer.matchesMixin087Wrapper(method));
         }
     }
