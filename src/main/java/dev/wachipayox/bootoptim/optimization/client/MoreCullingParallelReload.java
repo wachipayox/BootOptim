@@ -28,7 +28,7 @@ public final class MoreCullingParallelReload {
             states.forEach(action);
             return;
         }
-        parallelSnapshot(states, action);
+        parallelSnapshot(states, action, "shapes");
     }
 
     public static void models(java.util.Map<?, ?> models, BiConsumer<Object, Object> action) {
@@ -41,10 +41,10 @@ public final class MoreCullingParallelReload {
         parallelSnapshot(snapshot, value -> {
             ModelEntry entry = (ModelEntry) value;
             action.accept(entry.key(), entry.value());
-        });
+        }, "opacity");
     }
 
-    private static void parallelSnapshot(Iterable<?> values, Consumer<Object> action) {
+    private static void parallelSnapshot(Iterable<?> values, Consumer<Object> action, String mechanism) {
         List<Object> snapshot = new ArrayList<>();
         values.forEach(snapshot::add);
         if (snapshot.size() < 2) {
@@ -53,6 +53,8 @@ public final class MoreCullingParallelReload {
         }
 
         int workers = workerCount();
+        System.out.println("BOOTOPTIM_MORECULLING_PARALLEL mechanism=" + mechanism
+                + " entries=" + snapshot.size() + " workers=" + workers);
         if (workers < 2) {
             snapshot.forEach(action);
             return;
