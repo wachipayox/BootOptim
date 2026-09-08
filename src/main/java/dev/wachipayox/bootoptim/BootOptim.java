@@ -21,7 +21,7 @@ public final class BootOptim {
     public BootOptim() {
         RegularBootTraceBridge.recordProbe("regular_mod_entrypoint");
         StartupProfiler.markModEntrypoint();
-        if (StartupProfiler.isEnabled() && FMLEnvironment.dist == Dist.CLIENT) {
+        if (FMLEnvironment.dist == Dist.CLIENT) {
             ClientStartupHooks.install();
         }
     }
