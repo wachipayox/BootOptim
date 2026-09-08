@@ -1,10 +1,13 @@
 import importlib.util
+import contextlib
+import io
 import json
 import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/exact-pack/plan_scaling.py"
@@ -20,6 +23,13 @@ MATERIALIZER = importlib.util.module_from_spec(MATERIALIZER_SPEC)
 assert MATERIALIZER_SPEC.loader is not None
 sys.modules[MATERIALIZER_SPEC.name] = MATERIALIZER
 MATERIALIZER_SPEC.loader.exec_module(MATERIALIZER)
+
+SUMMARY_SCRIPT = Path(__file__).resolve().parents[2] / "scripts/exact-pack/summarize_startup.py"
+SUMMARY_SPEC = importlib.util.spec_from_file_location("summarize_startup", SUMMARY_SCRIPT)
+SUMMARY = importlib.util.module_from_spec(SUMMARY_SPEC)
+assert SUMMARY_SPEC.loader is not None
+sys.modules[SUMMARY_SPEC.name] = SUMMARY
+SUMMARY_SPEC.loader.exec_module(SUMMARY)
 
 
 def make_mod(path: Path, mod_id: str, dependencies: list[str] = ()) -> None:
@@ -100,6 +110,46 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertFalse((destination / "mods" / "feature.jar").exists())
             self.assertTrue((destination / ".bootoptim-scaling-variant.json").is_file())
             self.assertTrue((pack / "mods" / "feature.jar").is_file())
+
+    def test_aggregate_marks_scaling_resource_contract_as_diagnostic(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            results = root / "results" / "scaling-mod-feature"
+            results.mkdir(parents=True)
+            (results / "result.json").write_text(
+                json.dumps({
+                    "variant": "scaling-mod-feature",
+                    "startup_total_ms": 1234,
+                    "mod_entrypoint_ms": 400,
+                    "post_mod_entrypoint_ms": 834,
+                    "mcef_init_ms": None,
+                    "reload_to_fancymenu_finish_ms": 700,
+                    "fancymenu_panorama_ms": None,
+                    "bootoptim_mixin_errors": 0,
+                    "decocraft_status": None,
+                    "decocraft_models_remapped": None,
+                    "decocraft_atlas_removed": None,
+                    "blocks_atlas_width": None,
+                    "blocks_atlas_height": None,
+                    "blocks_atlas_levels": None,
+                    "resource_contract_valid": False,
+                    "diagnostic_only": True,
+                }),
+                encoding="utf-8",
+            )
+            markdown = root / "summary.md"
+            summary_json = root / "summary.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                SUMMARY.parse_aggregate(SimpleNamespace(
+                    results_dir=str(root / "results"),
+                    output=str(markdown),
+                    json_output=str(summary_json),
+                ))
+            summary = json.loads(summary_json.read_text(encoding="utf-8"))
+            row = summary["scaling-mod-feature"]
+            self.assertEqual(row["resource_contract_invalid_runs"], 1)
+            self.assertEqual(row["diagnostic_only_runs"], 1)
+            self.assertIn("resource-invalid", markdown.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

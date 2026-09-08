@@ -20,6 +20,7 @@ on:
           - smoke
           - ab
           - paired
+          - scaling
       repetitions:
         description: A/B repetitions per variant (1-5)
         required: true
@@ -37,6 +38,21 @@ on:
         type: string
       control_jvm_args:
         description: Optional newline-separated control JVM args for A/B
+        required: false
+        default: ''
+        type: string
+      scaling_variants:
+        description: Comma-separated planner variant IDs for scaling mode
+        required: false
+        default: 'baseline,full'
+        type: string
+      scaling_baseline:
+        description: Comma-separated baseline mod IDs for scaling mode
+        required: false
+        default: ''
+        type: string
+      scaling_groups:
+        description: Semicolon-separated NAME=mod1,mod2 groups for scaling mode
         required: false
         default: ''
         type: string
@@ -64,6 +80,8 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       mode: ${{ steps.plan.outputs.mode }}
+      scaling_baseline: ${{ steps.plan.outputs.scaling_baseline }}
+      scaling_groups: ${{ steps.plan.outputs.scaling_groups }}
     env:
       PR_BODY: ${{ github.event.pull_request.body || '' }}
       DISPATCH_MODE: ${{ inputs.mode || '' }}
@@ -71,6 +89,9 @@ jobs:
       DISPATCH_SMOKE_ARGS: ${{ inputs.smoke_jvm_args || '' }}
       DISPATCH_CANDIDATE_ARGS: ${{ inputs.candidate_jvm_args || '' }}
       DISPATCH_CONTROL_ARGS: ${{ inputs.control_jvm_args || '' }}
+      DISPATCH_SCALING_VARIANTS: ${{ inputs.scaling_variants || '' }}
+      DISPATCH_SCALING_BASELINE: ${{ inputs.scaling_baseline || '' }}
+      DISPATCH_SCALING_GROUPS: ${{ inputs.scaling_groups || '' }}
     steps:
       - name: Build benchmark matrix
         id: plan
@@ -93,6 +114,9 @@ jobs:
               smoke_args = os.environ.get('DISPATCH_SMOKE_ARGS', '').strip()
               candidate_args = os.environ.get('DISPATCH_CANDIDATE_ARGS', '').strip()
               control_args = os.environ.get('DISPATCH_CONTROL_ARGS', '').strip()
+              scaling_variants_text = os.environ.get('DISPATCH_SCALING_VARIANTS', '').strip()
+              scaling_baseline = os.environ.get('DISPATCH_SCALING_BASELINE', '').strip()
+              scaling_groups = os.environ.get('DISPATCH_SCALING_GROUPS', '').strip()
           else:
               mode_values = directive('exact-pack-mode')
               mode = (mode_values[-1] if mode_values else 'smoke').strip().lower()
@@ -101,8 +125,11 @@ jobs:
               smoke_args = '\n'.join(directive('exact-pack-smoke-jvm-arg')).strip()
               candidate_args = '\n'.join(directive('exact-pack-candidate-jvm-arg')).strip()
               control_args = '\n'.join(directive('exact-pack-control-jvm-arg')).strip()
+              scaling_variants_text = ','.join(directive('exact-pack-scaling-variant')).strip()
+              scaling_baseline = ','.join(directive('exact-pack-scaling-baseline')).strip()
+              scaling_groups = ';'.join(directive('exact-pack-scaling-group')).strip()
 
-          if mode not in {'smoke', 'ab', 'paired'}:
+          if mode not in {'smoke', 'ab', 'paired', 'scaling'}:
               raise SystemExit(f'Unsupported exact-pack mode: {mode}')
           try:
               repetitions = int(repetitions_text)
@@ -120,7 +147,7 @@ jobs:
               for iteration in range(1, repetitions + 1):
                   include.append({'variant': 'control', 'iteration': iteration, 'jvm_args': control_args})
                   include.append({'variant': 'candidate', 'iteration': iteration, 'jvm_args': candidate_args})
-          else:
+          elif mode == 'paired':
               if candidate_args == control_args:
                   raise SystemExit('Paired mode requires candidate and control JVM args to differ.')
               for pair in range(1, repetitions + 1):
@@ -129,11 +156,26 @@ jobs:
                       'control_jvm_args': control_args,
                       'candidate_jvm_args': candidate_args,
                   })
+          else:
+              scaling_variants = [value.strip() for value in scaling_variants_text.split(',') if value.strip()]
+              if not scaling_variants:
+                  raise SystemExit('Scaling mode requires at least one planner variant ID.')
+              if len(set(scaling_variants)) != len(scaling_variants):
+                  raise SystemExit('Scaling variant IDs must be unique.')
+              for variant_id in scaling_variants:
+                  include.append({
+                      'variant': f'scaling-{variant_id}',
+                      'scaling_variant': variant_id,
+                      'iteration': 1,
+                      'jvm_args': smoke_args,
+                  })
 
           matrix = json.dumps({'include': include}, separators=(',', ':'))
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               output.write(f'matrix={matrix}\n')
               output.write(f'mode={mode}\n')
+              output.write(f'scaling_baseline={scaling_baseline}\n')
+              output.write(f'scaling_groups={scaling_groups}\n')
           print(json.dumps({'mode': mode, 'runs': include}, indent=2))
 
   fixture:
@@ -237,6 +279,9 @@ jobs:
         -XX:ActiveProcessorCount=4
         -Dmcef.java.cef.commit=a78e832f9f13c2c688caea3d04d8b84fcd238d94
       BOOTOPTIM_PACK_EXTRA_JVM_ARGS: ${{ matrix.jvm_args }}
+      BOOTOPTIM_EXACT_MODE: ${{ needs.plan.outputs.mode }}
+      BOOTOPTIM_SCALING_BASELINE: ${{ needs.plan.outputs.scaling_baseline }}
+      BOOTOPTIM_SCALING_GROUPS: ${{ needs.plan.outputs.scaling_groups }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -357,14 +402,52 @@ jobs:
             --extract .exact-pack-run \
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 
+      - name: Materialize selected scaling variant
+        if: needs.plan.outputs.mode == 'scaling'
+        shell: bash
+        env:
+          SCALING_VARIANT: ${{ matrix.scaling_variant }}
+        run: |
+          set -euo pipefail
+          plan_args=(
+            --pack-dir .exact-pack-run
+            --output scaling-plan.json
+          )
+          if [[ -n "${BOOTOPTIM_SCALING_BASELINE:-}" ]]; then
+            IFS=',' read -ra baseline_ids <<< "$BOOTOPTIM_SCALING_BASELINE"
+            for mod_id in "${baseline_ids[@]}"; do
+              [[ -n "$mod_id" ]] && plan_args+=(--baseline "$mod_id")
+            done
+          fi
+          if [[ -n "${BOOTOPTIM_SCALING_GROUPS:-}" ]]; then
+            IFS=';' read -ra groups <<< "$BOOTOPTIM_SCALING_GROUPS"
+            for group in "${groups[@]}"; do
+              [[ -n "$group" ]] && plan_args+=(--group "$group")
+            done
+          fi
+          python scripts/exact-pack/plan_scaling.py "${plan_args[@]}"
+          rm -rf .exact-pack-scaling-variant
+          python scripts/exact-pack/materialize_scaling_variant.py \
+            --source .exact-pack-run \
+            --plan scaling-plan.json \
+            --variant "$SCALING_VARIANT" \
+            --destination .exact-pack-scaling-variant \
+            | tee scaling-variant-manifest.json
+          echo "BOOTOPTIM_PACK_DIR=$PWD/.exact-pack-scaling-variant" >> "$GITHUB_ENV"
+
       - name: Launch exact pack to main menu
         if: needs.plan.outputs.mode != 'paired'
         shell: bash
         run: |
-          python scripts/exact-pack/run_startup.py \
-            --variant '${{ matrix.variant }}' \
-            --iteration ${{ matrix.iteration }} \
+          run_args=(
+            --variant '${{ matrix.variant }}'
+            --iteration '${{ matrix.iteration }}'
             --timeout 1200
+          )
+          if [[ "$BOOTOPTIM_EXACT_MODE" == 'scaling' ]]; then
+            run_args+=(--allow-resource-mismatch)
+          fi
+          python scripts/exact-pack/run_startup.py "${run_args[@]}"
 
       - name: Launch paired control/candidate runs on this same VM
         if: needs.plan.outputs.mode == 'paired'
@@ -403,6 +486,9 @@ jobs:
             run-pack-benchmark/config/fml.toml
             run-pack-benchmark/config/mcef/mcef.properties
             run-pack-benchmark/options.txt
+            scaling-plan.json
+            scaling-variant-manifest.json
+            .exact-pack-scaling-variant/.bootoptim-scaling-variant.json
           if-no-files-found: ignore
           retention-days: 14
 

@@ -57,6 +57,26 @@ interaction groups. Only phase deltas that remain material and coherent on CI sh
 physical laptop. This is a software-pack scaling surrogate, not proof of laptop storage or native
 GPU behavior.
 
+The exact-pack workflow now exposes a diagnostic `scaling` mode. For a manual dispatch, provide
+comma-separated planner IDs (for example `baseline,full,mod-decocraft`) and optional baseline/group
+definitions. A pull request can request the same mode with repeated directives:
+
+```text
+[exact-pack-ci]
+exact-pack-mode: scaling
+exact-pack-scaling-variant: baseline
+exact-pack-scaling-variant: full
+exact-pack-scaling-variant: mod-decocraft
+exact-pack-scaling-baseline: neoforge
+exact-pack-scaling-group: render=embeddium,entity_model_features
+```
+
+Reduced variants are allowed to continue past the resource-selection check solely to expose startup
+phase evidence. Their result records `resource_contract_valid=false` and `diagnostic_only=true` and
+the aggregate marks those counts explicitly. Such a run cannot authorize gameplay equivalence or a
+production optimization; it only identifies which startup phases disappear or scale when a mod
+closure is removed.
+
 ## Validation
 
 The planner/materializer are covered by the existing Python contract suite: metadata dependency
