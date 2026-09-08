@@ -21,6 +21,7 @@ public final class BootstrapStartupConfig {
     public static final String RESOLVED_LOG_PROPERTY = "boot_optim.startupLog.enabled";
     public static final String RESOLVED_LOG_PATH_PROPERTY = "boot_optim.startupLog.path";
     public static final String RESOLVED_CONFIG_PATH_PROPERTY = "boot_optim.startupLog.configPath";
+    public static final String TRACE_PATH_PROPERTY = "boot_optim.trace.path";
 
     private static final String CONFIG_NAME = "boot_optim.properties";
     private static final String LOG_NAME = "bootoptim-startup.log";
@@ -82,6 +83,7 @@ public final class BootstrapStartupConfig {
                         configPath,
                         "# BootOptim early-startup settings.\n"
                                 + "# startupLog writes a lightweight startup report to logs/bootoptim-startup.log.\n"
+                                + "# Structured tracing is opt-in with -Dboot_optim.trace.mode=profile|development|benchmark.\n"
                                 + "# Heavy profiling remains opt-in through BootOptim's debug/benchmark tooling.\n"
                                 + "startupLog=false\n",
                         StandardCharsets.UTF_8,
@@ -104,6 +106,8 @@ public final class BootstrapStartupConfig {
         System.setProperty(RESOLVED_LOG_PROPERTY, Boolean.toString(enabled));
         System.setProperty(RESOLVED_LOG_PATH_PROPERTY, logPath.toString());
         System.setProperty(RESOLVED_CONFIG_PATH_PROPERTY, configPath.toString());
+        System.setProperty(TRACE_PATH_PROPERTY, resolvedGameDirectory.resolve("logs").resolve(BootTrace.DEFAULT_FILE_NAME).toString());
+        BootTrace.configure(resolvedGameDirectory);
 
         return new State(resolvedGameDirectory, configPath, logPath, configured, debug, profiling, enabled, problem);
     }

@@ -30,12 +30,14 @@ public final class StartupReport {
     }
 
     public static void optimization(String id, boolean enabled, String reason) {
+        StartupTrace.event("optimization", "startup", id + "=" + (enabled ? "enabled" : "disabled") + " " + reason);
         append("OPTIMIZATION id=" + sanitize(id)
                 + " status=" + (enabled ? "enabled" : "disabled")
                 + " reason=" + sanitize(reason));
     }
 
     public static void failure(String component, Throwable failure) {
+        StartupTrace.error(component, failure.getClass().getName() + ": " + failure.getMessage());
         append("FAILURE component=" + sanitize(component)
                 + " detail=" + sanitize(failure.getClass().getName() + ": " + failure.getMessage()));
     }
