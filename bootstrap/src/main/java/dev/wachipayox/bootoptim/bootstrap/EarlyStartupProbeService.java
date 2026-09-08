@@ -67,11 +67,14 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
-        // Default/off mode installs no diagnostic transformer at all. Benchmark/profile/development share the same
-        // boundaries; trace-core itself preserves benchmark's no-clock/no-buffer/no-JSON per-event contract.
-        return StructuredBootTrace.global().isEnabled()
-                ? List.of(new MinecraftBootstrapTraceTransformer(), new FmlLoadingTraceTransformer())
-                : List.of();
+        // ModLauncher reaches this callback only after scan completion and GAME resource registration. In trace modes,
+        // use that already-existing SERVICE callback as the first safe observable edge into the launch/game-layer
+        // transition. Default/off mode still installs no diagnostic transformer and emits no transition task.
+        var trace = StructuredBootTrace.global();
+        if (!trace.isEnabled()) return List.of();
+
+        ModLauncherTransitionTraceHooks.beginTransition();
+        return List.of(new MinecraftBootstrapTraceTransformer(), new FmlLoadingTraceTransformer());
     }
 
     private static void mark(String phase) {
