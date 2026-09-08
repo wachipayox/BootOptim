@@ -237,6 +237,16 @@ def required_closure(
             missing.add(mod_id)
             continue
         selected.add(mod_id)
+        # A top-level JAR is the materialization unit, and it can expose more
+        # than one loader mod (for example a bundled helper alongside the
+        # visible mod).  Selecting the artifact therefore also selects every
+        # mod ID declared by that artifact.  Otherwise artifact_selection()
+        # would copy a JAR whose hidden mod is loaded at runtime without its
+        # own dependency closure, producing a false-valid reduced variant.
+        for record in matching_records:
+            for co_located_id in record.mod_ids:
+                if co_located_id not in selected:
+                    pending.append(co_located_id)
         for group in groups:
             if mod_id in group:
                 pending.extend(member for member in group if member not in selected)

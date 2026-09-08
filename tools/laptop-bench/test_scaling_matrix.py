@@ -194,6 +194,31 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertEqual(variant["artifacts"], ["feature.jar"])
             self.assertIn("embedded", variant["mod_ids"])
 
+    def test_selecting_artifact_also_closes_every_co_located_mod(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            metadata = (
+                'modLoader="javafml"\n'
+                '[[mods]]\nmodId="visible"\nversion="1.0"\n'
+                '[[mods]]\nmodId="hidden_helper"\nversion="1.0"\n'
+                '[[dependencies.hidden_helper]]\n'
+                'modId="helper_runtime"\ntype="required"\n'
+            )
+            with zipfile.ZipFile(mods / "combined.jar", "w") as archive:
+                archive.writestr("META-INF/neoforge.mods.toml", metadata)
+            make_mod(mods / "helper.jar", "helper_runtime")
+
+            plan = PLAN.build_plan(pack, [], [])
+            variant = next(item for item in plan["variants"] if item["id"] == "mod-visible")
+            self.assertEqual(
+                variant["mod_ids"],
+                ["helper_runtime", "hidden_helper", "visible"],
+            )
+            self.assertEqual(variant["missing_dependencies"], [])
+            self.assertEqual(variant["artifacts"], ["combined.jar", "helper.jar"])
+
     def test_compatibility_group_keeps_runtime_family_together(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)

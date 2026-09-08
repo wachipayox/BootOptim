@@ -210,3 +210,37 @@ recognizes nested `META-INF/jarjar` mods, which removes false missing-dependency
 reports for Create's embedded Flywheel/Ponder. The Linux `libflite.so` failure
 from AnalogAudio remains a host capability issue and must be excluded and
 recorded for hosted partition attribution.
+
+### Run 34248612360 disposition
+
+The next broad run used four deterministic partitions plus `baseline` and
+`full`, excluded `analogaudio`, and kept the already-known Iris/Sodium and
+Bits'n'Bobs/Create families together. The valid variants reached the same
+process-origin/main-menu endpoint with `resource_contract_valid=true`,
+`diagnostic_only=false` and zero BootOptim/Mixin errors:
+
+| variant | TTMM / startup (ms) | mod entrypoint (ms) | post-mod (ms) | reload → FancyMenu (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| baseline | 14,509 | 9,798 | 4,711 | — |
+| partition-4 | 40,691 | 20,842 | 19,849 | — |
+| partition-1 | 58,622 | 27,289 | 31,333 | 21,913 |
+| full | 96,055 | 32,637 | 63,418 | 44,462 |
+
+The two remaining partitions were not admitted to the performance ledger.
+Partition-2 selected `we_companion` without its undeclared runtime partner
+`tfmg`; its Mixin targets were absent, and Observable also failed because the
+reduced closure did not carry the Kotlin serialization runtime
+(`kotlinx.serialization.json.JsonElement`). Partition-3 copied the
+MoreCulling artifact through its co-located `conditional_mixin` mod without
+selecting MoreCulling's declared `cloth_config` dependency. These are
+materialization/contract failures, not measurements.
+
+This run exposed an important planner invariant: selecting a top-level JAR
+must close *all* loader mod IDs declared by that artifact, not only the root
+ID that caused the artifact to be selected. The planner now expands
+co-located IDs during transitive closure and has a regression test for a
+combined artifact whose hidden helper requires a second JAR. The next
+validation dispatch must also pass the evidence-backed runtime families
+`tfmg-bridge=we_companion,tfmg` and
+`observable-runtime=observable,kotlinforforge`; until those variants reach a
+valid menu endpoint, no partition timing is interpreted.
