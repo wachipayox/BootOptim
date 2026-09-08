@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.bootstrap;
 
 import cpw.mods.modlauncher.api.IEnvironment;
+import cpw.mods.modlauncher.api.IModuleLayerManager;
 import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
 import dev.wachipayox.bootoptim.trace.StructuredBootTrace;
@@ -66,6 +67,16 @@ public final class EarlyStartupProbeService implements ITransformationService {
     }
 
     @Override
+    public List<ITransformationService.Resource> completeScan(IModuleLayerManager layerManager) {
+        // This is only BootOptim's own ITransformationService callback. It is an observable point inside
+        // ModLauncher's complete-scan loop, not a claim that every service has completed its scan.
+        if (StructuredBootTrace.global().isEnabled()) {
+            PostDiscoveryResidualTraceHooks.atCompleteScanCallback();
+        }
+        return List.of();
+    }
+
+    @Override
     public List<? extends ITransformer<?>> transformers() {
         // ModLauncher reaches this callback only after scan completion and GAME resource registration. In trace modes,
         // use that already-existing SERVICE callback as the first safe observable edge into the launch/game-layer
@@ -73,6 +84,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
         var trace = StructuredBootTrace.global();
         if (!trace.isEnabled()) return List.of();
 
+        PostDiscoveryResidualTraceHooks.endAtTransformersCallback();
         long callbackTask = ModLauncherTransitionTraceHooks.beginTransition();
         try {
             return List.of(new MinecraftBootstrapTraceTransformer(), new FmlLoadingTraceTransformer());
