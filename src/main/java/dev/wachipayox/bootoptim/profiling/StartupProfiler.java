@@ -22,10 +22,11 @@ public final class StartupProfiler {
     }
 
     public static boolean isEnabled() {
-        return PROFILING_ENABLED || REPORT_ENABLED;
+        return PROFILING_ENABLED || REPORT_ENABLED || StartupTrace.isEnabled();
     }
 
     public static void markModEntrypoint() {
+        StartupTrace.phaseEnd("mod_entrypoint", "regular_mod_constructed");
         if (REPORT_ENABLED) {
             StartupReport.phase("mod_entrypoint", uptimeMs());
         }
@@ -51,6 +52,8 @@ public final class StartupProfiler {
         if (PROFILING_ENABLED) {
             logPhase("main_menu");
         }
+        StartupTrace.phaseEnd("main_menu", "title_screen_opened");
+        StartupTrace.flush();
         return true;
     }
 

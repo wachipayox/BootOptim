@@ -47,6 +47,7 @@ public final class StartupDiagnostics {
                         StandardOpenOption.TRUNCATE_EXISTING,
                         StandardOpenOption.WRITE);
                 initialized = true;
+                BootTrace.milestone("bootstrap_diagnostics", "startup_report_initialized");
                 if (config.problem() != null) {
                     append("FAILURE component=config detail=" + sanitize(config.problem()));
                 }
@@ -72,6 +73,7 @@ public final class StartupDiagnostics {
             return;
         }
         String detail = failure.getClass().getName() + ": " + String.valueOf(failure.getMessage());
+        BootTrace.error(component, detail);
         append("FAILURE component=" + sanitize(component) + " detail=" + sanitize(detail));
         if (BootstrapStartupConfig.state().debug()) {
             StringWriter stack = new StringWriter();
@@ -81,6 +83,7 @@ public final class StartupDiagnostics {
     }
 
     public static void event(String category, String message) {
+        BootTrace.event("diagnostic", category, null, null, null, null, message);
         append(sanitize(category) + " " + sanitize(message));
     }
 

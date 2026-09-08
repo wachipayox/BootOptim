@@ -135,6 +135,22 @@ These are reminders, not a substitute for reading the ledger:
 
 Investigate root cause first, then implement. Keep diagnostic and production mechanisms separate. Record confirmed cause, hypotheses, measurements, residual risks, and whether runtime behavior was actually validated. Significant architectural wins are preferred, but medium/small improvements can be retained when their safety/maintenance cost is low or the project explicitly chooses to keep them.
 
+## Programme objective: architectural boot rewrite
+
+BootOptim is being developed as an architectural startup project for the exact modpack, not only as
+a collection of micro-patches. The durable sequence is documented in
+[`docs/research/boot-pipeline-program-2026-09-08.md`](docs/research/boot-pipeline-program-2026-09-08.md):
+first establish the structured trace and development sidecar contract, then build a per-mod/per-phase
+scaling matrix, attribute the real critical path, and climb from configuration/direct-mod fixes
+through prepare/commit redesign and, when justified, invasive NeoForge/Minecraft changes.
+
+The objective is that startup cost scales with real work rather than superlinearly with mod count,
+while the loaded game remains equivalent. Early transformation/coremod and user-owned mod changes are
+allowed when they preserve stock fallback, callback/GL ownership, cache invalidation, menu/world/
+first-use behavior and steady-state gameplay. A counter reduction or inclusive listener improvement
+alone is not a promotion. The opt-in JSONL trace foundation is recorded in
+[`docs/research/structured-boot-trace-2026-09-08.md`](docs/research/structured-boot-trace-2026-09-08.md).
+
 ## Local relay coordination with external agents
 
 When the user has enabled the local relay workflow, the primary Codex agent must maintain the ignored `.agent-coordination/` directory. It is operational memory, never a Git artifact.

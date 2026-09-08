@@ -62,6 +62,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
     @Override
     public void onLoad(IEnvironment environment, Set<String> otherServices) {
         mark("transformation_service_on_load");
+        BootTrace.flush();
     }
 
     @Override
@@ -70,19 +71,22 @@ public final class EarlyStartupProbeService implements ITransformationService {
     }
 
     private static void mark(String phase) {
-        if (!ENABLED) {
+        if (!ENABLED && !BootTrace.isEnabled()) {
             return;
         }
 
-        Runtime runtime = Runtime.getRuntime();
-        long usedBytes = runtime.totalMemory() - runtime.freeMemory();
-        long uptimeMs = ManagementFactory.getRuntimeMXBean().getUptime();
-        System.out.printf(
-                "BOOTOPTIM_STARTUP phase=%s uptime_ms=%d processors=%d heap_used_mib=%d heap_max_mib=%d%n",
-                phase,
-                uptimeMs,
-                runtime.availableProcessors(),
-                usedBytes / (1024L * 1024L),
-                runtime.maxMemory() / (1024L * 1024L));
+        if (ENABLED) {
+            Runtime runtime = Runtime.getRuntime();
+            long usedBytes = runtime.totalMemory() - runtime.freeMemory();
+            long uptimeMs = ManagementFactory.getRuntimeMXBean().getUptime();
+            System.out.printf(
+                    "BOOTOPTIM_STARTUP phase=%s uptime_ms=%d processors=%d heap_used_mib=%d heap_max_mib=%d%n",
+                    phase,
+                    uptimeMs,
+                    runtime.availableProcessors(),
+                    usedBytes / (1024L * 1024L),
+                    runtime.maxMemory() / (1024L * 1024L));
+        }
+        BootTrace.milestone("startup", phase);
     }
 }

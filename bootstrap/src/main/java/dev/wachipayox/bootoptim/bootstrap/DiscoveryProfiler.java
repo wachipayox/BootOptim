@@ -29,18 +29,19 @@ final class DiscoveryProfiler {
     }
 
     private static void begin(String phase, AtomicLong holder) {
-        if (!ENABLED) {
+        if (!ENABLED && !BootTrace.isEnabled()) {
             return;
         }
         long start = System.nanoTime();
         if (holder.compareAndSet(0L, start)) {
+            BootTrace.phaseBegin(phase, "fml_discovery_begin");
             System.out.printf("BOOTOPTIM_STARTUP phase=%s_start uptime_ms=%d%n",
                     phase, ManagementFactory.getRuntimeMXBean().getUptime());
         }
     }
 
     private static void end(String phase, AtomicLong holder) {
-        if (!ENABLED) {
+        if (!ENABLED && !BootTrace.isEnabled()) {
             return;
         }
         long start = holder.get();
@@ -48,6 +49,7 @@ final class DiscoveryProfiler {
             return;
         }
         double elapsedMs = (System.nanoTime() - start) / 1_000_000.0;
+        BootTrace.phaseEnd(phase, "fml_discovery_end elapsed_ms=" + String.format(java.util.Locale.ROOT, "%.3f", elapsedMs));
         System.out.printf("BOOTOPTIM_STARTUP phase=%s_end uptime_ms=%d elapsed_ms=%.3f%n",
                 phase, ManagementFactory.getRuntimeMXBean().getUptime(), elapsedMs);
     }

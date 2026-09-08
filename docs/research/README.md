@@ -37,6 +37,9 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Architectural boot rewrite programme — 2026-09-08](boot-pipeline-program-2026-09-08.md) — active end-to-end programme: structured trace, exact-pack scaling matrix, causal attribution and invasive optimization gates.
+- [Structured boot trace foundation — 2026-09-08](structured-boot-trace-2026-09-08.md) — active opt-in JSONL diagnostics shared by bootstrap and regular mod; no runtime scheduling change.
+
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
 - [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
