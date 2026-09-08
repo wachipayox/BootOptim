@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
+import dev.wachipayox.bootoptim.profiling.client.ModelDagDependencies;
 import dev.wachipayox.bootoptim.profiling.client.ResourceReloadDagTrace;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.resources.model.ModelManager;
@@ -87,7 +88,7 @@ abstract class ModelManagerDagMixin {
     private void bootoptim$loadModelsHead(CallbackInfoReturnable<?> cir) {
         long generation = ResourceReloadDagTrace.activeModelGeneration();
         bootoptim$loadModelsTask = ResourceReloadDagTrace.beginLexicalTask(
-                "model_manager_load_models", generation, null);
+                "model_manager_load_models", generation, ModelDagDependencies.bakeryPreparationDependency());
     }
 
     @Inject(method = "loadModels", at = @At("RETURN"))
