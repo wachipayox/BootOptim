@@ -15,7 +15,9 @@ public final class MinecraftBootstrapTraceHooks {
     public static void beginBootstrap() {
         if (!TRACE.isEnabled() || BOOTSTRAP_TASK.get() != 0L) return;
         try {
-            long predecessor = DiscoveryProfiler.dependencyTaskId();
+            // Close the immediately preceding observable launch-transition interval before opening Bootstrap.
+            long predecessor = ModLauncherTransitionTraceHooks.endTransitionAtMinecraftBootstrap();
+            if (predecessor == 0L) predecessor = DiscoveryProfiler.dependencyTaskId();
             long[] dependencies = predecessor == 0L ? null : new long[] { predecessor };
             long taskId = TRACE.beginTask("minecraft_bootstrap", 0L, dependencies, null, null, -1L);
             if (!BOOTSTRAP_TASK.compareAndSet(0L, taskId) && taskId != 0L) {
