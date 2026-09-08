@@ -119,15 +119,15 @@ public final class ModelClassReplayFmlProbe {
         String invalidException = null;
         try {
             parse("{\"elements\":[");
-        } catch (Throwable throwable) {
-            invalidException = unwrap(throwable).getClass().getName();
+        } catch (Exception exception) {
+            invalidException = unwrap(exception).getClass().getName();
         }
         if (invalidException == null) out.add("invalid_json_exception_class", com.google.gson.JsonNull.INSTANCE);
         else out.addProperty("invalid_json_exception_class", invalidException);
         return out;
     }
 
-    private static BlockModel parse(String json) throws Throwable {
+    private static BlockModel parse(String json) throws Exception {
         Method method = Arrays.stream(BlockModel.class.getMethods())
                 .filter(candidate -> java.lang.reflect.Modifier.isStatic(candidate.getModifiers()))
                 .filter(candidate -> candidate.getName().equals("fromStream"))
@@ -138,12 +138,15 @@ public final class ModelClassReplayFmlProbe {
             try {
                 return (BlockModel) method.invoke(null, reader);
             } catch (InvocationTargetException exception) {
-                throw exception.getCause() == null ? exception : exception.getCause();
+                Throwable cause = exception.getCause();
+                if (cause instanceof Exception checked) throw checked;
+                if (cause instanceof Error error) throw error;
+                throw new RuntimeException(cause == null ? exception : cause);
             }
         }
     }
 
-    private static void resolve(BlockModel model, Function<ResourceLocation, UnbakedModel> resolver) throws Throwable {
+    private static void resolve(BlockModel model, Function<ResourceLocation, UnbakedModel> resolver) throws Exception {
         Method method = Arrays.stream(model.getClass().getMethods())
                 .filter(candidate -> candidate.getName().equals("resolveParents"))
                 .filter(candidate -> candidate.getParameterCount() == 1
@@ -152,7 +155,10 @@ public final class ModelClassReplayFmlProbe {
         try {
             method.invoke(model, resolver);
         } catch (InvocationTargetException exception) {
-            throw exception.getCause() == null ? exception : exception.getCause();
+            Throwable cause = exception.getCause();
+            if (cause instanceof Exception checked) throw checked;
+            if (cause instanceof Error error) throw error;
+            throw new RuntimeException(cause == null ? exception : cause);
         }
     }
 
