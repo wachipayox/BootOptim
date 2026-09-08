@@ -365,3 +365,28 @@ records every applied artifact/mod/provider edge. The exact local
 CreateStuffNAdditions artifact does contain `com/simibubi/create/`, confirming
 that `create=com/simibubi/create/` will close the observed failure and also
 cover other exact-pack artifacts with the same real bytecode reference.
+
+### Run 34257305504: first valid four-complement matrix
+
+With Fabric metadata/aliases and the explicit Create symbol-provider edge,
+all four complements reached the main-menu endpoint with
+`resource_contract_valid=true`, `diagnostic_only=false`, and
+`bootoptim_mixin_errors=0`. This is the first valid broad attribution matrix;
+the previous complement runs are superseded as contract diagnostics.
+
+| variant | selected artifacts | TTMM (ms) | mod entrypoint (ms) | post-entrypoint (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| complement-1 | 54 | 38,140 | 15,254 | 22,886 |
+| complement-2 | 56 | 32,503 | 16,108 | 16,395 |
+| complement-3 | 56 | 38,835 | 15,731 | 23,104 |
+| complement-4 | 60 | 36,880 | 16,821 | 20,059 |
+
+These are single fresh-VM observations, therefore they establish valid
+workloads and broad phase scale, not per-block causal savings. A matching full
+control is being run on the same planner revision before assigning any block a
+priority. The robust conclusion already justified is structural: retaining
+roughly 54--60 of the selected artifacts produces 32.5--38.8 seconds to menu,
+whereas prior valid full-pack observations were roughly 90 seconds. The next
+step is repeated full/complement control and then narrower, contract-valid
+binary splits inside the block with the largest reproducible critical-path
+contribution.
