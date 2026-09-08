@@ -13,7 +13,9 @@ public final class FmlLoadingTraceHooks {
     public static void beginGatherAndInitialize() {
         if (!TRACE.isEnabled() || GATHER_TASK.get() != 0L) return;
         try {
-            long predecessor = MinecraftBootstrapTraceHooks.bootstrapTaskId();
+            long predecessor = ClientPostBootstrapTraceHooks.clientPreGatherTaskId();
+            if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.validateTaskId();
+            if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.bootstrapTaskId();
             if (predecessor == 0L) predecessor = DiscoveryProfiler.dependencyTaskId();
             long[] dependencies = predecessor == 0L ? null : new long[] { predecessor };
             long taskId = TRACE.beginTask(
