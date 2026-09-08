@@ -78,19 +78,19 @@ class MinecraftBootstrapTraceTransformerTest {
     }
 
     @Test
-    void closesServiceTransitionBeforeOpeningBootstrapTask() throws IOException {
+    void closesTransitionPhaseBeforeOpeningBootstrapTask() throws IOException {
         var hooksClass = readClass(MinecraftBootstrapTraceHooks.class);
         var begin = methodNamed(hooksClass, "beginBootstrap");
         var calls = methodCalls(begin);
 
         int transitionEnd = indexOfCall(calls, TRANSITION_HOOKS, "endTransitionAtMinecraftBootstrap");
         int bootstrapBegin = indexOfCall(calls, TRACE, "beginTask");
-        assertTrue(transitionEnd >= 0, "bootstrap begin must close the SERVICE-to-game transition");
-        assertTrue(bootstrapBegin > transitionEnd, "transition end must precede minecraft_bootstrap task begin");
+        assertTrue(transitionEnd >= 0, "bootstrap begin must close the SERVICE-to-game transition phase");
+        assertTrue(bootstrapBegin > transitionEnd, "transition phase end must precede minecraft_bootstrap task begin");
     }
 
     @Test
-    void serviceCallbackStartsTransitionBeforeReturningDiagnosticTransformers() throws IOException {
+    void serviceCallbackKeepsItsTaskThreadLocalAroundTransformerConstruction() throws IOException {
         var serviceClass = readClass(EarlyStartupProbeService.class);
         var transformers = methodNamed(serviceClass, "transformers");
         var calls = methodCalls(transformers);
@@ -100,8 +100,10 @@ class MinecraftBootstrapTraceTransformerTest {
                 calls,
                 "dev/wachipayox/bootoptim/bootstrap/MinecraftBootstrapTraceTransformer",
                 "<init>");
+        int callbackEnd = indexOfCall(calls, TRANSITION_HOOKS, "endTransformersCallback");
         assertTrue(transitionBegin >= 0, "SERVICE transformers callback must emit the transition begin edge");
-        assertTrue(bootstrapTransformerCtor > transitionBegin, "transition begin must precede diagnostic transformer return");
+        assertTrue(bootstrapTransformerCtor > transitionBegin, "callback task must open before diagnostic transformer construction");
+        assertTrue(callbackEnd > bootstrapTransformerCtor, "callback task must close on the SERVICE thread after transformer construction");
     }
 
     private static ClassNode bootstrapClass() {
