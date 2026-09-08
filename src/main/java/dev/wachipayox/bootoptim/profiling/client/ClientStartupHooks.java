@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.profiling.client;
 
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.optimization.client.MoreCullingShapeFaceDedup;
+import dev.wachipayox.bootoptim.optimization.client.MoreCullingShapeFaceObjectCache;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.neoforged.neoforge.client.event.ScreenEvent;
@@ -29,6 +30,7 @@ public final class ClientStartupHooks {
         }
 
         MoreCullingShapeFaceDedup.endStartup();
+        MoreCullingShapeFaceObjectCache.endStartup();
         if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }

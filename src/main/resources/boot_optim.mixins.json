@@ -13,6 +13,7 @@
     "client.ModelBakeryDecocraftReuseMixin",
     "client.MoreCullingParallelReloadMixin",
     "client.MoreCullingShapeFaceDedupMixin",
+    "client.MoreCullingShapeFaceObjectCacheMixin",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
