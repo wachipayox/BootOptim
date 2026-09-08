@@ -62,9 +62,17 @@ diagnostic hypothesis, not a production-safe conclusion.
 
 ## Candidate and gate
 
-PR #192 (`codex/moreculling-parallel`) adds a required-false mixin that only
-matches MoreCulling's two synthetic lambda method names. Two independent system
-properties select the mechanisms:
+PR #192 (`codex/moreculling-parallel`) adds required-false mixins that only
+match MoreCulling's transformed callsites. The primary A/B candidate is a
+reload-local identity cache for repeated `VoxelShape.getFaceShape` results
+inside listener 25:
+
+- `-Dboot_optim.morecullingShapeFaceDedup=true`
+
+It preserves the original block callback and only reuses the six derived faces
+when the exact same shape object recurs during that invocation; the ThreadLocal
+cache is removed at return. Two separate scheduling probes are also present for
+follow-up, but are not enabled by the primary A/B:
 
 - `-Dboot_optim.morecullingParallelShapes=true`
 - `-Dboot_optim.morecullingParallelOpacity=true`
