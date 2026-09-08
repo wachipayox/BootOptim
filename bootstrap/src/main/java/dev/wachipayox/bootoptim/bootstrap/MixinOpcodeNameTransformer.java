@@ -14,6 +14,7 @@ import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
@@ -100,6 +101,11 @@ final class MixinOpcodeNameTransformer implements ITransformer<ClassNode> {
         if (opcode < 0) {
             return "UNKNOWN";
         }
+        // Mixin 0.8.7 starts its reflective scan at this ASM frame constant, so value 6
+        // resolves to this field name before the later ICONST_3 opcode field is examined.
+        if (opcode == Opcodes.UNINITIALIZED_THIS) {
+            return "UNINITIALIZED_THIS";
+        }
         if (opcode > 0 && opcode < Printer.OPCODES.length) {
             String name = Printer.OPCODES[opcode];
             if (name != null) {
@@ -111,6 +117,7 @@ final class MixinOpcodeNameTransformer implements ITransformer<ClassNode> {
 
     private static void replaceBody(MethodNode method) {
         InsnList instructions = new InsnList();
+        LabelNode table = new LabelNode();
         LabelNode decimal = new LabelNode();
         LabelNode unknown = new LabelNode();
 
@@ -118,6 +125,14 @@ final class MixinOpcodeNameTransformer implements ITransformer<ClassNode> {
         instructions.add(new JumpInsnNode(Opcodes.IFLT, unknown));
         instructions.add(new VarInsnNode(Opcodes.ILOAD, 0));
         instructions.add(new JumpInsnNode(Opcodes.IFEQ, decimal));
+        instructions.add(new VarInsnNode(Opcodes.ILOAD, 0));
+        instructions.add(new IntInsnNode(Opcodes.BIPUSH, Opcodes.UNINITIALIZED_THIS));
+        instructions.add(new JumpInsnNode(Opcodes.IF_ICMPNE, table));
+        instructions.add(new LdcInsnNode("UNINITIALIZED_THIS"));
+        instructions.add(new InsnNode(Opcodes.ARETURN));
+
+        instructions.add(table);
+        instructions.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
         instructions.add(new VarInsnNode(Opcodes.ILOAD, 0));
         instructions.add(new FieldInsnNode(
                 Opcodes.GETSTATIC,
