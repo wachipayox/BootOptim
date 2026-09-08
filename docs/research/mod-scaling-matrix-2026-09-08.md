@@ -86,3 +86,27 @@ closure is removed.
 The planner/materializer are covered by the existing Python contract suite: metadata dependency
 closure, missing-dependency reporting, duplicate BootOptim rejection, source immutability and native
 directory preservation. No Minecraft process is started by either tool.
+
+## First hosted attribution smoke — 2026-09-08
+
+Run `34242754173` used commit `6e89511` and one fresh hosted repetition for
+`full`, an empty `baseline`, and the single-mod closures `decocraft` and
+`citresewn`. All four reached the same main-menu endpoint with
+`resource_contract_valid=true`, `diagnostic_only=false`, zero BootOptim/Mixin
+errors, and the same process-origin clock. The values are attribution evidence
+only, not a promotion A/B:
+
+| variant | TTMM / startup (ms) | mod entrypoint (ms) | post-mod (ms) | atlas |
+| --- | ---: | ---: | ---: | --- |
+| baseline | 17,394 | 12,132 | 5,262 | 1024×1024×2 |
+| mod-citresewn | 21,644 | 11,523 | 10,121 | 4096×4096×2 |
+| mod-decocraft | 22,405 | 11,169 | 11,236 | 8192×4096×2 |
+| full | 91,444 | 30,703 | 60,741 | 8192×8192×2 |
+
+The isolated closures for CITResewn and Decocraft are therefore inexpensive
+relative to the 74,050 ms full-minus-baseline delta in this run. This does not
+close their interaction paths, nor does it prove linearity: the next matrix
+must test high-value consumers and interaction groups with the corrected
+NeoForge dependency parser. FancyMenu/reload and panorama fields are absent in
+reduced variants, so those fields must not be compared as if they were present
+workloads.
