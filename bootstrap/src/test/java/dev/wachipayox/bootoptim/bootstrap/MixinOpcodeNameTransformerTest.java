@@ -1,27 +1,30 @@
 package dev.wachipayox.bootoptim.bootstrap;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.VarInsnNode;
 import org.objectweb.asm.util.Printer;
 import org.spongepowered.asm.util.Bytecode;
 
 class MixinOpcodeNameTransformerTest {
     @Test
     void directLookupMatchesMixin087ForExhaustiveRelevantDomain() throws Exception {
-        // Every value which the stock reflective scan could possibly match, plus the complete
-        // practical opcode/invalid neighbourhood and integer extremes.
         Set<Integer> values = new LinkedHashSet<>();
         for (int opcode = -4096; opcode <= 4096; opcode++) {
             values.add(opcode);
@@ -34,12 +37,15 @@ class MixinOpcodeNameTransformerTest {
             }
         }
 
+        List<String> mismatches = new ArrayList<>();
         for (int opcode : values) {
-            assertEquals(
-                    Bytecode.getOpcodeName(opcode),
-                    MixinOpcodeNameTransformer.directOpcodeName(opcode),
-                    "opcode=" + opcode);
+            String stock = Bytecode.getOpcodeName(opcode);
+            String direct = MixinOpcodeNameTransformer.directOpcodeName(opcode);
+            if (!stock.equals(direct)) {
+                mismatches.add(opcode + ":stock=" + stock + ",direct=" + direct);
+            }
         }
+        assertTrue(mismatches.isEmpty(), "opcode mismatches=" + mismatches);
     }
 
     @Test
@@ -61,9 +67,17 @@ class MixinOpcodeNameTransformerTest {
                             && "(I)Ljava/lang/String;".equals(candidate.desc))
                     .findFirst()
                     .orElseThrow();
-            assertTrue(MixinOpcodeNameTransformer.matchesMixin087Wrapper(method));
+            List<String> shape = new ArrayList<>();
+            for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                if (insn.getOpcode() < 0) continue;
+                String detail = Printer.OPCODES[insn.getOpcode()];
+                if (insn instanceof VarInsnNode var) detail += " var=" + var.var;
+                if (insn instanceof LdcInsnNode ldc) detail += " cst=" + ldc.cst;
+                if (insn instanceof MethodInsnNode call) detail += " call=" + call.owner + "." + call.name + call.desc;
+                shape.add(detail);
+            }
+            assertTrue(MixinOpcodeNameTransformer.matchesMixin087Wrapper(method), "wrapper shape=" + shape);
 
-            // Any meaningful change to the wrapper must fail open rather than patch an unknown version.
             method.instructions.remove(method.instructions.getFirst());
             assertFalse(MixinOpcodeNameTransformer.matchesMixin087Wrapper(method));
         }
