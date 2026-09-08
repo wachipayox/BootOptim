@@ -37,7 +37,24 @@ jobs:
         run: ./gradlew -I tools/model-class-replay/model-replay.init.gradle modelReplaySelfTest --stacktrace
 
       - name: Reproduce clean-JavaExec NeoForge bootstrap blocker
-        run: ./gradlew -I tools/model-class-replay/model-replay.init.gradle modelReplayBootstrapBoundary --stacktrace
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          ./gradlew -I tools/model-class-replay/model-replay.init.gradle modelReplayBootstrapBoundary --stacktrace > model-replay-bootstrap-boundary.log 2>&1
+          status=$?
+          set -e
+          cat model-replay-bootstrap-boundary.log
+
+          if [[ $status -eq 0 ]]; then
+            echo 'Expected clean-JavaExec bootstrap to fail before FML establishes LoadingModList, but it succeeded.' >&2
+            exit 1
+          fi
+
+          grep -F 'FeatureFlagLoader.loadModdedFlags' model-replay-bootstrap-boundary.log
+          grep -F 'LoadingModList.get()' model-replay-bootstrap-boundary.log
+          grep -F 'Bootstrap.bootStrap' model-replay-bootstrap-boundary.log
+          echo 'MODEL_CLASS_PARENT_BOUNDARY_REPRODUCED FeatureFlagLoader->LoadingModList'
 
       - name: Summary
         run: |
