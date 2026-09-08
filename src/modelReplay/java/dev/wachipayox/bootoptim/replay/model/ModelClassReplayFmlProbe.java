@@ -81,13 +81,14 @@ public final class ModelClassReplayFmlProbe {
             if (!controlled.get("missing_parent_resolver_called").getAsBoolean()
                     || controlled.get("missing_parent_exception_class").isJsonNull()
                     || !controlled.get("cycle_observed").getAsBoolean()
+                    || controlled.get("cycle_exception_class").isJsonNull()
                     || controlled.get("invalid_json_exception_class").isJsonNull()) {
                 throw new IllegalStateException("controlled fallback/error probes did not all pass: " + controlled);
             }
 
             System.out.println("MODEL_CLASS_FML_REPLAY_OK semantic_sha256="
                     + result.get("semantic_sha256").getAsString()
-                    + " controlled_missing_parent_error=true controlled_cycle=true controlled_invalid_json=true");
+                    + " controlled_missing_parent_error=true controlled_cycle_error=true controlled_invalid_json=true");
         } catch (Exception exception) {
             throw new RuntimeException("FML model replay probe failed", exception);
         }
@@ -123,10 +124,35 @@ public final class ModelClassReplayFmlProbe {
         Map<String, BlockModel> cycle = new LinkedHashMap<>();
         cycle.put("bootoptim_test:cycle_a", parse("{\"parent\":\"bootoptim_test:cycle_b\"}"));
         cycle.put("bootoptim_test:cycle_b", parse("{\"parent\":\"bootoptim_test:cycle_a\"}"));
-        resolve(cycle.get("bootoptim_test:cycle_a"), location -> cycle.get(location.toString()));
-        resolve(cycle.get("bootoptim_test:cycle_b"), location -> cycle.get(location.toString()));
-        out.addProperty("cycle_observed", hasParentCycle(cycle.get("bootoptim_test:cycle_a"))
-                || hasParentCycle(cycle.get("bootoptim_test:cycle_b")));
+        List<String> cycleRequests = new ArrayList<>();
+        Function<ResourceLocation, UnbakedModel> cycleResolver = location -> {
+            cycleRequests.add(location.toString());
+            return cycle.get(location.toString());
+        };
+        String cycleExceptionClass = null;
+        String cycleExceptionMessage = null;
+        try {
+            resolve(cycle.get("bootoptim_test:cycle_a"), cycleResolver);
+            resolve(cycle.get("bootoptim_test:cycle_b"), cycleResolver);
+        } catch (Exception exception) {
+            Throwable cause = unwrap(exception);
+            cycleExceptionClass = cause.getClass().getName();
+            cycleExceptionMessage = cause.getMessage();
+        }
+        JsonArray cycleRequested = new JsonArray();
+        cycleRequests.forEach(cycleRequested::add);
+        out.add("cycle_parent_requests", cycleRequested);
+        boolean cycleStateObserved = hasParentCycle(cycle.get("bootoptim_test:cycle_a"))
+                || hasParentCycle(cycle.get("bootoptim_test:cycle_b"));
+        boolean cycleRequestPathObserved = cycleRequests.contains("bootoptim_test:cycle_a")
+                && cycleRequests.contains("bootoptim_test:cycle_b");
+        out.addProperty("cycle_parent_state_loop", cycleStateObserved);
+        out.addProperty("cycle_request_path_observed", cycleRequestPathObserved);
+        out.addProperty("cycle_observed", cycleStateObserved || (cycleRequestPathObserved && cycleExceptionClass != null));
+        if (cycleExceptionClass == null) out.add("cycle_exception_class", com.google.gson.JsonNull.INSTANCE);
+        else out.addProperty("cycle_exception_class", cycleExceptionClass);
+        if (cycleExceptionMessage == null) out.add("cycle_exception_message", com.google.gson.JsonNull.INSTANCE);
+        else out.addProperty("cycle_exception_message", cycleExceptionMessage);
         out.addProperty("cycle_downstream_lowering_attempted", false);
 
         String invalidException = null;
