@@ -181,8 +181,12 @@ neoForge {
             sourceSet(sourceSets.main)
         }
         // Keep the early transformation service on a distinct path in dev, mirroring the packaged wrapper.
+        // ModDev groups every source set listed for one local mod into the same fake mod/JAR exposed through
+        // MOD_CLASSES. trace-core therefore has the same SERVICE-layer visibility in dev as the classes that
+        // bootstrap/build.gradle embeds in the distributable wrapper JAR.
         'boot_optim_bootstrap' {
             sourceSet(project(':bootstrap').sourceSets.main)
+            sourceSet(project(':trace-core').sourceSets.main)
         }
     }
 }
