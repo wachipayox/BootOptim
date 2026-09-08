@@ -23,6 +23,7 @@ final class StructuredBootTraceBridgeTest {
     @AfterEach
     void cleanupBridge() {
         StructuredBootTraceBridge.unpublishForTest();
+        System.clearProperty(StructuredBootTrace.MODE_PROPERTY);
     }
 
     @Test
@@ -39,6 +40,7 @@ final class StructuredBootTraceBridgeTest {
         StructuredBootTrace trace = StructuredBootTrace.create(new StructuredBootTrace.Config(
                 StructuredBootTrace.Mode.PROFILE, output, 64, "bridge_test", "regular_probe", "none"));
         assertTrue(StructuredBootTraceBridge.publishForTest(trace));
+        System.setProperty(StructuredBootTrace.MODE_PROPERTY, "profile");
 
         URL[] urls = new URL[] {regularJar.toUri().toURL()};
         try (URLClassLoader regularLoader = new URLClassLoader(urls, ClassLoader.getPlatformClassLoader())) {
