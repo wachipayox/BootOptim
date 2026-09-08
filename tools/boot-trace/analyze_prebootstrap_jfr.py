@@ -72,7 +72,7 @@ def parse_time_ns(value: str) -> int:
     match = re.fullmatch(r"(.+?\.)(\d+)(Z|[+-]\d\d:\d\d)", text)
     if match:
         fraction_ns = int((match.group(2) + "000000000")[:9])
-        base_text = match.group(1) + ("+00:00" if match.group(3) == "Z" else match.group(3))
+        base_text = match.group(1)[:-1] + ("+00:00" if match.group(3) == "Z" else match.group(3))
         base = datetime.fromisoformat(base_text)
         if base.tzinfo is None:
             base = base.replace(tzinfo=timezone.utc)
