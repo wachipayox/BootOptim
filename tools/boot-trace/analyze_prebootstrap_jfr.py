@@ -63,6 +63,8 @@ def frame_name(frame: dict) -> str:
     class_name = holder.get("name") if isinstance(holder, dict) else str(holder)
     if not class_name:
         class_name = method.get("typeName") or method.get("className") or "?"
+    # JFR JSON uses JVM-internal slash names for Java types.
+    class_name = class_name.replace("/", ".")
     return f"{class_name}.{method_name}"
 
 
