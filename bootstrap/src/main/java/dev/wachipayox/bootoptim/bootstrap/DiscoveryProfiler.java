@@ -62,6 +62,9 @@ final class DiscoveryProfiler {
         if (taskId != 0L) {
             TRACE.endTask(taskId, phase, -1L, "fml_discovery_end");
         }
+        if ("dependency_discovery".equals(phase)) {
+            PostDiscoveryResidualTraceHooks.beginAtDependencyDiscoveryEnd();
+        }
         System.out.printf("BOOTOPTIM_STARTUP phase=%s_end uptime_ms=%d elapsed_ms=%.3f%n",
                 phase, ManagementFactory.getRuntimeMXBean().getUptime(), elapsedMs);
     }
