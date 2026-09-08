@@ -53,7 +53,7 @@ jobs:
             --sha256 "$EXACT_PACK_SHA256" \
             --extract exact-pack-run
 
-      - name: Build bounded provenance-preserving model fixture
+      - name: Build 4096-root provenance-preserving model fixture
         shell: bash
         run: |
           set -euo pipefail
@@ -66,7 +66,7 @@ jobs:
           python tools/model-class-replay/prepare_fixture.py \
             --pack-root "$pack_root" \
             --output-dir model-replay-fixture \
-            --limit 24
+            --limit 4096
 
       - name: Run real FML replay with opt-in allocation stacks
         shell: bash
@@ -101,13 +101,15 @@ jobs:
           replay = json.loads(Path('model-replay-out/alloc/replay.json').read_text())
           alloc = json.loads(Path('model-replay-out/alloc/allocation-summary.json').read_text())
           controlled = json.loads(Path('model-replay-out/alloc/controlled-fallback-error.json').read_text())
-          assert replay['semantic_sha256'] == '502282f60acdc16beaaf312a81fd76958a8a7ca9504f1ee5305e970eb5fc2050', replay['semantic_sha256']
+          assert replay['fixture_exact_pack_sha256'] == '7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639'
           assert replay['stock_repeat_equal'] and replay['identity_candidate_equal'] and replay['fault_probe_detected']
           assert controlled['missing_parent_resolver_called'] and controlled['missing_parent_exception_class']
           assert controlled['cycle_observed'] and controlled['cycle_exception_class']
           assert controlled['invalid_json_exception_class']
-          assert alloc['deserializer_parse_path']['samples'] > 0
+          assert alloc['replay_scope']['models'] >= 4000, alloc['replay_scope']
+          assert alloc['deserializer_parse_path']['samples'] >= 100, alloc['deserializer_parse_path']
           print('semantic digest:', replay['semantic_sha256'])
+          print('models:', alloc['replay_scope']['models'])
           print('parse exact allocated bytes:', alloc['replay_scope']['stock_1_exact_current_thread_allocated_bytes'])
           print('growth/resize sample weight %:', alloc['deserializer_parse_path']['growth_resize_percent'])
           print('diagnostic decision:', alloc['decision_hint'])
