@@ -500,7 +500,11 @@ jobs:
             # Reduced diagnostic closures must fail fast when their missing
             # lifecycle/resource contract prevents title readiness; they are not
             # allowed to consume the full benchmark timeout.
-            run_timeout=300
+            # The complete hosted pack reaches the same endpoint in about 90 s.
+            # A complement that cannot do so within three minutes is not a
+            # useful comparable point; retain enough headroom for a valid
+            # workload without pinning a runner at an error screen for 300 s.
+            run_timeout=180
           fi
           run_args=(
             --variant '${{ matrix.variant }}'

@@ -318,3 +318,9 @@ property. If NeoForge actually opens `LoadingErrorScreen`, BootOptim records the
 screen and stops the client immediately. It exists to prevent an already-invalid
 reduced variant from consuming the full hosted timeout; it is never enabled in
 a performance comparison.
+
+Scaling-mode launches have a three-minute ceiling. The complete hosted pack has
+already reached the same menu endpoint in roughly 90 seconds, so a reduced
+variant that does not reach it within 180 seconds is not a comparable
+attribution point; its timeout is recorded as a contract/lifecycle failure, not
+as a startup time.
