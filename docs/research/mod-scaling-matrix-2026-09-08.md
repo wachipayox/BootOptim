@@ -151,3 +151,13 @@ that the excluded mod is cheap. This keeps the experiment reproducible without
 hand-maintaining another list of 160 IDs. The next hosted run should compare
 `baseline`, `full`, and four `partition-*` variants with one fresh repetition;
 the goal is localization of the broad scaling block, not a product claim.
+
+The first broad-partition attempt exposed a second contract class before any
+optimization could be judged: a reduced set can satisfy declared required
+dependencies and still be invalid. Iris reached a Sodium API class without
+Sodium in one partition; another activated AnalogAudio without its `flite`
+native library; another let Bits'n'Bobs reference Create classes that were
+absent. These are pack-validity failures, not startup measurements. The
+planner therefore keeps such variants out of the performance ledger and now
+includes optional dependencies that are actually present in the source pack,
+while recording unmaterializable roots explicitly.
