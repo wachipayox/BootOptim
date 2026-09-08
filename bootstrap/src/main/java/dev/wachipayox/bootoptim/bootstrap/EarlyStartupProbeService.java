@@ -25,6 +25,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
         // ModLauncher's GAMEDIR is not populated yet while SERVICE implementations are constructed.
         // Delay every filesystem decision until initialize(IEnvironment), which runs after argument parsing.
         BootOptimRuntimeInfo.version();
+        StructuredBootTraceBridge.publishIfEnabled();
         mark("transformation_service_construct");
     }
 
