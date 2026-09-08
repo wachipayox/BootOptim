@@ -289,6 +289,27 @@ def parse_group(raw: str) -> tuple[str, list[str]]:
     return name.strip(), roots
 
 
+def expand_compatibility_exclusions(
+    excluded: set[str], compatibility_groups: list[list[str]],
+) -> set[str]:
+    """Expand a complement exclusion to whole evidence-backed runtime families.
+
+    A complement must not leave one member of a known runtime family behind:
+    the surviving member could pull the excluded member through an undeclared
+    integration edge and turn the result into a misleading partial pack.
+    """
+    expanded = set(excluded)
+    changed = True
+    while changed:
+        changed = False
+        for group in compatibility_groups:
+            if expanded.intersection(group):
+                before = len(expanded)
+                expanded.update(group)
+                changed |= len(expanded) != before
+    return expanded
+
+
 def build_plan(
     pack_dir: Path,
     groups: list[str],
@@ -393,6 +414,75 @@ def build_plan(
                 "excluded_roots": excluded_roots,
                 "mod_ids": sorted(selected),
                 "artifacts": artifact_selection(records, selected),
+                "missing_dependencies": [],
+            })
+
+        # A subset partition is useful for locating broad attribution blocks,
+        # but it is commonly not a runnable Minecraft pack: mods often have
+        # undeclared runtime references to content outside their loader
+        # dependency closure.  Emit complements as the safer follow-up: they
+        # retain most of the real pack and remove only one deterministic block.
+        # These are selected explicitly by the workflow (they do not alter the
+        # existing partition IDs or their diagnostic-only semantics).
+        for index in range(balanced_partitions):
+            assigned = set(all_ids[index::balanced_partitions])
+            excluded = expand_compatibility_exclusions(
+                assigned | explicitly_excluded,
+                parsed_compatibility_groups,
+            )
+            candidate_roots = [mod_id for mod_id in all_ids if mod_id not in excluded]
+            runnable_roots = []
+            excluded_records = []
+            for root in sorted(assigned | explicitly_excluded):
+                reason = "operator_excluded" if root in explicitly_excluded else "complement_excluded"
+                excluded_records.append({
+                    "id": root,
+                    "reason": reason,
+                    "missing_dependencies": [],
+                })
+            for group in parsed_compatibility_groups:
+                if assigned.intersection(group):
+                    for root in sorted(set(group) - assigned - explicitly_excluded):
+                        excluded_records.append({
+                            "id": root,
+                            "reason": "compatibility_group_excluded",
+                            "missing_dependencies": [],
+                        })
+            for root in candidate_roots:
+                _, root_missing = required_closure(
+                    records,
+                    [root],
+                    parsed_compatibility_groups,
+                    excluded,
+                )
+                if root_missing:
+                    excluded_records.append({
+                        "id": root,
+                        "reason": "depends_on_excluded_or_missing",
+                        "missing_dependencies": root_missing,
+                    })
+                else:
+                    runnable_roots.append(root)
+            selected, missing = required_closure(
+                records,
+                runnable_roots,
+                parsed_compatibility_groups,
+                excluded,
+            )
+            if missing:
+                raise ValueError(
+                    f"balanced complement {index + 1} has an unexpected missing dependency closure: {missing}"
+                )
+            variants.append({
+                "id": f"complement-{index + 1}",
+                "kind": "balanced_complement",
+                "roots": sorted(candidate_roots),
+                "runnable_roots": sorted(runnable_roots),
+                "excluded_roots": sorted(
+                    excluded_records,
+                    key=lambda item: (item["id"], item["reason"]),
+                ),
+                "mod_ids": sorted(selected),
                 "missing_dependencies": [],
             })
 

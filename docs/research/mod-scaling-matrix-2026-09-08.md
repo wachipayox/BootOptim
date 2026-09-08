@@ -81,6 +81,14 @@ the aggregate marks those counts explicitly. Such a run cannot authorize gamepla
 production optimization; it only identifies which startup phases disappear or scale when a mod
 closure is removed.
 
+The planner also emits `complement-1` … `complement-N` when `--balanced-partitions N` is used. A
+complement keeps the rest of the exact pack and removes one deterministic block of roots; known runtime
+compatibility families are removed together. If a surviving root requires an omitted or undeclared runtime
+partner, that root is recorded in `excluded_roots` with `depends_on_excluded_or_missing` instead of being
+silently included. Complements are the preferred next attribution workload because they preserve the
+resource, renderer and UI environment much more faithfully than a subset-only partition. They still need
+the same menu, resource-contract and zero-error gates before their timings enter the ledger.
+
 ## Validation
 
 The planner/materializer are covered by the existing Python contract suite: metadata dependency
@@ -269,3 +277,23 @@ explicit partition exclusions block the same ID when reached through optional
 dependencies, and the next dispatch keeps the runtime family
 `menu-browser=fancymenu,mcef` together. The run remains contract evidence only;
 no p2/p3 startup value is used for attribution or promotion.
+
+### Run 34251855587 disposition
+
+The follow-up run used all five evidence-backed families (`menu-browser`,
+`tfmg-bridge`, `observable-runtime`, `render`, and `create-ui`) and excluded
+`analogaudio`. Both selected subset partitions materialized the expected
+families, reached `Minecraft resource reload: FINISHED`, and then remained
+alive for the 300-second diagnostic timeout without emitting the `TitleScreen`
+marker. Their render threads were idle in `GLFW.glfwWaitEventsTimeout`, not
+busy doing startup work. This is a reduced-pack lifecycle/semantic-contract
+failure, not a slow startup measurement.
+
+The baseline in the same hosted workflow reached `main_menu` at 17,034 ms and
+also logged the hosted OpenAL failure, proving OpenAL is not sufficient to
+explain the partition outcome. The subset variants also emitted a TFMG model
+parse error, but that error is not by itself causal because the full pack has
+shown the same model warning while reaching the menu. No p2/p3 time is admitted
+to the performance ledger. The next matrix should select `baseline`, `full`,
+and `complement-*` variants; subset partitions remain useful only as explicitly
+diagnostic evidence for phase disappearance.

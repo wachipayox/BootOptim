@@ -102,6 +102,55 @@ class ScalingPlanTest(unittest.TestCase):
                 "missing_dependencies": ["not-shipped"],
             }])
 
+    def test_balanced_complements_retain_the_other_pack_block(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "base.jar", "base")
+            make_mod(mods / "feature.jar", "feature", ["base"])
+            make_mod(mods / "other.jar", "other")
+            make_mod(mods / "last.jar", "last")
+
+            plan = PLAN.build_plan(pack, [], [], balanced_partitions=2)
+            by_id = {variant["id"]: variant for variant in plan["variants"]}
+
+            # complement-1 removes base/last; feature is explicitly recorded as
+            # unmaterializable rather than silently pretending it can run.
+            self.assertEqual(by_id["complement-1"]["kind"], "balanced_complement")
+            self.assertEqual(by_id["complement-1"]["mod_ids"], ["other"])
+            self.assertTrue(any(
+                item["id"] == "feature"
+                and item["reason"] == "depends_on_excluded_or_missing"
+                for item in by_id["complement-1"]["excluded_roots"]
+            ))
+            # complement-2 removes feature/other, while the remaining base and
+            # last form a valid pack closure.
+            self.assertEqual(by_id["complement-2"]["mod_ids"], ["base", "last"])
+
+    def test_balanced_complements_exclude_runtime_families_together(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "alpha.jar", "alpha")
+            make_mod(mods / "beta.jar", "beta")
+            make_mod(mods / "other.jar", "other")
+
+            plan = PLAN.build_plan(
+                pack,
+                [],
+                [],
+                balanced_partitions=3,
+                compatibility_groups=["family=alpha,beta"],
+            )
+            variant = next(item for item in plan["variants"] if item["id"] == "complement-1")
+            excluded = {item["id"] for item in variant["excluded_roots"]}
+            self.assertIn("alpha", excluded)
+            self.assertIn("beta", excluded)
+            self.assertNotIn("alpha", variant["mod_ids"])
+            self.assertNotIn("beta", variant["mod_ids"])
+
     def test_missing_required_dependency_is_reported_not_silently_dropped(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)
