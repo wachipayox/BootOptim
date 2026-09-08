@@ -199,7 +199,14 @@ def parse_group(raw: str) -> tuple[str, list[str]]:
     return name.strip(), roots
 
 
-def build_plan(pack_dir: Path, groups: list[str], baseline: list[str]) -> dict:
+def build_plan(
+    pack_dir: Path,
+    groups: list[str],
+    baseline: list[str],
+    balanced_partitions: int = 0,
+) -> dict:
+    if balanced_partitions < 0:
+        raise ValueError("balanced_partitions must not be negative")
     records, artifact_to_ids, fingerprint = scan_pack(pack_dir.resolve())
     variants = []
 
@@ -244,6 +251,23 @@ def build_plan(pack_dir: Path, groups: list[str], baseline: list[str]) -> dict:
             "artifacts": artifact_selection(records, selected),
             "missing_dependencies": missing,
         })
+    if balanced_partitions:
+        if balanced_partitions > len(all_ids):
+            raise ValueError("balanced_partitions cannot exceed the number of mod ids")
+        # Keep root assignment stable across runs.  Dependency closure is still
+        # computed for each partition, so a required dependency may correctly
+        # appear in more than one partition rather than being silently omitted.
+        for index in range(balanced_partitions):
+            roots = all_ids[index::balanced_partitions]
+            selected, missing = required_closure(records, roots)
+            variants.append({
+                "id": f"partition-{index + 1}",
+                "kind": "balanced_partition",
+                "roots": roots,
+                "mod_ids": sorted(selected),
+                "artifacts": artifact_selection(records, selected),
+                "missing_dependencies": missing,
+            })
 
     return {
         "schema": 1,
@@ -273,9 +297,15 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--baseline", action="append", default=[], help="Required baseline mod id; repeatable")
     parser.add_argument("--group", action="append", default=[], help="NAME=mod1,mod2 interaction group; repeatable")
+    parser.add_argument(
+        "--balanced-partitions",
+        type=int,
+        default=0,
+        help="Add deterministic round-robin root partitions; repeatable closures expose broad scaling blocks",
+    )
     args = parser.parse_args()
     try:
-        plan = build_plan(args.pack_dir, args.group, args.baseline)
+        plan = build_plan(args.pack_dir, args.group, args.baseline, args.balanced_partitions)
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         raise SystemExit(str(error)) from error
     serialized = json.dumps(plan, indent=2, sort_keys=True) + "\n"

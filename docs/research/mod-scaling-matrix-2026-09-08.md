@@ -135,3 +135,15 @@ small groups. This is not evidence that they are irrelevant in the full pack;
 it means the next experiment must partition the remaining 160 artifacts into
 larger functional groups (Create/content, client/render, resource/model and
 UI/utility) before selecting an optimization target.
+
+## Automatic broad partitions
+
+The planner now supports `--balanced-partitions N`. It assigns the sorted mod
+ID inventory to deterministic round-robin root partitions and computes a full
+required-dependency closure for each partition. A dependency can therefore be
+present in multiple partitions when the metadata requires it; a partition with
+missing dependencies is diagnostic-only and must not be treated as a clean
+performance point. This keeps the attribution experiment reproducible without
+hand-maintaining another list of 160 IDs. The next hosted run should compare
+`baseline`, `full`, and four `partition-*` variants with one fresh repetition;
+the goal is localization of the broad scaling block, not a product claim.

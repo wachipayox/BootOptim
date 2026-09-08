@@ -63,6 +63,24 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertEqual(by_id["group-ui"]["mod_ids"], ["base", "feature", "other"])
             self.assertEqual(by_id["baseline"]["artifacts"], ["base.jar"])
 
+    def test_balanced_partitions_are_deterministic_and_preserve_dependency_closure(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "base.jar", "base")
+            make_mod(mods / "feature.jar", "feature", ["base"])
+            make_mod(mods / "other.jar", "other")
+            make_mod(mods / "last.jar", "last")
+
+            plan = PLAN.build_plan(pack, [], [], balanced_partitions=2)
+            by_id = {variant["id"]: variant for variant in plan["variants"]}
+            self.assertEqual(by_id["partition-1"]["roots"], ["base", "last"])
+            self.assertEqual(by_id["partition-2"]["roots"], ["feature", "other"])
+            self.assertEqual(by_id["partition-1"]["mod_ids"], ["base", "last"])
+            self.assertEqual(by_id["partition-2"]["mod_ids"], ["base", "feature", "other"])
+            self.assertEqual(by_id["partition-2"]["missing_dependencies"], [])
+
     def test_missing_required_dependency_is_reported_not_silently_dropped(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)

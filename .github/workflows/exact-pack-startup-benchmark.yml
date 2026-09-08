@@ -56,6 +56,11 @@ on:
         required: false
         default: ''
         type: string
+      scaling_partitions:
+        description: Number of deterministic broad root partitions for scaling mode
+        required: false
+        default: '0'
+        type: string
 
 permissions:
   contents: read
@@ -82,6 +87,7 @@ jobs:
       mode: ${{ steps.plan.outputs.mode }}
       scaling_baseline: ${{ steps.plan.outputs.scaling_baseline }}
       scaling_groups: ${{ steps.plan.outputs.scaling_groups }}
+      scaling_partitions: ${{ steps.plan.outputs.scaling_partitions }}
     env:
       PR_BODY: ${{ github.event.pull_request.body || '' }}
       DISPATCH_MODE: ${{ inputs.mode || '' }}
@@ -92,6 +98,7 @@ jobs:
       DISPATCH_SCALING_VARIANTS: ${{ inputs.scaling_variants || '' }}
       DISPATCH_SCALING_BASELINE: ${{ inputs.scaling_baseline || '' }}
       DISPATCH_SCALING_GROUPS: ${{ inputs.scaling_groups || '' }}
+      DISPATCH_SCALING_PARTITIONS: ${{ inputs.scaling_partitions || '' }}
     steps:
       - name: Build benchmark matrix
         id: plan
@@ -117,6 +124,7 @@ jobs:
               scaling_variants_text = os.environ.get('DISPATCH_SCALING_VARIANTS', '').strip()
               scaling_baseline = os.environ.get('DISPATCH_SCALING_BASELINE', '').strip()
               scaling_groups = os.environ.get('DISPATCH_SCALING_GROUPS', '').strip()
+              scaling_partitions = os.environ.get('DISPATCH_SCALING_PARTITIONS', '').strip() or '0'
           else:
               mode_values = directive('exact-pack-mode')
               mode = (mode_values[-1] if mode_values else 'smoke').strip().lower()
@@ -128,6 +136,15 @@ jobs:
               scaling_variants_text = ','.join(directive('exact-pack-scaling-variant')).strip()
               scaling_baseline = ','.join(directive('exact-pack-scaling-baseline')).strip()
               scaling_groups = ';'.join(directive('exact-pack-scaling-group')).strip()
+              partition_values = directive('exact-pack-scaling-partitions')
+              scaling_partitions = (partition_values[-1] if partition_values else '0').strip() or '0'
+
+          try:
+              scaling_partitions_value = int(scaling_partitions)
+          except ValueError as exc:
+              raise SystemExit(f'Invalid exact-pack-scaling-partitions: {scaling_partitions}') from exc
+          if scaling_partitions_value < 0:
+              raise SystemExit('exact-pack-scaling-partitions must not be negative')
 
           if mode not in {'smoke', 'ab', 'paired', 'scaling'}:
               raise SystemExit(f'Unsupported exact-pack mode: {mode}')
@@ -176,6 +193,7 @@ jobs:
               output.write(f'mode={mode}\n')
               output.write(f'scaling_baseline={scaling_baseline}\n')
               output.write(f'scaling_groups={scaling_groups}\n')
+              output.write(f'scaling_partitions={scaling_partitions_value}\n')
           print(json.dumps({'mode': mode, 'runs': include}, indent=2))
 
   fixture:
@@ -282,6 +300,7 @@ jobs:
       BOOTOPTIM_EXACT_MODE: ${{ needs.plan.outputs.mode }}
       BOOTOPTIM_SCALING_BASELINE: ${{ needs.plan.outputs.scaling_baseline }}
       BOOTOPTIM_SCALING_GROUPS: ${{ needs.plan.outputs.scaling_groups }}
+      BOOTOPTIM_SCALING_PARTITIONS: ${{ needs.plan.outputs.scaling_partitions }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -424,6 +443,9 @@ jobs:
             for group in "${groups[@]}"; do
               [[ -n "$group" ]] && plan_args+=(--group "$group")
             done
+          fi
+          if [[ "${BOOTOPTIM_SCALING_PARTITIONS:-0}" != "0" ]]; then
+            plan_args+=(--balanced-partitions "$BOOTOPTIM_SCALING_PARTITIONS")
           fi
           python scripts/exact-pack/plan_scaling.py "${plan_args[@]}"
           rm -rf .exact-pack-scaling-variant
