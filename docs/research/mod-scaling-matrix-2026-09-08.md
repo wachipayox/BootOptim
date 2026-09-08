@@ -244,3 +244,28 @@ validation dispatch must also pass the evidence-backed runtime families
 `tfmg-bridge=we_companion,tfmg` and
 `observable-runtime=observable,kotlinforforge`; until those variants reach a
 valid menu endpoint, no partition timing is interpreted.
+
+### Run 34250484156 disposition
+
+The co-located-artifact fix was exercised with the four compatibility families
+(`render`, `create-ui`, `tfmg-bridge` and `observable-runtime`). It removed the
+previous dependency omissions: both failed partitions now materialized
+MoreCulling with ClothConfig, TFMG with `we_companion`, and Observable with
+KotlinForForge. They still did not produce a valid endpoint, so their times are
+not admitted.
+
+The remaining failure is a runtime-family boundary. Partition-2 contained
+FancyMenu but not MCEF; it completed FancyMenu's resource reload and then
+remained on the loading/error-screen path without emitting the title marker.
+Partition-3 contained MCEF but not FancyMenu and likewise never emitted the
+title marker. Partition-3 also reintroduced AnalogAudio through a present
+optional edge even though `analogaudio` was excluded as a partition root; the
+hosted Linux run logged its incompatible Create registration and OpenAL
+environment. This proves that a root-only exclusion is insufficient when
+optional edges are materialized.
+
+The planner is therefore being tightened in two ways before another matrix:
+explicit partition exclusions block the same ID when reached through optional
+dependencies, and the next dispatch keeps the runtime family
+`menu-browser=fancymenu,mcef` together. The run remains contract evidence only;
+no p2/p3 startup value is used for attribution or promotion.

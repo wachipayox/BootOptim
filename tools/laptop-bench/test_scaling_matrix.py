@@ -247,6 +247,30 @@ class ScalingPlanTest(unittest.TestCase):
                 "missing_dependencies": [],
             }])
 
+    def test_explicit_partition_exclusion_blocks_present_optional_dependency(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            metadata = (
+                'modLoader="javafml"\n'
+                '[[mods]]\nmodId="feature"\nversion="1.0"\n'
+                '[[dependencies.feature]]\nmodId="audio"\ntype="optional"\n'
+            )
+            with zipfile.ZipFile(mods / "feature.jar", "w") as archive:
+                archive.writestr("META-INF/neoforge.mods.toml", metadata)
+            make_mod(mods / "audio.jar", "audio")
+
+            plan = PLAN.build_plan(pack, [], [], balanced_partitions=1, excluded_roots=["audio"])
+            variant = next(item for item in plan["variants"] if item["id"] == "partition-1")
+            self.assertNotIn("audio", variant["mod_ids"])
+            self.assertNotIn("audio.jar", variant["artifacts"])
+            self.assertEqual(variant["excluded_roots"], [{
+                "id": "audio",
+                "reason": "operator_excluded",
+                "missing_dependencies": [],
+            }])
+
     def test_source_pack_rejects_bootoptim_duplicate(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)

@@ -221,14 +221,22 @@ def required_closure(
     records: dict[str, list[ModRecord]],
     roots: list[str],
     compatibility_groups: list[list[str]] | None = None,
+    excluded_ids: set[str] | None = None,
 ) -> tuple[set[str], list[str]]:
     selected: set[str] = set()
     missing: set[str] = set()
     pending = list(roots)
     groups = compatibility_groups or []
+    excluded = excluded_ids or set()
     while pending:
         mod_id = pending.pop()
         if mod_id in PLATFORM_PROVIDED_MOD_IDS:
+            continue
+        if mod_id in excluded:
+            # An explicitly host-incompatible mod is absent from this
+            # partition. Required edges become an unmaterializable root;
+            # optional edges are filtered below before they reach pending.
+            missing.add(mod_id)
             continue
         if mod_id in selected:
             continue
@@ -256,7 +264,7 @@ def required_closure(
             dependencies.update(
                 dependency
                 for dependency in record.optional_dependencies.get(mod_id, set())
-                if dependency in records
+                if dependency in records and dependency not in excluded
             )
         for dependency in dependencies:
             if dependency not in selected:
@@ -348,7 +356,12 @@ def build_plan(
             runnable_roots = []
             excluded_roots = []
             for root in roots:
-                _, root_missing = required_closure(records, [root], parsed_compatibility_groups)
+                _, root_missing = required_closure(
+                    records,
+                    [root],
+                    parsed_compatibility_groups,
+                    explicitly_excluded,
+                )
                 if root in explicitly_excluded:
                     excluded_roots.append({
                         "id": root,
@@ -362,7 +375,12 @@ def build_plan(
                     })
                 else:
                     runnable_roots.append(root)
-            selected, missing = required_closure(records, runnable_roots, parsed_compatibility_groups)
+            selected, missing = required_closure(
+                records,
+                runnable_roots,
+                parsed_compatibility_groups,
+                explicitly_excluded,
+            )
             if missing:
                 raise ValueError(
                     f"balanced partition {index + 1} has an unexpected missing dependency closure: {missing}"
