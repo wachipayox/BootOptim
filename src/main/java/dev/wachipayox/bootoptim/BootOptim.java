@@ -2,6 +2,8 @@ package dev.wachipayox.bootoptim;
 
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
+import dev.wachipayox.bootoptim.optimization.client.MoreCullingShapeFaceDedup;
+import dev.wachipayox.bootoptim.optimization.client.MoreCullingShapeFaceObjectCache;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -19,6 +21,8 @@ public final class BootOptim {
 
     public BootOptim() {
         StartupProfiler.markModEntrypoint();
+        MoreCullingShapeFaceDedup.beginStartup();
+        MoreCullingShapeFaceObjectCache.beginStartup();
         if (StartupProfiler.isEnabled() && FMLEnvironment.dist == Dist.CLIENT) {
             ClientStartupHooks.install();
         }
