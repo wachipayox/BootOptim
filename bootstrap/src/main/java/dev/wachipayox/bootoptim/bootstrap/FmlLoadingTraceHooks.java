@@ -15,6 +15,7 @@ public final class FmlLoadingTraceHooks {
         if (!TRACE.isEnabled() || COMMON_PREFIX_TASK.get() != 0L) return;
         try {
             long predecessor = NeoForgeLanguageTraceHooks.builtinLanguageTaskId();
+            if (predecessor == 0L) predecessor = MinecraftClientTransitionTraceHooks.clientEntryTaskId();
             if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.validateTaskId();
             if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.bootstrapTaskId();
             if (predecessor == 0L) predecessor = DiscoveryProfiler.dependencyTaskId();
@@ -25,7 +26,6 @@ public final class FmlLoadingTraceHooks {
                 TRACE.endTask(taskId, "neoforge_common_modloader_pregather", -1L, "duplicate_common_prefix_hook");
             }
         } catch (Throwable ignored) {
-            // Diagnostics must never become a startup dependency.
         }
     }
 
@@ -45,6 +45,7 @@ public final class FmlLoadingTraceHooks {
         try {
             long predecessor = COMMON_PREFIX_TASK.get();
             if (predecessor == 0L) predecessor = NeoForgeLanguageTraceHooks.builtinLanguageTaskId();
+            if (predecessor == 0L) predecessor = MinecraftClientTransitionTraceHooks.clientEntryTaskId();
             if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.validateTaskId();
             if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.bootstrapTaskId();
             if (predecessor == 0L) predecessor = DiscoveryProfiler.dependencyTaskId();
@@ -52,12 +53,9 @@ public final class FmlLoadingTraceHooks {
             long taskId = TRACE.beginTask(
                     "fml_gather_and_initialize_mods", 0L, dependencies, null, null, -1L);
             if (!GATHER_TASK.compareAndSet(0L, taskId) && taskId != 0L) {
-                // A second invocation is not expected on the client startup path. Close the redundant diagnostic
-                // task rather than leaving an unbalanced pair; never affect the underlying load.
                 TRACE.endTask(taskId, "fml_gather_and_initialize_mods", -1L, "duplicate_gather_hook");
             }
         } catch (Throwable ignored) {
-            // Diagnostics must never become a startup dependency.
         }
     }
 

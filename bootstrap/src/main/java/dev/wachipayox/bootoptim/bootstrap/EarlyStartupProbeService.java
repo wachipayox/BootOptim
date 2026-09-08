@@ -22,8 +22,6 @@ public final class EarlyStartupProbeService implements ITransformationService {
             || Boolean.getBoolean(BENCHMARK_PROPERTY);
 
     public EarlyStartupProbeService() {
-        // ModLauncher's GAMEDIR is not populated yet while SERVICE implementations are constructed.
-        // Delay every filesystem decision until initialize(IEnvironment), which runs after argument parsing.
         BootOptimRuntimeInfo.version();
         mark("transformation_service_construct");
     }
@@ -67,21 +65,17 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
-        // Default/off mode installs no diagnostic transformer at all. Benchmark/profile/development share the same
-        // boundaries; trace-core itself preserves benchmark's no-clock/no-buffer/no-JSON per-event contract.
         return StructuredBootTrace.global().isEnabled()
                 ? List.of(
                         new MinecraftBootstrapTraceTransformer(),
+                        new MinecraftClientTransitionTraceTransformer(),
                         new NeoForgeLanguageTraceTransformer(),
                         new FmlLoadingTraceTransformer())
                 : List.of();
     }
 
     private static void mark(String phase) {
-        if (!ENABLED) {
-            return;
-        }
-
+        if (!ENABLED) return;
         Runtime runtime = Runtime.getRuntime();
         long usedBytes = runtime.totalMemory() - runtime.freeMemory();
         long uptimeMs = ManagementFactory.getRuntimeMXBean().getUptime();

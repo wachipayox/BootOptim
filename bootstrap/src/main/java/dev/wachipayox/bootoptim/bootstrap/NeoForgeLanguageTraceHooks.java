@@ -13,7 +13,8 @@ public final class NeoForgeLanguageTraceHooks {
     public static void beginBuiltinLanguages() {
         if (!TRACE.isEnabled() || BUILTIN_LANGUAGE_TASK.get() != 0L) return;
         try {
-            long predecessor = MinecraftBootstrapTraceHooks.validateTaskId();
+            long predecessor = MinecraftClientTransitionTraceHooks.clientEntryTaskId();
+            if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.validateTaskId();
             if (predecessor == 0L) predecessor = MinecraftBootstrapTraceHooks.bootstrapTaskId();
             if (predecessor == 0L) predecessor = DiscoveryProfiler.dependencyTaskId();
             long[] dependencies = predecessor == 0L ? null : new long[] { predecessor };
@@ -23,7 +24,6 @@ public final class NeoForgeLanguageTraceHooks {
                 TRACE.endTask(taskId, "neoforge_builtin_languages", -1L, "duplicate_builtin_language_hook");
             }
         } catch (Throwable ignored) {
-            // Diagnostics must never become a startup dependency.
         }
     }
 
