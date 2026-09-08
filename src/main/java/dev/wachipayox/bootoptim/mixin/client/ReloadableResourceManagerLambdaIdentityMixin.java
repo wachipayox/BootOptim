@@ -7,6 +7,7 @@ import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.server.packs.resources.ReloadableResourceManager;
 import net.minecraft.util.Unit;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -19,6 +20,9 @@ import java.util.concurrent.Executor;
 /** Diagnostic-only registration/callsite identity probe; listener behavior is never wrapped. */
 @Mixin(ReloadableResourceManager.class)
 abstract class ReloadableResourceManagerLambdaIdentityMixin {
+    @Shadow
+    private List<PreparableReloadListener> listeners;
+
     @Inject(method = "registerReloadListener", at = @At("HEAD"), require = 0)
     private void bootoptim$captureMinecraftLambdaRegistration(
             PreparableReloadListener listener,
@@ -36,7 +40,6 @@ abstract class ReloadableResourceManagerLambdaIdentityMixin {
         if (!MinecraftReloadLambdaIdentityProfiler.enabled()) {
             return;
         }
-        ReloadableResourceManager self = (ReloadableResourceManager) (Object) this;
-        MinecraftReloadLambdaIdentityProfiler.onCreateReload(self.getListeners());
+        MinecraftReloadLambdaIdentityProfiler.onCreateReload(listeners);
     }
 }
