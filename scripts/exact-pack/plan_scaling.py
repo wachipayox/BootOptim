@@ -31,6 +31,7 @@ class ModRecord:
     mod_ids: list[str]
     version: str | None
     dependencies: dict[str, set[str]] = field(default_factory=dict)
+    optional_dependencies: dict[str, set[str]] = field(default_factory=dict)
     sha256: str = ""
 
 
@@ -47,7 +48,9 @@ def _value(raw: str) -> str | None:
     return match.group(1) if match else None
 
 
-def read_metadata(jar: Path) -> tuple[list[tuple[str, str | None]], dict[str, set[str]]]:
+def read_metadata(
+    jar: Path,
+) -> tuple[list[tuple[str, str | None]], dict[str, set[str]], dict[str, set[str]]]:
     metadata_name = None
     with zipfile.ZipFile(jar) as archive:
         for candidate in ("META-INF/neoforge.mods.toml", "META-INF/mods.toml"):
@@ -55,7 +58,7 @@ def read_metadata(jar: Path) -> tuple[list[tuple[str, str | None]], dict[str, se
                 metadata_name = candidate
                 break
         if metadata_name is None:
-            return [], {}
+            return [], {}, {}
         text = archive.read(metadata_name).decode("utf-8", errors="replace")
 
     section = ""
@@ -63,7 +66,23 @@ def read_metadata(jar: Path) -> tuple[list[tuple[str, str | None]], dict[str, se
     current_dependency: str | None = None
     mods: list[tuple[str, str | None]] = []
     dependencies: dict[str, set[str]] = {}
-    dependency_mandatory = True
+    optional_dependencies: dict[str, set[str]] = {}
+    dependency_mode = "required"
+
+    def record_dependency() -> None:
+        if not current_mod or not current_dependency:
+            return
+        required = dependencies.setdefault(current_mod, set())
+        optional = optional_dependencies.setdefault(current_mod, set())
+        if dependency_mode == "required":
+            required.add(current_dependency)
+            optional.discard(current_dependency)
+        elif dependency_mode == "optional":
+            optional.add(current_dependency)
+            required.discard(current_dependency)
+        else:
+            required.discard(current_dependency)
+            optional.discard(current_dependency)
 
     for original in text.splitlines():
         line = original.split("#", 1)[0].strip()
@@ -78,7 +97,7 @@ def read_metadata(jar: Path) -> tuple[list[tuple[str, str | None]], dict[str, se
         if section_match:
             section = section_match.group(1)
             current_dependency = None
-            dependency_mandatory = True
+            dependency_mode = "required"
             if section.startswith("dependencies."):
                 owner = section[len("dependencies."):].split(".", 1)[0].strip()
                 # NeoForge's metadata commonly quotes the mod id in a
@@ -106,29 +125,24 @@ def read_metadata(jar: Path) -> tuple[list[tuple[str, str | None]], dict[str, se
         elif section.startswith("dependencies."):
             if key == "modId" and value:
                 current_dependency = value
-                if dependency_mandatory:
-                    dependencies.setdefault(current_mod or "", set())
-                    dependencies[current_mod or ""].add(value)
+                record_dependency()
             elif key == "mandatory":
                 mandatory_text = raw_value.strip().strip('"').strip("'").lower()
-                dependency_mandatory = mandatory_text == "true"
-                if current_mod and current_dependency:
-                    dependencies.setdefault(current_mod, set())
-                    if dependency_mandatory:
-                        dependencies[current_mod].add(current_dependency)
-                    else:
-                        dependencies[current_mod].discard(current_dependency)
+                dependency_mode = "required" if mandatory_text == "true" else "optional"
+                record_dependency()
             elif key == "type" and value:
                 # NeoForge's current schema uses type=required/optional/
                 # incompatible/discouraged instead of mandatory=false.
-                dependency_mandatory = value.lower() == "required"
-                if current_mod and current_dependency:
-                    dependencies.setdefault(current_mod, set())
-                    if dependency_mandatory:
-                        dependencies[current_mod].add(current_dependency)
-                    else:
-                        dependencies[current_mod].discard(current_dependency)
-    return mods, dependencies
+                dependency_type = value.lower()
+                dependency_mode = (
+                    "required"
+                    if dependency_type == "required"
+                    else "optional"
+                    if dependency_type == "optional"
+                    else "excluded"
+                )
+                record_dependency()
+    return mods, dependencies, optional_dependencies
 
 
 def scan_pack(pack_dir: Path) -> tuple[dict[str, list[ModRecord]], dict[str, list[str]], str]:
@@ -141,13 +155,20 @@ def scan_pack(pack_dir: Path) -> tuple[dict[str, list[ModRecord]], dict[str, lis
     for jar in sorted(mods_dir.glob("*.jar"), key=lambda value: value.name.lower()):
         if "bootoptim" in jar.name.lower() or "boot_optim" in jar.name.lower():
             raise ValueError(f"source pack must not contain a BootOptim jar: {jar.name}")
-        mod_entries, dependencies = read_metadata(jar)
+        mod_entries, dependencies, optional_dependencies = read_metadata(jar)
         if not mod_entries:
             mod_id = jar.stem.lower()
             mod_entries = [(mod_id, None)]
         mod_ids = [entry[0] for entry in mod_entries]
         version = next((entry[1] for entry in mod_entries if entry[1]), None)
-        record = ModRecord(jar.name, mod_ids, version, dependencies, sha256(jar))
+        record = ModRecord(
+            jar.name,
+            mod_ids,
+            version,
+            dependencies,
+            optional_dependencies,
+            sha256(jar),
+        )
         for mod_id in mod_ids:
             records.setdefault(mod_id, []).append(record)
         artifact_to_ids[jar.name] = mod_ids
@@ -176,6 +197,11 @@ def required_closure(records: dict[str, list[ModRecord]], roots: list[str]) -> t
         dependencies = set()
         for record in matching_records:
             dependencies.update(record.dependencies.get(mod_id, set()))
+            dependencies.update(
+                dependency
+                for dependency in record.optional_dependencies.get(mod_id, set())
+                if dependency in records
+            )
         for dependency in dependencies:
             if dependency not in selected:
                 pending.append(dependency)
@@ -300,6 +326,11 @@ def build_plan(
                     dependency
                     for record in records[mod_id]
                     for dependency in record.dependencies.get(mod_id, set())
+                }),
+                "optional_dependencies": sorted({
+                    dependency
+                    for record in records[mod_id]
+                    for dependency in record.optional_dependencies.get(mod_id, set())
                 }),
             }
             for mod_id in all_ids

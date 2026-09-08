@@ -146,6 +146,27 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertEqual(variant["mod_ids"], ["feature"])
             self.assertEqual(variant["missing_dependencies"], ["base"])
 
+    def test_present_optional_dependency_is_kept_in_a_runnable_closure(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            metadata = (
+                'modLoader="javafml"\n'
+                '[[mods]]\nmodId="feature"\nversion="1.0"\n'
+                '[[dependencies.feature]]\nmodId="optional"\ntype="optional"\n'
+            )
+            with zipfile.ZipFile(mods / "feature.jar", "w") as archive:
+                archive.writestr("META-INF/neoforge.mods.toml", metadata)
+            make_mod(mods / "optional.jar", "optional")
+
+            plan = PLAN.build_plan(pack, [], [])
+            variant = next(item for item in plan["variants"] if item["id"] == "mod-feature")
+            self.assertEqual(variant["mod_ids"], ["feature", "optional"])
+            feature = next(item for item in plan["mods"] if item["id"] == "feature")
+            self.assertEqual(feature["required_dependencies"], [])
+            self.assertEqual(feature["optional_dependencies"], ["optional"])
+
     def test_source_pack_rejects_bootoptim_duplicate(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)

@@ -81,6 +81,8 @@ def materialize(source: Path, destination: Path, plan_path: Path, variant_id: st
             "variant_id": variant["id"],
             "variant_kind": variant.get("kind"),
             "roots": variant.get("roots", []),
+            "runnable_roots": variant.get("runnable_roots", []),
+            "excluded_roots": variant.get("excluded_roots", []),
             "selected_mod_ids": variant.get("mod_ids", []),
             "selected_artifacts": sorted(selected, key=str.lower),
             "excluded_artifacts": sorted(set(source_jars) - selected, key=str.lower),
