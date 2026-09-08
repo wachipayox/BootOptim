@@ -229,7 +229,10 @@ def main() -> None:
             raise SystemExit(f"Exact-pack summarizer failed with exit {summary.returncode}")
         result = json.loads(result_json.read_text(encoding="utf-8"))
         result["resource_contract_valid"] = resource_contract_valid
-        result["diagnostic_only"] = bool(args.allow_resource_mismatch)
+        # Scaling mode permits a reduced variant to continue after its
+        # resource selection diverges, but a full exact-pack run remains a
+        # normal measurement when the contract actually passes.
+        result["diagnostic_only"] = bool(args.allow_resource_mismatch and not resource_contract_valid)
         manifest_path = Path(fixture_root) / ".bootoptim-scaling-variant.json"
         if manifest_path.is_file():
             result["scaling_variant_manifest"] = json.loads(manifest_path.read_text(encoding="utf-8"))
