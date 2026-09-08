@@ -71,15 +71,17 @@ the run remains valid for behavior but incomplete for detailed attribution.
 
 ## Sidecar direction
 
-`development` establishes a stable, append-only JSONL contract for a local external viewer. A future
-sidecar may tail this file or subscribe through a loopback endpoint without requiring a GUI change
-inside Minecraft. No sidecar process is started in production, and no scheduling or resource-load
-behavior changes in this foundation.
+`development` establishes a stable, append-only JSONL contract for a local external viewer. The
+standard-library-only `tools/boot-trace-sidecar.py` tails this file in a small Tk window and shows
+uptime, phase/task, producer thread, details and malformed/drop counts. It is launched separately
+from Prism and never packaged into the mod JAR. No sidecar process is started in production, and no
+scheduling or resource-load behavior changes in this foundation.
 
 ## Validation performed
 
 - bootstrap and regular-mod source sets compile together;
 - JUnit verifies JSON escaping, benchmark buffering, and bounded-drop reporting;
+- the sidecar passes Python syntax compilation and remains external to the packaged jars;
 - existing bootstrap tests remain green;
 - no model/resource executor, NeoForge ordering, GL ownership, or gameplay behavior is changed.
 
