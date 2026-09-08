@@ -70,7 +70,10 @@ public final class EarlyStartupProbeService implements ITransformationService {
         // Default/off mode installs no diagnostic transformer at all. Benchmark/profile/development share the same
         // boundaries; trace-core itself preserves benchmark's no-clock/no-buffer/no-JSON per-event contract.
         return StructuredBootTrace.global().isEnabled()
-                ? List.of(new MinecraftBootstrapTraceTransformer(), new FmlLoadingTraceTransformer())
+                ? List.of(
+                        new MinecraftBootstrapTraceTransformer(),
+                        new NeoForgeLanguageTraceTransformer(),
+                        new FmlLoadingTraceTransformer())
                 : List.of();
     }
 
