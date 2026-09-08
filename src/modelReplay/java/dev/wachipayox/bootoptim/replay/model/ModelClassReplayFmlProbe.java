@@ -79,6 +79,7 @@ public final class ModelClassReplayFmlProbe {
             JsonObject controlled = controlledFallbackAndErrorProbe();
             Files.writeString(output.resolve("controlled-fallback-error.json"), PRETTY.toJson(controlled) + "\n");
             if (!controlled.get("missing_parent_resolver_called").getAsBoolean()
+                    || controlled.get("missing_parent_exception_class").isJsonNull()
                     || !controlled.get("cycle_observed").getAsBoolean()
                     || controlled.get("invalid_json_exception_class").isJsonNull()) {
                 throw new IllegalStateException("controlled fallback/error probes did not all pass: " + controlled);
@@ -86,7 +87,7 @@ public final class ModelClassReplayFmlProbe {
 
             System.out.println("MODEL_CLASS_FML_REPLAY_OK semantic_sha256="
                     + result.get("semantic_sha256").getAsString()
-                    + " controlled_missing_parent=true controlled_cycle=true controlled_invalid_json=true");
+                    + " controlled_missing_parent_error=true controlled_cycle=true controlled_invalid_json=true");
         } catch (Exception exception) {
             throw new RuntimeException("FML model replay probe failed", exception);
         }
@@ -97,15 +98,27 @@ public final class ModelClassReplayFmlProbe {
 
         BlockModel missing = parse("{\"parent\":\"bootoptim_test:not_present\"}");
         List<String> missingRequests = new ArrayList<>();
-        resolve(missing, location -> {
-            missingRequests.add(location.toString());
-            return null;
-        });
+        String missingExceptionClass = null;
+        String missingExceptionMessage = null;
+        try {
+            resolve(missing, location -> {
+                missingRequests.add(location.toString());
+                return null;
+            });
+        } catch (Exception exception) {
+            Throwable cause = unwrap(exception);
+            missingExceptionClass = cause.getClass().getName();
+            missingExceptionMessage = cause.getMessage();
+        }
         JsonArray requested = new JsonArray();
         missingRequests.forEach(requested::add);
         out.add("missing_parent_requests", requested);
         out.addProperty("missing_parent_resolver_called", missingRequests.contains("bootoptim_test:not_present"));
         out.addProperty("missing_parent_probe_class", missing.getClass().getName());
+        if (missingExceptionClass == null) out.add("missing_parent_exception_class", com.google.gson.JsonNull.INSTANCE);
+        else out.addProperty("missing_parent_exception_class", missingExceptionClass);
+        if (missingExceptionMessage == null) out.add("missing_parent_exception_message", com.google.gson.JsonNull.INSTANCE);
+        else out.addProperty("missing_parent_exception_message", missingExceptionMessage);
 
         Map<String, BlockModel> cycle = new LinkedHashMap<>();
         cycle.put("bootoptim_test:cycle_a", parse("{\"parent\":\"bootoptim_test:cycle_b\"}"));
