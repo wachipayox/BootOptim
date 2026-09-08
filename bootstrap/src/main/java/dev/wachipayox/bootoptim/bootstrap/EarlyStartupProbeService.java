@@ -3,6 +3,7 @@ package dev.wachipayox.bootoptim.bootstrap;
 import cpw.mods.modlauncher.api.IEnvironment;
 import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
+import dev.wachipayox.bootoptim.trace.StructuredBootTrace;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.util.List;
@@ -11,8 +12,8 @@ import java.util.Set;
 /**
  * Earliest BootOptim entry point available from the mods directory.
  *
- * <p>This class intentionally depends only on JDK and ModLauncher API types because it is loaded in
- * ModLauncher's SERVICE layer, before the regular BootOptim NeoForge mod.</p>
+ * <p>This class intentionally depends only on JDK, ModLauncher API and the shared JDK-only trace core because it is
+ * loaded in ModLauncher's SERVICE layer, before the regular BootOptim NeoForge mod.</p>
  */
 public final class EarlyStartupProbeService implements ITransformationService {
     private static final String PROFILE_PROPERTY = "boot_optim.profileStartup";
@@ -24,6 +25,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
         // ModLauncher's GAMEDIR is not populated yet while SERVICE implementations are constructed.
         // Delay every filesystem decision until initialize(IEnvironment), which runs after argument parsing.
         BootOptimRuntimeInfo.version();
+        StructuredBootTraceBridge.publishIfEnabled();
         mark("transformation_service_construct");
     }
 
@@ -66,7 +68,11 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
-        return List.of();
+        // Default/off mode installs no FML transformer at all. Benchmark/profile/development share the same
+        // boundaries; trace-core itself preserves benchmark's no-clock/no-buffer/no-JSON per-event contract.
+        return StructuredBootTrace.global().isEnabled()
+                ? List.of(new FmlLoadingTraceTransformer())
+                : List.of();
     }
 
     private static void mark(String phase) {
