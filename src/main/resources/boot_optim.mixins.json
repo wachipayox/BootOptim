@@ -11,6 +11,7 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.McefFirstConsumerDeferMixin",
     "client.ModelBakeryDecocraftReuseMixin",
+    "client.MoreCullingParallelReloadMixin",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
