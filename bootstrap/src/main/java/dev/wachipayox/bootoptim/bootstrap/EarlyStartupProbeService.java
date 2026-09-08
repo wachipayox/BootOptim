@@ -69,12 +69,16 @@ public final class EarlyStartupProbeService implements ITransformationService {
     public List<? extends ITransformer<?>> transformers() {
         // ModLauncher reaches this callback only after scan completion and GAME resource registration. In trace modes,
         // use that already-existing SERVICE callback as the first safe observable edge into the launch/game-layer
-        // transition. Default/off mode still installs no diagnostic transformer and emits no transition task.
+        // transition. Default/off mode still installs no diagnostic transformer and emits no transition phase/task.
         var trace = StructuredBootTrace.global();
         if (!trace.isEnabled()) return List.of();
 
-        ModLauncherTransitionTraceHooks.beginTransition();
-        return List.of(new MinecraftBootstrapTraceTransformer(), new FmlLoadingTraceTransformer());
+        long callbackTask = ModLauncherTransitionTraceHooks.beginTransition();
+        try {
+            return List.of(new MinecraftBootstrapTraceTransformer(), new FmlLoadingTraceTransformer());
+        } finally {
+            ModLauncherTransitionTraceHooks.endTransformersCallback(callbackTask);
+        }
     }
 
     private static void mark(String phase) {
