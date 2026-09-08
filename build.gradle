@@ -29,11 +29,8 @@ sourceSets.main.resources {
 repositories {
 }
 
-dependencies {
-    // Shared JDK-only trace schema/API for the regular mod. Bootstrap compiles the same source tree
-    // into its own SERVICE-visible output; see bootstrap/build.gradle.
-    implementation project(':trace-core')
-}
+// The regular GAME-layer mod intentionally has no trace-core dependency. StructuredBootTrace is owned by the
+// bootstrap SERVICE output, and regular producers reach it only through the JDK-only versioned bridge.
 
 var packBenchmarkDirectory = project.file('run-pack-benchmark')
 var externalPackDirectory = providers.gradleProperty('bootoptimPackDir')
