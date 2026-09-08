@@ -2,10 +2,13 @@ package dev.wachipayox.bootoptim.bootstrap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
@@ -14,6 +17,8 @@ import org.objectweb.asm.tree.MethodNode;
 
 class MinecraftBootstrapTraceTransformerTest {
     private static final String HOOKS = "dev/wachipayox/bootoptim/bootstrap/MinecraftBootstrapTraceHooks";
+    private static final String TRANSITION_HOOKS = "dev/wachipayox/bootoptim/bootstrap/ModLauncherTransitionTraceHooks";
+    private static final String TRACE = "dev/wachipayox/bootoptim/trace/StructuredBootTrace";
 
     @Test
     void wrapsExactBootstrapMethodInOrder() {
@@ -72,6 +77,33 @@ class MinecraftBootstrapTraceTransformerTest {
         assertEquals(0, methodCalls(wrong.methods.getFirst()).size());
     }
 
+    @Test
+    void closesServiceTransitionBeforeOpeningBootstrapTask() throws IOException {
+        var hooksClass = readClass(MinecraftBootstrapTraceHooks.class);
+        var begin = methodNamed(hooksClass, "beginBootstrap");
+        var calls = methodCalls(begin);
+
+        int transitionEnd = indexOfCall(calls, TRANSITION_HOOKS, "endTransitionAtMinecraftBootstrap");
+        int bootstrapBegin = indexOfCall(calls, TRACE, "beginTask");
+        assertTrue(transitionEnd >= 0, "bootstrap begin must close the SERVICE-to-game transition");
+        assertTrue(bootstrapBegin > transitionEnd, "transition end must precede minecraft_bootstrap task begin");
+    }
+
+    @Test
+    void serviceCallbackStartsTransitionBeforeReturningDiagnosticTransformers() throws IOException {
+        var serviceClass = readClass(EarlyStartupProbeService.class);
+        var transformers = methodNamed(serviceClass, "transformers");
+        var calls = methodCalls(transformers);
+
+        int transitionBegin = indexOfCall(calls, TRANSITION_HOOKS, "beginTransition");
+        int bootstrapTransformerCtor = indexOfCall(
+                calls,
+                "dev/wachipayox/bootoptim/bootstrap/MinecraftBootstrapTraceTransformer",
+                "<init>");
+        assertTrue(transitionBegin >= 0, "SERVICE transformers callback must emit the transition begin edge");
+        assertTrue(bootstrapTransformerCtor > transitionBegin, "transition begin must precede diagnostic transformer return");
+    }
+
     private static ClassNode bootstrapClass() {
         var input = new ClassNode();
         input.name = "net/minecraft/server/Bootstrap";
@@ -89,5 +121,26 @@ class MinecraftBootstrapTraceTransformerTest {
             if (instruction instanceof MethodInsnNode call) calls.add(call);
         }
         return calls;
+    }
+
+    private static ClassNode readClass(Class<?> type) throws IOException {
+        try (var input = type.getResourceAsStream(type.getSimpleName() + ".class")) {
+            if (input == null) throw new IOException("missing class resource for " + type.getName());
+            var node = new ClassNode();
+            new ClassReader(input).accept(node, 0);
+            return node;
+        }
+    }
+
+    private static MethodNode methodNamed(ClassNode type, String name) {
+        return type.methods.stream().filter(method -> method.name.equals(name)).findFirst().orElseThrow();
+    }
+
+    private static int indexOfCall(List<MethodInsnNode> calls, String owner, String name) {
+        for (int i = 0; i < calls.size(); i++) {
+            var call = calls.get(i);
+            if (call.owner.equals(owner) && call.name.equals(name)) return i;
+        }
+        return -1;
     }
 }
