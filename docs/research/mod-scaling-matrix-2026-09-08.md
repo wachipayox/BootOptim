@@ -417,6 +417,24 @@ their removal has a non-additive interaction through the closed remainder.
 `block2b` is the next bisection target because its removal retained the lower
 TTMM, while `block2a` remains an active sibling frontier.
 
+The next `block2b` split was also valid in run `34258839298`, but did not
+isolate one independent half:
+
+| removed custom block | selected artifacts | TTMM (ms) | mod entrypoint (ms) | post-entrypoint (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| block2b1 (16 roots) | 86 | 49,228 | 17,786 | 31,442 |
+| block2b2 (15 roots) | 82 | 50,383 | 17,941 | 32,442 |
+
+Each is a valid menu/resource workload with zero BootOptim Mixin errors, but
+removing either half retains more time than removing `block2b` as a whole
+(45,755 ms). This is expected when the dependency-closed remainder changes
+nonlinearly; it rules out treating raw root membership as a per-mod time
+budget. Further root-only bisection is not the next high-information action.
+The matrix has fulfilled its current role: it proves a large structural cost,
+identifies the interaction frontier, and now needs phase/task-level trace data
+to distinguish loader callbacks from resource/model work before an invasive
+NeoForge or mod-specific redesign is selected.
+
 For that next stage the planner exposes `--complement-group NAME=mod1,mod2`
 and the hosted equivalent `scaling_complement_groups`. Unlike a subset group,
 it removes only the requested block, expands declared runtime families, and
