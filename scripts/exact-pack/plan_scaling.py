@@ -23,7 +23,9 @@ KEY_VALUE_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 QUOTED_RE = re.compile(r'^"([^"]*)"')
 # These are supplied by the Minecraft/NeoForge runtime rather than by a
 # selectable mod artifact in the exact-pack `mods/` directory.
-PLATFORM_PROVIDED_MOD_IDS = {"minecraft", "neoforge", "forge", "javafml"}
+PLATFORM_PROVIDED_MOD_IDS = {
+    "minecraft", "neoforge", "forge", "javafml", "fabricloader", "java",
+}
 # Loader-level language providers are supplied by NeoForge itself and must not
 # turn into selectable closure edges.
 BUILTIN_LANGUAGE_PROVIDERS = {"javafml", "lowcodefml", "neoforge", "forge"}
@@ -54,13 +56,19 @@ def _value(raw: str) -> str | None:
 
 def _parse_metadata_text(
     text: str,
-) -> tuple[list[tuple[str, str | None]], dict[str, set[str]], dict[str, set[str]]]:
+) -> tuple[
+    list[tuple[str, str | None]],
+    dict[str, set[str]],
+    dict[str, set[str]],
+    dict[str, set[str]],
+]:
     section = ""
     current_mod: str | None = None
     current_dependency: str | None = None
     mods: list[tuple[str, str | None]] = []
     dependencies: dict[str, set[str]] = {}
     optional_dependencies: dict[str, set[str]] = {}
+    provided_aliases: dict[str, set[str]] = {}
     dependency_mode = "required"
     language_provider: str | None = None
 
@@ -120,6 +128,13 @@ def _parse_metadata_text(
                     if mods[index][0] == current_mod and mods[index][1] is None:
                         mods[index] = (current_mod, value)
                         break
+            elif key == "provides" and current_mod:
+                # TOML's array syntax is enough here: providers are short
+                # literal IDs and this deliberately avoids pretending to be a
+                # general TOML parser. They are aliases, not independent roots.
+                provided_aliases.setdefault(current_mod, set()).update(
+                    re.findall(r'"([^"\\]+)"', raw_value)
+                )
         elif section.startswith("dependencies."):
             if key == "modId" and value:
                 current_dependency = value
@@ -148,12 +163,58 @@ def _parse_metadata_text(
     if provider_id and provider_id not in BUILTIN_LANGUAGE_PROVIDERS:
         for mod_id, _ in mods:
             dependencies.setdefault(mod_id, set()).add(provider_id)
-    return mods, dependencies, optional_dependencies
+    return mods, dependencies, optional_dependencies, provided_aliases
+
+
+def _parse_fabric_metadata_text(
+    text: str,
+) -> tuple[
+    list[tuple[str, str | None]],
+    dict[str, set[str]],
+    dict[str, set[str]],
+    dict[str, set[str]],
+]:
+    """Translate the small loader-contract subset of ``fabric.mod.json``.
+
+    Connector ports are still ordinary artifacts in the exact pack.  Ignoring
+    their JSON metadata made the planner invent filename-based IDs and drop
+    their declared Fabric API requirement.  ``depends`` and ``breaks`` can be
+    objects or arrays in Fabric metadata; only positive dependency objects are
+    closure edges.  Alias providers are represented separately so a value such
+    as ``fabric-api`` resolves to Forgified Fabric API without becoming a
+    second scaling root.
+    """
+    payload = json.loads(text)
+    mod_id = payload.get("id")
+    if not isinstance(mod_id, str) or not mod_id:
+        return [], {}, {}, {}
+    version = payload.get("version")
+    version_text = version if isinstance(version, str) else None
+    required = {
+        dependency
+        for dependency in (payload.get("depends") or {})
+        if isinstance(dependency, str)
+    }
+    optional = {
+        dependency
+        for dependency in (payload.get("recommends") or {})
+        if isinstance(dependency, str)
+    }
+    provides = payload.get("provides") or []
+    aliases = {
+        alias for alias in provides if isinstance(alias, str) and alias
+    } if isinstance(provides, list) else set()
+    return [(mod_id, version_text)], {mod_id: required}, {mod_id: optional}, {mod_id: aliases}
 
 
 def read_metadata(
     jar: Path,
-) -> tuple[list[tuple[str, str | None]], dict[str, set[str]], dict[str, set[str]]]:
+) -> tuple[
+    list[tuple[str, str | None]],
+    dict[str, set[str]],
+    dict[str, set[str]],
+    dict[str, set[str]],
+]:
     """Read top-level and nested NeoForge/FML metadata from one artifact.
 
     Modern NeoForge mods commonly ship library mods such as Flywheel or Ponder
@@ -163,39 +224,47 @@ def read_metadata(
     the selection unit while exposing every embedded mod ID for closure checks.
     """
     metadata_names = ("META-INF/neoforge.mods.toml", "META-INF/mods.toml")
+    fabric_metadata_name = "fabric.mod.json"
     merged_mods: list[tuple[str, str | None]] = []
     merged_required: dict[str, set[str]] = {}
     merged_optional: dict[str, set[str]] = {}
+    merged_aliases: dict[str, set[str]] = {}
 
-    def merge(payload: tuple[list[tuple[str, str | None]], dict[str, set[str]], dict[str, set[str]]]) -> None:
-        mods, required, optional = payload
+    def merge(payload: tuple[
+        list[tuple[str, str | None]], dict[str, set[str]], dict[str, set[str]], dict[str, set[str]],
+    ]) -> None:
+        mods, required, optional, aliases = payload
         merged_mods.extend(mods)
         for owner, values in required.items():
             merged_required.setdefault(owner, set()).update(values)
         for owner, values in optional.items():
             merged_optional.setdefault(owner, set()).update(values)
+        for owner, values in aliases.items():
+            merged_aliases.setdefault(owner, set()).update(values)
 
-    with zipfile.ZipFile(jar) as archive:
-        names = set(archive.namelist())
+    def read_one(archive: zipfile.ZipFile, names: set[str]) -> None:
         for candidate in metadata_names:
             if candidate in names:
                 merge(_parse_metadata_text(archive.read(candidate).decode("utf-8", errors="replace")))
-                break
+                return
+        if fabric_metadata_name in names:
+            merge(_parse_fabric_metadata_text(
+                archive.read(fabric_metadata_name).decode("utf-8", errors="replace")
+            ))
+
+    with zipfile.ZipFile(jar) as archive:
+        names = set(archive.namelist())
+        read_one(archive, names)
         for nested_name in sorted(name for name in names if name.lower().endswith(".jar")):
             try:
                 nested_bytes = archive.read(nested_name)
                 with zipfile.ZipFile(io.BytesIO(nested_bytes)) as nested:
                     nested_names = set(nested.namelist())
-                    for candidate in metadata_names:
-                        if candidate in nested_names:
-                            merge(_parse_metadata_text(
-                                nested.read(candidate).decode("utf-8", errors="replace")
-                            ))
-                            break
+                    read_one(nested, nested_names)
             except (OSError, zipfile.BadZipFile):
                 # A non-JAR payload with a .jar suffix is not a loader artifact.
                 continue
-    return merged_mods, merged_required, merged_optional
+    return merged_mods, merged_required, merged_optional, merged_aliases
 
 
 def scan_pack(pack_dir: Path) -> tuple[dict[str, list[ModRecord]], dict[str, list[str]], str]:
@@ -208,7 +277,7 @@ def scan_pack(pack_dir: Path) -> tuple[dict[str, list[ModRecord]], dict[str, lis
     for jar in sorted(mods_dir.glob("*.jar"), key=lambda value: value.name.lower()):
         if "bootoptim" in jar.name.lower() or "boot_optim" in jar.name.lower():
             raise ValueError(f"source pack must not contain a BootOptim jar: {jar.name}")
-        mod_entries, dependencies, optional_dependencies = read_metadata(jar)
+        mod_entries, dependencies, optional_dependencies, provided_aliases = read_metadata(jar)
         if not mod_entries:
             mod_id = jar.stem.lower()
             mod_entries = [(mod_id, None)]
@@ -224,6 +293,12 @@ def scan_pack(pack_dir: Path) -> tuple[dict[str, list[ModRecord]], dict[str, lis
         )
         for mod_id in mod_ids:
             records.setdefault(mod_id, []).append(record)
+            # ``provides`` is a loader-level alias, such as Forgified Fabric
+            # API providing ``fabric-api`` for Connector ports.  It must be a
+            # valid closure target, but never an independently partitioned
+            # root or a duplicate artifact in the plan.
+            for alias in provided_aliases.get(mod_id, set()):
+                records.setdefault(alias, []).append(record)
         artifact_to_ids[jar.name] = mod_ids
         fingerprint.update(jar.name.encode())
         fingerprint.update(b"\0")
@@ -340,7 +415,10 @@ def build_plan(
     explicitly_excluded = set(excluded_roots or [])
     variants = []
 
-    all_ids = sorted(records)
+    # ``records`` also contains dependency aliases exposed through `provides`.
+    # Roots are only actual mod IDs declared by artifacts; aliases resolve a
+    # closure edge but must not inflate mod count or be partitioned separately.
+    all_ids = sorted({mod_id for ids in artifact_to_ids.values() for mod_id in ids})
     variants.append({
         "id": "full",
         "kind": "full",

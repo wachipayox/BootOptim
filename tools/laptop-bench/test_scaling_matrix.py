@@ -51,6 +51,16 @@ def make_mod(
         archive.writestr("META-INF/neoforge.mods.toml", metadata)
 
 
+def make_fabric_mod(path: Path, mod_id: str, dependencies: list[str] = ()) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("fabric.mod.json", json.dumps({
+            "schemaVersion": 1,
+            "id": mod_id,
+            "version": "1.0",
+            "depends": {dependency: "*" for dependency in dependencies},
+        }))
+
+
 class ScalingPlanTest(unittest.TestCase):
     def test_plan_contains_full_single_closure_and_group_variants(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -181,6 +191,27 @@ class ScalingPlanTest(unittest.TestCase):
             variant = next(item for item in plan["variants"] if item["id"] == "mod-libipn")
             self.assertEqual(variant["mod_ids"], ["kotlinforforge", "libipn"])
             self.assertEqual(variant["artifacts"], ["kotlin.jar", "libipn.jar"])
+
+    def test_fabric_metadata_and_neoforge_provides_close_connector_contracts(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            metadata = (
+                'modLoader="lowcodefml"\n'
+                '[[mods]]\nmodId="fabric_api"\nversion="1.0"\n'
+                'provides=["fabric-api"]\n'
+            )
+            with zipfile.ZipFile(mods / "fabric-api.jar", "w") as archive:
+                archive.writestr("META-INF/neoforge.mods.toml", metadata)
+            make_fabric_mod(mods / "furnish.jar", "furnish", ["fabric-api", "fabricloader", "java"])
+
+            plan = PLAN.build_plan(pack, [], [])
+            variant = next(item for item in plan["variants"] if item["id"] == "mod-furnish")
+            self.assertEqual(variant["mod_ids"], ["fabric-api", "fabric_api", "furnish"])
+            self.assertEqual(variant["artifacts"], ["fabric-api.jar", "furnish.jar"])
+            self.assertEqual(variant["missing_dependencies"], [])
+            self.assertEqual(plan["mod_count"], 2)
 
     def test_platform_dependencies_are_not_reported_as_missing_artifacts(self):
         with tempfile.TemporaryDirectory() as raw:

@@ -324,3 +324,33 @@ already reached the same menu endpoint in roughly 90 seconds, so a reduced
 variant that does not reach it within 180 seconds is not a comparable
 attribution point; its timeout is recorded as a contract/lifecycle failure, not
 as a startup time.
+
+### Run 34255651108 disposition and Fabric-port closure fix
+
+The post-language-provider complement dispatch still produced invalid variants,
+but its logs yielded a concrete planner defect rather than performance data.
+Complement 2 retained Furnish and MusicMaker; complement 3 retained Furnish and
+Joy of Painting. NeoForge then rejected each variant because the retained
+Fabric-port mods required `fabric-api`, while the planner had removed Forgified
+Fabric API. The cause was that these artifacts expose only `fabric.mod.json`;
+the planner only read FML TOML and invented filename-derived roots, so it could
+not see either their real IDs or their dependency contracts. Forgified Fabric
+API itself declares `provides = ["fabric", "fabric-api"]`, an alias which must
+resolve to the same artifact but must not become an additional partition root.
+
+The planner now reads `fabric.mod.json` (top-level and nested), treats
+`depends` as required closure edges, treats `fabricloader` and `java` as
+runtime-provided, and resolves NeoForge `provides` aliases without inflating the
+root count. A regression fixture proves that a Fabric mod requiring
+`fabric-api` carries the one Forgified API artifact. These failed timings remain
+invalid. The next complement run must use this parser before any attribution is
+attempted.
+
+Complement 1 exposed a separate, genuine undeclared execution edge:
+CreateStuffNAdditions (`create_sa`) was retained while Create was removed, then
+failed with `NoClassDefFoundError` for
+`com/simibubi/create/content/processing/sequenced/SequencedAssemblyItem`.
+This is not repaired by the Fabric metadata fix. It is evidence that the next
+planner increment needs an explicit, auditable mechanism for runtime-symbol
+provider edges (rather than accumulating accidental timing results or silently
+declaring the complement valid).
