@@ -127,49 +127,53 @@ public final class ReloadListenerCriticalPathProfiler {
             List<ListenerTrace> ordered = new ArrayList<>(listeners);
             ordered.sort(Comparator.comparingInt(ListenerTrace::index));
 
-            long serialPostTurnSum = 0L;
-            long externalSerialPostTurnSum = 0L;
-            long modelManagerSerialPostTurnSum = 0L;
-            boolean orderedNonOverlap = true;
-            ListenerTrace previous = null;
-            for (ListenerTrace listener : ordered) {
-                long postTurn = listener.postTurnNanos();
-                if (postTurn >= 0L) {
-                    serialPostTurnSum += postTurn;
-                    if (listener.scope == Scope.MODEL_MANAGER) {
-                        modelManagerSerialPostTurnSum += postTurn;
-                    } else {
-                        externalSerialPostTurnSum += postTurn;
+            long serialSlotSum = 0L;
+            long externalSerialSlotSum = 0L;
+            long modelManagerSerialSlotSum = 0L;
+            boolean turnsMonotonic = true;
+            ListenerTrace largestExternalSerial = null;
+
+            for (int i = 0; i < ordered.size(); i++) {
+                ListenerTrace listener = ordered.get(i);
+                long slotStart = listener.turnReadyNanos.get();
+                long slotEnd = i + 1 < ordered.size()
+                        ? ordered.get(i + 1).turnReadyNanos.get()
+                        : allDone;
+                long slot = slotStart >= 0L && slotEnd >= slotStart ? slotEnd - slotStart : -1L;
+                listener.serialSlotNanos.set(slot);
+                if (slot < 0L) {
+                    turnsMonotonic = false;
+                    continue;
+                }
+                serialSlotSum += slot;
+                if (listener.scope == Scope.MODEL_MANAGER) {
+                    modelManagerSerialSlotSum += slot;
+                } else {
+                    externalSerialSlotSum += slot;
+                    if (largestExternalSerial == null || slot > largestExternalSerial.serialSlotNanos.get()) {
+                        largestExternalSerial = listener;
                     }
                 }
-                if (previous != null) {
-                    long previousDone = previous.listenerDoneNanos.get();
-                    long turn = listener.turnReadyNanos.get();
-                    if (previousDone < 0L || turn < 0L || turn < previousDone) {
-                        orderedNonOverlap = false;
-                    }
-                }
-                previous = listener;
             }
 
             long tailNanos = allPrep >= 0L && allDone >= allPrep ? allDone - allPrep : -1L;
-            long unaccountedTail = tailNanos >= 0L
-                    ? Math.max(0L, tailNanos - serialPostTurnSum)
+            long unaccountedTail = tailNanos >= 0L && turnsMonotonic
+                    ? Math.max(0L, tailNanos - serialSlotSum)
                     : -1L;
 
             LOGGER.info(
-                    "BOOTOPTIM_RELOAD_LISTENER_PATH event=summary reload_id={} expected_listeners={} observed_listeners={} all_preparations_ms={} all_done_ms={} serial_tail_ms={} post_turn_sum_ms={} external_post_turn_sum_ms={} model_manager_post_turn_sum_ms={} unaccounted_tail_ms={} ordered_nonoverlap={} result={}",
+                    "BOOTOPTIM_RELOAD_LISTENER_PATH event=summary reload_id={} expected_listeners={} observed_listeners={} all_preparations_ms={} all_done_ms={} serial_tail_ms={} serial_slot_sum_ms={} external_serial_slot_sum_ms={} model_manager_serial_slot_sum_ms={} unaccounted_tail_ms={} turns_monotonic={} result={}",
                     id,
                     expectedListenerCount,
                     ordered.size(),
                     format(relativeMs(allPrep)),
                     format(relativeMs(allDone)),
                     format(nanosToMs(tailNanos)),
-                    format(nanosToMs(serialPostTurnSum)),
-                    format(nanosToMs(externalSerialPostTurnSum)),
-                    format(nanosToMs(modelManagerSerialPostTurnSum)),
+                    format(nanosToMs(serialSlotSum)),
+                    format(nanosToMs(externalSerialSlotSum)),
+                    format(nanosToMs(modelManagerSerialSlotSum)),
                     format(nanosToMs(unaccountedTail)),
-                    orderedNonOverlap,
+                    turnsMonotonic,
                     failure == null ? "success" : "failed");
 
             for (ListenerTrace listener : ordered) {
@@ -180,16 +184,11 @@ public final class ReloadListenerCriticalPathProfiler {
                     .filter(listener -> listener.preparationDoneNanos.get() >= 0L)
                     .max(Comparator.comparingLong(listener -> listener.preparationDoneNanos.get()))
                     .orElse(null);
-            ListenerTrace largestExternalSerial = ordered.stream()
-                    .filter(listener -> listener.scope == Scope.EXTERNAL_LISTENER)
-                    .filter(listener -> listener.postTurnNanos() >= 0L)
-                    .max(Comparator.comparingLong(ListenerTrace::postTurnNanos))
-                    .orElse(null);
 
             emitCritical("preparation_gate", preparationGate,
                     preparationGate == null ? -1L : preparationGate.preparationDoneNanos.get() - startNanos);
-            emitCritical("largest_external_serial_apply", largestExternalSerial,
-                    largestExternalSerial == null ? -1L : largestExternalSerial.postTurnNanos());
+            emitCritical("largest_external_serial_slot", largestExternalSerial,
+                    largestExternalSerial == null ? -1L : largestExternalSerial.serialSlotNanos.get());
         }
 
         private void emitCritical(String kind, ListenerTrace listener, long nanos) {
@@ -222,6 +221,7 @@ public final class ReloadListenerCriticalPathProfiler {
         private final AtomicLong preparationDoneNanos = new AtomicLong(-1L);
         private final AtomicLong turnReadyNanos = new AtomicLong(-1L);
         private final AtomicLong listenerDoneNanos = new AtomicLong(-1L);
+        private final AtomicLong serialSlotNanos = new AtomicLong(-1L);
         private final AtomicBoolean listenerFailed = new AtomicBoolean();
 
         private ListenerTrace(ReloadTrace reload, int index, String name, String className, Scope scope) {
@@ -296,9 +296,10 @@ public final class ReloadListenerCriticalPathProfiler {
             long prepared = preparationDoneNanos.get();
             long turnReady = turnReadyNanos.get();
             long done = listenerDoneNanos.get();
-            boolean serialCritical = allPreparations >= 0L && turnReady >= allPreparations && done >= turnReady;
+            long serialSlot = serialSlotNanos.get();
+            boolean serialCritical = allPreparations >= 0L && turnReady >= allPreparations && serialSlot >= 0L;
             LOGGER.info(
-                    "BOOTOPTIM_RELOAD_LISTENER_PATH event=listener reload_id={} index={} scope={} name=\"{}\" class={} barrier_calls={} prepare_done_ms={} global_wait_ms={} order_wait_ms={} turn_ready_ms={} done_ms={} serial_post_turn_ms={} serial_critical={} result={}",
+                    "BOOTOPTIM_RELOAD_LISTENER_PATH event=listener reload_id={} index={} scope={} name=\"{}\" class={} barrier_calls={} prepare_done_ms={} global_wait_ms={} order_wait_ms={} turn_ready_ms={} done_ms={} observed_post_turn_ms={} serial_slot_ms={} serial_critical={} result={}",
                     reload.id,
                     index,
                     scope.label,
@@ -311,6 +312,7 @@ public final class ReloadListenerCriticalPathProfiler {
                     format(reload.relativeMs(turnReady)),
                     format(reload.relativeMs(done)),
                     format(nanosToMs(postTurnNanos())),
+                    format(nanosToMs(serialSlot)),
                     serialCritical,
                     listenerFailed.get() ? "failed" : "success");
         }
