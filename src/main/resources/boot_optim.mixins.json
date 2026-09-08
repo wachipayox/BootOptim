@@ -5,6 +5,10 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.EntityRenderersAccessor",
+    "client.EntityRenderDispatcherReloadInventoryMixin",
+    "client.EntityRendererProviderContextInventoryMixin",
+    "client.EventBusAddLayersInventoryMixin",
     "client.FancyMenuBrowserElementFirstConsumerMixin",
     "client.FancyMenuMcefBrowserFirstConsumerMixin",
     "client.FancyMenuMcefVideoFirstConsumerMixin",
