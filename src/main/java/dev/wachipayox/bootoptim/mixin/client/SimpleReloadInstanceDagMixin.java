@@ -27,6 +27,8 @@ abstract class SimpleReloadInstanceDagMixin<S> {
     @Shadow protected CompletableFuture<List<S>> allDone;
 
     @Unique private long bootoptim$reloadGeneration;
+    @Unique private int bootoptim$listenerIndex;
+    @Unique private boolean bootoptim$modelManagerSeen;
 
     @Redirect(
             method = "<init>",
@@ -43,15 +45,28 @@ abstract class SimpleReloadInstanceDagMixin<S> {
             bootoptim$reloadGeneration = ResourceReloadDagTrace.beginReloadGeneration();
         }
         long generation = bootoptim$reloadGeneration;
+        int listenerIndex = bootoptim$listenerIndex++;
         PreparableReloadListener.PreparationBarrier actualBarrier = barrier;
         boolean modelManager = listener instanceof ModelManager;
+        boolean tailListener = bootoptim$modelManagerSeen && !modelManager;
+        String listenerClassName = listener.getClass().getName();
         if (modelManager) {
+            bootoptim$modelManagerSeen = true;
             actualBarrier = ResourceReloadDagTrace.wrapModelManagerBarrier(generation, barrier);
             ResourceReloadDagTrace.enterListener(generation);
+        } else if (tailListener) {
+            ResourceReloadDagTrace.beginTailListener(generation, listenerIndex, listenerClassName);
+            actualBarrier = ResourceReloadDagTrace.wrapTailListenerBarrier(
+                    generation, barrier, listenerIndex, listenerClassName);
         }
         try {
-            return SimpleReloadStateFactoryBridge.create(factory, actualBarrier, resourceManager,
+            CompletableFuture<S> future = SimpleReloadStateFactoryBridge.create(factory, actualBarrier, resourceManager,
                     listener, prepareExecutor, applyExecutor);
+            if (tailListener) {
+                ResourceReloadDagTrace.observeTailListenerCompletion(
+                        generation, listenerIndex, listenerClassName, future);
+            }
+            return future;
         } finally {
             if (modelManager) {
                 ResourceReloadDagTrace.exitListener();
