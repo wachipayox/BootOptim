@@ -46,6 +46,9 @@ public final class MinecraftBootstrapTraceTransformer implements ITransformer<Cl
         }
         if (normalReturns.isEmpty()) return input;
 
+        // This is a literal, already-proven transformation boundary: only emit it after the strict matcher has
+        // accepted the exact method, immediately before the existing diagnostic bytecode mutation.
+        ModLauncherTransitionTraceHooks.minecraftBootstrapTransformAccepted();
         bootstrap.instructions.insertBefore(firstExecutable, call("beginBootstrap"));
         for (var normalReturn : normalReturns) {
             bootstrap.instructions.insertBefore(normalReturn, call("endBootstrap"));
