@@ -4,6 +4,12 @@
 
 **ACTIVE — attribution confirmed; opt-in scheduling probe submitted as PR #192.**
 
+Independent static review in PR #191 confirms the attribution and adds an
+important constraint: neither listener is safe to move into preparation. The
+probe below therefore tests only same-barrier internal scheduling; it is not a
+`prepare/commit` implementation and must not be promoted merely because it
+reduces the listener's own wall time.
+
 This entry explains the two anonymous `Minecraft$$Lambda` slots reported by the
 PR #184 exact-pack diagnostic. It does not yet promote a runtime optimization.
 
@@ -31,6 +37,13 @@ constructor registers two consecutive listeners immediately before constructing
 The bytecode and upstream source agree on these bodies. The first listener is
 the 3.590560 s slot and the second is the 0.852055 s slot; the attribution is
 now a callsite fact rather than an inference from an anonymous class name.
+
+The independent dynamic probe in PR #189 correlated the final listener list by
+object identity in two fresh exact-pack VMs (`list_size=72`, 25→30046,
+26→30050, `registration_match=true`, zero mixin errors). It did not wrap or
+time listener execution and added only 701.623/725.418 microseconds of probe
+self-time. This closes the identity question without weakening the scheduling
+safety gate.
 
 ## Semantic and threading assessment
 
@@ -69,6 +82,12 @@ Required evidence before any promotion:
 4. the critical-path wall result, not task-sum CPU, must improve materially;
 5. the first-listener candidate needs an additional compatibility decision for
    arbitrary `Block#getOcclusionShape` callbacks, even if hosted timing wins.
+
+PR #191's independent conclusion is that generic parallelization is a
+provisional no-go. The reopen path is an algorithmic optimization that retains
+the exact apply barrier and proves equivalence for every affected state/model;
+the probe is useful only to falsify that path with an exact-pack run or to
+identify a narrowly safe subset.
 
 If the hosted gain is small or the mixin cannot be proven active, keep the
 attribution and close only the scheduling implementation, not the MoreCulling
