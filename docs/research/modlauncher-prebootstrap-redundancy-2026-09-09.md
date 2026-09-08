@@ -1,6 +1,6 @@
 # ModLauncher pre-Bootstrap redundancy audit — 2026-09-09
 
-Status: **ACTIVE DIAGNOSTIC / OPTIMIZATION NO-GO WITHOUT A NEW UPSTREAM CONTRACT**
+Status: **COMPLETE DIAGNOSTIC / LOCAL SECONDS-SCALE OPTIMIZATION NO-GO WITHOUT A NEW UPSTREAM CONTRACT**
 
 Agent 75. Authority was refreshed as `agent/integration-current` @ `fa6df8bc8f74aae32338f521bf845a5730ac634b` before branching.
 
@@ -77,35 +77,67 @@ Therefore BootOptim must not ship a cache that bypasses `processClassWithFlags`,
 
 The first diagnostic step is intentionally outside the transformation pipeline: opt-in Java Flight Recorder `jdk.ExecutionSample` sampling, post-processed only after the Minecraft JVM exits.
 
-`tools/boot-trace/analyze_prebootstrap_jfr.py` correlates JFR sample timestamps with the epoch origin and monotonic phase markers already emitted by the #200/#207 trace stack. It reports sample counts, threads, top frames and conservative package categories for exactly the three #207 phase windows.
+`tools/boot-trace/analyze_prebootstrap_jfr.py` correlates JFR sample timestamps with the epoch origin and monotonic phase markers already emitted by the #200/#207 trace stack. It reports sample counts, threads, top frames, top-frame categories and full-stack semantic ownership for exactly the three #207 phase windows.
 
 The exact-pack harness does **not** enable JFR by default. It only notices a specifically named `bootoptim-prebootstrap.jfr` after process exit, analyzes it, and appends one compact summary record to the already-uploaded console log. Missing JFR is a no-op. Analyzer failure is fail-open and occurs after endpoint/resource validation, so it cannot alter launch callbacks, class bytes, classloader choice, module construction, scheduling, threads or the `main_menu` endpoint.
 
 This is preferable to #42's launch-plugin wrappers for the current question: wrappers were useful and reached menu, but they mutate ModLauncher's live plugin map and necessarily add callback delegation/bookkeeping inside the path being measured. JFR sampling has lower coupling and no plugin identity/ordering risk.
 
-## Candidate decision tree after same-run attribution
+## Hosted exact-pack attribution result
 
-A seconds-scale candidate is acceptable only if the JFR profile puts material CPU in one of these buckets:
+The repository's ordinary exact-pack workflow was unable to launch Minecraft for this PR because its fixture job downloaded and verified the pinned JCEF payload but lost a GitHub Actions cache-reservation race; the benchmark job then used `actions/cache/restore` with `fail-on-cache-miss` and aborted before the timed JVM. Re-running the failed job reproduced the same provisioning failure. This is not a product signal.
 
-### 1. Mixin preparation/application remains dominant
+To avoid changing the timed JVM merely to work around that infrastructure race, commit `094b8e90701c92b476fed8580b598d2b6cd5e62b` added a branch-only diagnostic workflow that downloads and SHA-verifies the same exact-pack fixture and the same pinned JCEF payload directly **before** launching the benchmark. `Agent75 Exact Pack JFR` run `34288040085` completed successfully:
 
-BootOptim-side final-byte caching remains rejected. The maintainable optimization requires a new Mixin/upstream contract that separates **pure reusable preparation** from **per-launch state transitions**.
+- same exact-pack fixture SHA-256 `7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639`;
+- Oracle JDK 25.0.4 runtime, `ActiveProcessorCount=4`, llvmpipe;
+- BootOptim trace origin `hosted_exact_pack`, endpoint `main_menu`;
+- main menu reached at 93,070 ms;
+- BootOptim Mixin errors: 0;
+- resource-selection contract valid, one reload, expected and observed pack lists identical;
+- JFR summary produced after process exit.
 
-The useful upstream primitive would be a versioned immutable "compiled mixin plan" (parsed mixin bytecode, validated selectors/injection metadata and other demonstrably pure preparation artifacts) keyed by every input that affects that plan. On reuse, Mixin itself must still execute target selection, plugins, coprocessors, extensions, audit and application callbacks in stock order. BootOptim cannot safely infer or replay that state from the outside.
+The JFR run is **not** an end-to-end performance comparison. Its phase walls differ from #207 and JFR itself is an observer, so no regression or saving is inferred from those wall values. They are used only to bound the CPU attribution:
 
-A weaker upstream primitive would expose an explicit side-effect-free eligibility/plan cache API with invalidation fingerprints supplied by Mixin/config plugins. Without such an API, reflection/coremod replacement of Mixin internals is not maintainable enough for production.
+- parent SERVICE-transformers -> Bootstrap entry: 9,744.332 ms, 722 execution samples;
+- SERVICE-transformers -> strict Bootstrap transform acceptance: 3,707.624 ms, 347 samples;
+- strict Bootstrap transform acceptance -> Bootstrap entry: 6,036.645 ms, 375 samples.
 
-### 2. `Configuration.resolveAndBind` / GAME module-layer work is material
+### Before strict Bootstrap transform acceptance
 
-A BootOptim reflection replacement is rejected: it would duplicate JPMS resolution/binding semantics and publish custom live module objects. The required upstream primitive is either a supported reusable resolution descriptor or a loader-owned persistent cache whose validity is checked against exact `SecureJar` module descriptors/service bindings and parent configurations before stock `defineModules` publication.
+The 347 samples are not one serial transformation-service block:
 
-### 3. Class loading/definition dominates outside Mixin
+- `main`: 153 samples;
+- three `background-scan-handler-*` threads: 177 samples total;
+- `bootoptim-scan-cache-writer`: 16 samples;
+- async logger: 1 sample.
 
-Investigate CDS/AppCDS only for classes whose bytes are not transformed or whose archived form is explicitly supported by the JVM/custom loader. Do not archive-and-return transformed GAME bytes as a way to bypass launch-plugin or transformation-service callbacks.
+On `main`, full-stack exclusive ownership was: `other` 42, JPMS 27, ModLauncher 24, zip/I/O 16, ASM 14, module classloading/JarHandling 13, Mixin 10, JDK classloading 6, access transformer 1. JPMS + ModLauncher + module-loader ownership therefore accounts for 64/153 main-thread samples (~41.8%), with direct stacks through `Configuration.resolveAndBind`, `ModuleLayerHandler.buildLayer`, `ModuleLayer.defineModules`, `ModuleClassLoader` and JarHandling.
 
-### 4. No bucket owns seconds
+The 177 background-scan samples are real CPU overlap, with stacks through `net.neoforged.fml.loading.modscan.Scanner`, mod-file scanning, ASM parsing and zipfs. They are **not** added to the main-thread wall budget: JFR sample sums across concurrently running threads are not a critical-path saving. Changing their scheduling or scan callbacks is outside this front and would violate the task's semantic/scheduling constraint without a separate proof.
 
-Close this front as distributed mandatory work. Do not introduce a coremod/service wrapper merely to shave microphases or counts.
+This result makes GAME-layer resolution/construction the largest identifiable main-thread owner before transform acceptance, but not a demonstrated multi-second pure cache. Its public objects are live JPMS/module-reader/classloader state, so BootOptim has no maintainable persistent shortcut that preserves stock publication semantics.
+
+### Strict Bootstrap transform acceptance to actual Bootstrap entry
+
+This window is much more serial: 350/375 samples are on `main`, with 25 on `Datafixer Bootstrap`.
+
+Full-stack attribution is transformation-heavy but distributed. Mixin is the largest single semantic owner: 121 samples contain `org.spongepowered.asm` frames, including config selection/preparation, `MixinInfo` validation, `ClassInfo`, `getClassNode` side-loads, applicator/injector work and actual application. ModLauncher owns another 26 samples; access-transformer/FML ASM paths are also present; 68 samples are rooted in ASM without a deeper owner visible in the captured stack. Combining those transformation-related buckets identifies a seconds-scale aggregate, but not a pure subroutine that can be bypassed while preserving callbacks.
+
+A concrete redundant micro-path was also exposed: exact Mixin 0.8.7's `Bytecode.getOpcodeName` reflectively walks `Opcodes.getDeclaredFields()` and calls `Field.getInt` for opcode-name lookup. The JFR window contains 39 Mixin samples with this utility (36 ending in `Bytecode.getOpcodeName`). Newer Fabric Mixin source uses a direct opcode-name table instead. This is a credible version-pinned micro-optimization/backport, but the sample share is sub-second-scale for this phase; it does **not** satisfy this task's requirement to prioritize a seconds-moving hypothesis, so no invasive coremod patch is proposed here.
+
+## Final decision
+
+**No-go for a BootOptim-local seconds-scale optimization of the #207 pre-Bootstrap front under the required semantic constraints.** The hosted profile does not reveal a maintainable pure boundary large enough to justify replacing transformation services, launch plugins, the GAME classloader, or Mixin state transitions.
+
+The only two mechanisms with credible seconds-scale aggregate ceilings require ownership upstream:
+
+1. **Mixin-owned reusable preparation contract.** Mixin would expose/version an immutable compiled preparation plan for demonstrably pure work (parsed mixin class data, validated selectors/injection metadata, immutable target-independent analysis). The cache key and invalidation inputs must be supplied by Mixin/config plugins. On reuse, stock per-launch selection, config/plugin/coprocessor/extension/audit callbacks and class application still execute in the same order on fresh mutable class state. BootOptim must not infer that contract by reflecting into 0.8.7 internals.
+2. **ModLauncher/JarHandling-owned module-resolution descriptor cache.** Loader code would validate exact `SecureJar` module descriptors, service bindings and parent configuration identity, then reconstruct fresh live JPMS/classloader state through a supported API. BootOptim must not persist/reuse live `Configuration`, `ModuleReference`, `ModuleReader` or classloader instances across launches.
+
+If neither upstream contract is available, this phase should be treated as distributed mandatory startup work rather than wrapped/reordered/cached from BootOptim.
+
+No physical-laptop run is justified: this PR is diagnostic and found no hosted optimization candidate. No A/B optimization run is claimed or required because no candidate was enabled.
 
 ## Explicit no-go mechanisms
 
@@ -118,11 +150,12 @@ Unless a new upstream contract changes a material premise, do not pursue:
 - generic Mixin side-load caches, ClassInfo negative caches, target-membership caches, or ASM serialization caches as a seconds-scale claim;
 - moving the first Mixin preparation trigger to another thread or earlier phase and calling the shift a reduction without identical-origin/end-to-end evidence.
 
-## Validation contract for this PR
+## Validation contract and status
 
 - diagnostic stack dependency is explicit (#200 -> #201 -> #202 -> #203 -> #205 -> #207 -> this PR);
-- Python unit test verifies phase-window correlation and conservative sample categorization;
-- normal build/package and startup must remain green with JFR absent;
-- hosted exact-pack profile enables JFR explicitly and must reach the same `main_menu` endpoint with zero BootOptim Mixin errors and valid resource selection;
+- Python unit coverage verifies phase-window correlation, nanosecond timestamp parsing, top-frame categorization and full-stack semantic ownership;
+- normal build/package and startup were green before the hosted profile, with JFR absent;
+- hosted direct exact-pack profile `34288040085` reached the same `main_menu` endpoint with zero BootOptim Mixin errors and valid resource selection;
+- the ordinary exact-pack workflow failure is a pre-JVM JCEF cache-reservation infrastructure failure and is recorded separately from the successful direct pinned gate;
 - JFR sample counts are CPU attribution only, not wall-clock savings;
 - no physical laptop run is requested at this diagnostic stage.
