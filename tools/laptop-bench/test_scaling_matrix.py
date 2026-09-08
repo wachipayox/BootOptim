@@ -32,13 +32,18 @@ sys.modules[SUMMARY_SPEC.name] = SUMMARY
 SUMMARY_SPEC.loader.exec_module(SUMMARY)
 
 
-def make_mod(path: Path, mod_id: str, dependencies: list[str] = ()) -> None:
+def make_mod(
+    path: Path,
+    mod_id: str,
+    dependencies: list[str] = (),
+    mod_loader: str = "javafml",
+) -> None:
     dependency_text = "".join(
         f"\n[dependencies.{mod_id}.{dependency}]\nmodId=\"{dependency}\"\nmandatory=true\n"
         for dependency in dependencies
     )
     metadata = (
-        "modLoader=\"javafml\"\nloaderVersion=\"[4,)\"\n"
+        f"modLoader=\"{mod_loader}\"\nloaderVersion=\"[4,)\"\n"
         "[[mods]]\nmodId=\"{0}\"\nversion=\"1.0\"\n".format(mod_id)
         + dependency_text
     )
@@ -163,6 +168,19 @@ class ScalingPlanTest(unittest.TestCase):
             variant = next(item for item in plan["variants"] if item["id"] == "mod-feature")
             self.assertEqual(variant["missing_dependencies"], ["missing"])
             self.assertEqual(variant["artifacts"], ["feature.jar"])
+
+    def test_non_builtin_language_provider_is_a_required_closure_edge(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "kotlin.jar", "kotlinforforge")
+            make_mod(mods / "libipn.jar", "libipn", mod_loader="kotlinforforge")
+
+            plan = PLAN.build_plan(pack, [], [])
+            variant = next(item for item in plan["variants"] if item["id"] == "mod-libipn")
+            self.assertEqual(variant["mod_ids"], ["kotlinforforge", "libipn"])
+            self.assertEqual(variant["artifacts"], ["kotlin.jar", "libipn.jar"])
 
     def test_platform_dependencies_are_not_reported_as_missing_artifacts(self):
         with tempfile.TemporaryDirectory() as raw:

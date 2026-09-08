@@ -298,6 +298,14 @@ to the performance ledger. The next matrix should select `baseline`, `full`,
 and `complement-*` variants; subset partitions remain useful only as explicitly
 diagnostic evidence for phase disappearance.
 
+The first real complement run additionally exposed an omitted loader contract:
+LibIPN uses `modLoader="kotlinforforge"`, which NeoForge treats as a hard
+language-provider requirement rather than a `[[dependencies]]` entry. The
+planner now converts non-built-in language providers into required closure
+edges, so a selected Kotlin mod carries KotlinForForge even when its metadata
+has no ordinary dependency table. The failed pre-fix complement is discarded;
+it is contract evidence only.
+
 For a future diagnostic rerun, the benchmark-only JVM property
 `-Dboot_optim.benchmark.screenProbe=true` records every NeoForge
 `ScreenEvent.Opening` class as `BOOTOPTIM_SCREEN`. It is intentionally opt-in

@@ -24,6 +24,9 @@ QUOTED_RE = re.compile(r'^"([^"]*)"')
 # These are supplied by the Minecraft/NeoForge runtime rather than by a
 # selectable mod artifact in the exact-pack `mods/` directory.
 PLATFORM_PROVIDED_MOD_IDS = {"minecraft", "neoforge", "forge", "javafml"}
+# Loader-level language providers are supplied by NeoForge itself and must not
+# turn into selectable closure edges.
+BUILTIN_LANGUAGE_PROVIDERS = {"javafml", "lowcodefml", "neoforge", "forge"}
 
 
 @dataclass
@@ -59,6 +62,7 @@ def _parse_metadata_text(
     dependencies: dict[str, set[str]] = {}
     optional_dependencies: dict[str, set[str]] = {}
     dependency_mode = "required"
+    language_provider: str | None = None
 
     def record_dependency() -> None:
         if not current_mod or not current_dependency:
@@ -104,6 +108,9 @@ def _parse_metadata_text(
             continue
         key, raw_value = match.groups()
         value = _value(raw_value)
+        if key == "modLoader" and value:
+            language_provider = value
+            continue
         if section == "mods":
             if key == "modId" and value:
                 current_mod = value
@@ -133,6 +140,13 @@ def _parse_metadata_text(
                     else "excluded"
                 )
                 record_dependency()
+    # `modLoader="kotlinforforge"` is a hard loader contract, not a normal
+    # [[dependencies]] table. Without this edge a reduced variant can copy a
+    # Kotlin mod and fail in NeoForge's loading screen instead of producing a
+    # valid attribution point.
+    if language_provider and language_provider.lower() not in BUILTIN_LANGUAGE_PROVIDERS:
+        for mod_id, _ in mods:
+            dependencies.setdefault(mod_id, set()).add(language_provider)
     return mods, dependencies, optional_dependencies
 
 
