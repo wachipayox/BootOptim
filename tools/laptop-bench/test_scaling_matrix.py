@@ -96,6 +96,8 @@ class ScalingPlanTest(unittest.TestCase):
                 '[[mods]]\nmodId="feature"\nversion="1.0"\n'
                 '[[dependencies."feature"]]\n'
                 'modId="base"\ntype="required"\n'
+                '[[dependencies."feature"]]\n'
+                'modId="optional"\ntype="optional"\n'
             )
             with zipfile.ZipFile(mods / "feature.jar", "w") as archive:
                 archive.writestr("META-INF/neoforge.mods.toml", metadata)

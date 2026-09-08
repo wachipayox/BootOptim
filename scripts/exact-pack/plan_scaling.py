@@ -106,12 +106,28 @@ def read_metadata(jar: Path) -> tuple[list[tuple[str, str | None]], dict[str, se
         elif section.startswith("dependencies."):
             if key == "modId" and value:
                 current_dependency = value
-                dependencies.setdefault(current_mod or "", set())
-                dependencies[current_mod or ""].add(value)
+                if dependency_mandatory:
+                    dependencies.setdefault(current_mod or "", set())
+                    dependencies[current_mod or ""].add(value)
             elif key == "mandatory":
-                dependency_mandatory = raw_value.lower() == "true"
-                if not dependency_mandatory and current_mod and current_dependency:
-                    dependencies.setdefault(current_mod, set()).discard(current_dependency)
+                mandatory_text = raw_value.strip().strip('"').strip("'").lower()
+                dependency_mandatory = mandatory_text == "true"
+                if current_mod and current_dependency:
+                    dependencies.setdefault(current_mod, set())
+                    if dependency_mandatory:
+                        dependencies[current_mod].add(current_dependency)
+                    else:
+                        dependencies[current_mod].discard(current_dependency)
+            elif key == "type" and value:
+                # NeoForge's current schema uses type=required/optional/
+                # incompatible/discouraged instead of mandatory=false.
+                dependency_mandatory = value.lower() == "required"
+                if current_mod and current_dependency:
+                    dependencies.setdefault(current_mod, set())
+                    if dependency_mandatory:
+                        dependencies[current_mod].add(current_dependency)
+                    else:
+                        dependencies[current_mod].discard(current_dependency)
     return mods, dependencies
 
 
