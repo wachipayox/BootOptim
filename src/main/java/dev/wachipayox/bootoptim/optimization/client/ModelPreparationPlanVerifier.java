@@ -34,20 +34,15 @@ import org.joml.Vector3f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Stage A only: builds a detached immutable representation of strict vanilla ElementsModel geometry,
- * lowers it with the current reload's material/sprite getter and stock BlockModel.bakeFace, compares
- * against the real stock ElementsModel writes, and never substitutes candidate output.
- */
+/** Stage A shadow verifier: candidate output is never published. */
 public final class ModelPreparationPlanVerifier {
     public static final String PROPERTY = "boot_optim.modelPreparationPlan";
     public static final String MARKER = "BOOTOPTIM_MODEL_PREPARATION_PLAN";
-
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/ModelPreparationPlan");
     private static final AtomicReference<RunStats> CURRENT = new AtomicReference<>();
-    private static final ThreadLocal<Deque<VerificationState>> ACTIVE = ThreadLocal.withInitial(ArrayDeque::new);
-    private static final AtomicInteger LOGGED_MISMATCHES = new AtomicInteger();
-    private static final java.lang.management.ThreadMXBean CPU_BEAN = ManagementFactory.getThreadMXBean();
+    private static final ThreadLocal<Deque<State>> ACTIVE = ThreadLocal.withInitial(ArrayDeque::new);
+    private static final AtomicInteger LOGGED = new AtomicInteger();
+    private static final java.lang.management.ThreadMXBean CPU = ManagementFactory.getThreadMXBean();
 
     private ModelPreparationPlanVerifier() {}
 
@@ -56,447 +51,186 @@ public final class ModelPreparationPlanVerifier {
     }
 
     public static void beginReload() {
-        if (!enabled()) return;
-        CURRENT.set(new RunStats(System.nanoTime(), gcMillis()));
-        LOGGED_MISMATCHES.set(0);
+        if (enabled()) {
+            CURRENT.set(new RunStats(System.nanoTime(), gcMillis()));
+            LOGGED.set(0);
+        }
     }
 
     public static long barrierStart() {
         return enabled() ? System.nanoTime() : -1L;
     }
 
-    public static void finishReload(long barrierStartedNanos, Throwable failure) {
-        if (!enabled()) return;
-        RunStats run = CURRENT.getAndSet(null);
-        if (run == null) return;
-        run.modelManagerBarrierNanos = barrierStartedNanos > 0L ? System.nanoTime() - barrierStartedNanos : -1L;
-        run.gcDeltaMillis = Math.max(0L, gcMillis() - run.gcStartMillis);
-        LOGGER.info(
-                "{} mode=verify status={} encountered_calls={} eligible_calls={} plans_built={} plan_elements={} plan_faces={} matches={} mismatches={} fallbacks={} "
-                        + "plan_build_wall_ms={} plan_build_cpu_ms={} plan_build_alloc_bytes={} candidate_wall_ms={} candidate_cpu_ms={} candidate_alloc_bytes={} "
-                        + "candidate_facebakery_ms={} stock_wall_ms={} stock_cpu_ms={} stock_alloc_bytes={} stock_facebakery_ms={} compare_ms={} "
-                        + "modelmanager_barrier_ms={} verifier_window_ms={} gc_delta_ms={} ineligible_context={} ineligible_custom_geometry={} ineligible_transform={} "
-                        + "ineligible_render_type={} ineligible_owner={} ineligible_parent={} ineligible_elements_identity={} ineligible_extra_face_data={} ineligible_empty={} ineligible_malformed={}",
-                MARKER,
-                failure == null ? "complete" : "stock_failed",
-                run.encountered.sum(), run.eligible.sum(), run.plansBuilt.sum(), run.planElements.sum(), run.planFaces.sum(),
-                run.matches.sum(), run.mismatches.sum(), run.fallbacks.sum(),
-                ms(run.planBuildWall.sum()), ms(run.planBuildCpu.sum()), run.planBuildAlloc.sum(),
-                ms(run.candidateWall.sum()), ms(run.candidateCpu.sum()), run.candidateAlloc.sum(), ms(run.candidateFaceBakery.sum()),
-                ms(run.stockWall.sum()), ms(run.stockCpu.sum()), run.stockAlloc.sum(), ms(run.stockFaceBakery.sum()), ms(run.compareWall.sum()),
-                ms(run.modelManagerBarrierNanos), ms(System.nanoTime() - run.startedNanos), run.gcDeltaMillis,
-                run.ineligibleContext.sum(), run.ineligibleCustomGeometry.sum(), run.ineligibleTransform.sum(), run.ineligibleRenderType.sum(),
-                run.ineligibleOwner.sum(), run.ineligibleParent.sum(), run.ineligibleElementsIdentity.sum(), run.ineligibleExtraFaceData.sum(),
-                run.ineligibleEmpty.sum(), run.ineligibleMalformed.sum());
+    public static void finishReload(long started, Throwable failure) {
+        RunStats r = CURRENT.getAndSet(null);
+        if (r == null) return;
+        long barrier = started > 0 ? System.nanoTime() - started : -1;
+        long gc = Math.max(0, gcMillis() - r.gcStart);
+        LOGGER.info("{} mode=verify status={} encountered_calls={} eligible_calls={} plans_built={} plan_elements={} plan_faces={} matches={} mismatches={} fallbacks={} plan_build_wall_ms={} plan_build_cpu_ms={} plan_build_alloc_bytes={} candidate_wall_ms={} candidate_cpu_ms={} candidate_alloc_bytes={} candidate_facebakery_ms={} stock_wall_ms={} stock_cpu_ms={} stock_alloc_bytes={} stock_facebakery_ms={} compare_ms={} modelmanager_barrier_ms={} verifier_window_ms={} gc_delta_ms={} ineligible_context={} ineligible_custom_geometry={} ineligible_transform={} ineligible_render_type={} ineligible_owner={} ineligible_parent={} ineligible_elements_identity={} ineligible_extra_face_data={} ineligible_empty={} ineligible_malformed={}",
+                MARKER, failure == null ? "complete" : "stock_failed", r.encountered.sum(), r.eligible.sum(), r.plans.sum(), r.elements.sum(), r.faces.sum(), r.matches.sum(), r.mismatches.sum(), r.fallbacks.sum(),
+                ms(r.planWall.sum()), ms(r.planCpu.sum()), r.planAlloc.sum(), ms(r.candidateWall.sum()), ms(r.candidateCpu.sum()), r.candidateAlloc.sum(), ms(r.candidateFace.sum()),
+                ms(r.stockWall.sum()), ms(r.stockCpu.sum()), r.stockAlloc.sum(), ms(r.stockFace.sum()), ms(r.compare.sum()), ms(barrier), ms(System.nanoTime() - r.started), gc,
+                r.badContext.sum(), r.badCustom.sum(), r.badTransform.sum(), r.badRender.sum(), r.badOwner.sum(), r.badParent.sum(), r.badIdentity.sum(), r.badFaceData.sum(), r.badEmpty.sum(), r.badMalformed.sum());
     }
 
-    public static void beginElements(
-            IGeometryBakingContext context,
-            List<BlockElement> elements,
-            ModelBaker baker,
-            Function<Material, TextureAtlasSprite> spriteGetter,
-            ModelState modelState) {
-        RunStats run = CURRENT.get();
-        if (!enabled() || run == null) return;
-        run.encountered.increment();
-
-        Eligibility eligibility = classify(context, elements, run);
-        if (eligibility == null) return;
-
-        BlockGeometryBakingContext blockContext = eligibility.context;
-        ModelPreparationPlanHolder holder = (ModelPreparationPlanHolder) blockContext.owner;
-        if (holder.bootoptim$modelPreparationPlanPoisoned()) {
-            run.fallbacks.increment();
-            return;
-        }
+    public static void beginElements(IGeometryBakingContext context, List<BlockElement> elements, ModelBaker baker,
+            Function<Material, TextureAtlasSprite> spriteGetter, ModelState state) {
+        RunStats r = CURRENT.get();
+        if (!enabled() || r == null) return;
+        r.encountered.increment();
+        BlockGeometryBakingContext ctx = classify(context, elements, r);
+        if (ctx == null) return;
+        ModelPreparationPlanHolder holder = (ModelPreparationPlanHolder) ctx.owner;
+        if (holder.bootoptim$modelPreparationPlanPoisoned()) { r.fallbacks.increment(); return; }
 
         Plan plan = holder.bootoptim$modelPreparationPlan();
         if (!holder.bootoptim$modelPreparationPlanCompiled()) {
-            long wallStart = System.nanoTime();
-            long cpuStart = cpuNanos();
-            long allocStart = allocatedBytes();
+            long w = System.nanoTime(), c = cpu(), a = alloc();
             try {
                 plan = Plan.build(elements);
                 holder.bootoptim$setModelPreparationPlan(plan);
                 holder.bootoptim$markModelPreparationPlanCompiled();
-                if (plan != null) {
-                    run.plansBuilt.increment();
-                    run.planElements.add(plan.elements.size());
-                    run.planFaces.add(plan.faceCount);
-                }
+                if (plan != null) { r.plans.increment(); r.elements.add(plan.elements.size()); r.faces.add(plan.faceCount); }
             } catch (RuntimeException | LinkageError ex) {
-                holder.bootoptim$markModelPreparationPlanCompiled();
-                run.fallbacks.increment();
-                run.ineligibleMalformed.increment();
-                return;
+                holder.bootoptim$markModelPreparationPlanCompiled(); r.fallbacks.increment(); r.badMalformed.increment(); return;
             } finally {
-                run.planBuildWall.add(System.nanoTime() - wallStart);
-                addDelta(run.planBuildCpu, cpuStart, cpuNanos());
-                addDelta(run.planBuildAlloc, allocStart, allocatedBytes());
+                r.planWall.add(System.nanoTime() - w); delta(r.planCpu, c, cpu()); delta(r.planAlloc, a, alloc());
             }
         }
         if (plan == null) return;
 
-        long candidateWallStart = System.nanoTime();
-        long candidateCpuStart = cpuNanos();
-        long candidateAllocStart = allocatedBytes();
+        long w = System.nanoTime(), c = cpu(), a = alloc();
         List<QuadRecord> candidate;
         try {
-            candidate = plan.lower(blockContext, spriteGetter, modelState, run);
+            candidate = plan.lower(ctx, spriteGetter, state, r);
         } catch (RuntimeException | LinkageError ex) {
-            run.fallbacks.increment();
-            holder.bootoptim$poisonModelPreparationPlan();
-            return;
+            holder.bootoptim$poisonModelPreparationPlan(); r.fallbacks.increment(); return;
         } finally {
-            run.candidateWall.add(System.nanoTime() - candidateWallStart);
-            addDelta(run.candidateCpu, candidateCpuStart, cpuNanos());
-            addDelta(run.candidateAlloc, candidateAllocStart, allocatedBytes());
+            r.candidateWall.add(System.nanoTime() - w); delta(r.candidateCpu, c, cpu()); delta(r.candidateAlloc, a, alloc());
         }
-
-        run.eligible.increment();
-        ACTIVE.get().push(new VerificationState(
-                holder,
-                context.getModelName(),
-                candidate,
-                new ArrayList<>(candidate.size()),
-                System.nanoTime(),
-                cpuNanos(),
-                allocatedBytes()));
+        r.eligible.increment();
+        ACTIVE.get().push(new State(holder, context.getModelName(), candidate, new ArrayList<>(candidate.size()), System.nanoTime(), cpu(), alloc()));
     }
 
-    /** Redirect target for the stock BlockModel.bakeFace call; returns the exact stock result unchanged. */
-    public static BakedQuad stockBakeFace(
-            BlockElement element,
-            BlockElementFace face,
-            TextureAtlasSprite sprite,
-            Direction direction,
-            ModelState modelState) {
-        VerificationState state = currentState();
+    public static BakedQuad stockBakeFace(BlockElement element, BlockElementFace face, TextureAtlasSprite sprite,
+            Direction direction, ModelState modelState) {
+        State state = current();
         if (state == null) return BlockModel.bakeFace(element, face, sprite, direction, modelState);
-        RunStats run = CURRENT.get();
-        long started = System.nanoTime();
-        try {
-            return BlockModel.bakeFace(element, face, sprite, direction, modelState);
-        } finally {
-            if (run != null) run.stockFaceBakery.add(System.nanoTime() - started);
-        }
+        RunStats r = CURRENT.get(); long s = System.nanoTime();
+        try { return BlockModel.bakeFace(element, face, sprite, direction, modelState); }
+        finally { if (r != null) r.stockFace.add(System.nanoTime() - s); }
     }
 
-    public static void recordStockUnculled(BakedQuad quad) {
-        VerificationState state = currentState();
-        if (state != null) state.stock.add(new QuadRecord(null, quad));
-    }
-
-    public static void recordStockCulled(Direction direction, BakedQuad quad) {
-        VerificationState state = currentState();
-        if (state != null) state.stock.add(new QuadRecord(direction, quad));
-    }
+    public static void recordStockUnculled(BakedQuad quad) { State s = current(); if (s != null) s.stock.add(new QuadRecord(null, quad)); }
+    public static void recordStockCulled(Direction direction, BakedQuad quad) { State s = current(); if (s != null) s.stock.add(new QuadRecord(direction, quad)); }
 
     public static void endElements() {
-        Deque<VerificationState> stack = ACTIVE.get();
-        if (stack.isEmpty()) return;
-        VerificationState state = stack.pop();
-        if (stack.isEmpty()) ACTIVE.remove();
-        RunStats run = CURRENT.get();
-        if (run == null) return;
-
-        run.stockWall.add(System.nanoTime() - state.stockWallStart);
-        addDelta(run.stockCpu, state.stockCpuStart, cpuNanos());
-        addDelta(run.stockAlloc, state.stockAllocStart, allocatedBytes());
-
-        long compareStart = System.nanoTime();
-        String mismatch = compare(state.stock, state.candidate);
-        run.compareWall.add(System.nanoTime() - compareStart);
-        if (mismatch == null) {
-            run.matches.increment();
-        } else {
-            run.mismatches.increment();
-            state.holder.bootoptim$poisonModelPreparationPlan();
-            if (LOGGED_MISMATCHES.getAndIncrement() < 16) {
-                LOGGER.warn("{} mismatch model={} reason={}", MARKER, state.modelName, mismatch);
-            }
-        }
+        Deque<State> stack = ACTIVE.get(); if (stack.isEmpty()) return;
+        State s = stack.pop(); if (stack.isEmpty()) ACTIVE.remove();
+        RunStats r = CURRENT.get(); if (r == null) return;
+        r.stockWall.add(System.nanoTime() - s.wall); delta(r.stockCpu, s.cpu, cpu()); delta(r.stockAlloc, s.alloc, alloc());
+        long compareStart = System.nanoTime(); String mismatch = compare(s.stock, s.candidate); r.compare.add(System.nanoTime() - compareStart);
+        if (mismatch == null) r.matches.increment();
+        else { r.mismatches.increment(); s.holder.bootoptim$poisonModelPreparationPlan(); if (LOGGED.getAndIncrement() < 16) LOGGER.warn("{} mismatch model={} reason={}", MARKER, s.name, mismatch); }
     }
 
-    private static VerificationState currentState() {
-        Deque<VerificationState> stack = ACTIVE.get();
-        return stack.isEmpty() ? null : stack.peek();
-    }
+    private static State current() { Deque<State> s = ACTIVE.get(); return s.isEmpty() ? null : s.peek(); }
 
-    private static Eligibility classify(IGeometryBakingContext context, List<BlockElement> elements, RunStats run) {
-        if (context == null || context.getClass() != BlockGeometryBakingContext.class) {
-            run.ineligibleContext.increment();
-            return null;
-        }
-        BlockGeometryBakingContext blockContext = (BlockGeometryBakingContext) context;
-        BlockModel owner = blockContext.owner;
-        if (owner == null || owner.getClass() != BlockModel.class || !(owner instanceof ModelPreparationPlanHolder)) {
-            run.ineligibleOwner.increment();
-            return null;
-        }
+    private static BlockGeometryBakingContext classify(IGeometryBakingContext context, List<BlockElement> elements, RunStats r) {
+        if (context == null || context.getClass() != BlockGeometryBakingContext.class) { r.badContext.increment(); return null; }
+        BlockGeometryBakingContext ctx = (BlockGeometryBakingContext) context; BlockModel owner = ctx.owner;
+        if (owner == null || owner.getClass() != BlockModel.class || !(owner instanceof ModelPreparationPlanHolder)) { r.badOwner.increment(); return null; }
         try {
-            if (blockContext.hasCustomGeometry()) {
-                run.ineligibleCustomGeometry.increment();
-                return null;
-            }
-            if (!blockContext.getRootTransform().isIdentity()) {
-                run.ineligibleTransform.increment();
-                return null;
-            }
-            if (blockContext.getRenderTypeHint() != null) {
-                run.ineligibleRenderType.increment();
-                return null;
-            }
-            if (owner.getElements() != elements) {
-                run.ineligibleElementsIdentity.increment();
-                return null;
-            }
-        } catch (RuntimeException ex) {
-            run.ineligibleMalformed.increment();
-            return null;
-        }
-
+            if (ctx.hasCustomGeometry()) { r.badCustom.increment(); return null; }
+            if (!ctx.getRootTransform().isIdentity()) { r.badTransform.increment(); return null; }
+            if (ctx.getRenderTypeHint() != null) { r.badRender.increment(); return null; }
+            if (owner.getElements() != elements) { r.badIdentity.increment(); return null; }
+        } catch (RuntimeException ex) { r.badMalformed.increment(); return null; }
         IdentityHashMap<BlockModel, Boolean> seen = new IdentityHashMap<>();
-        for (BlockModel cursor = owner; cursor != null; cursor = cursor.parent) {
-            if (cursor.getClass() != BlockModel.class || seen.put(cursor, Boolean.TRUE) != null) {
-                run.ineligibleParent.increment();
-                return null;
+        for (BlockModel cursor = owner; cursor != null; cursor = cursor.parent)
+            if (cursor.getClass() != BlockModel.class || seen.put(cursor, Boolean.TRUE) != null) { r.badParent.increment(); return null; }
+        if (elements == null || elements.isEmpty()) { r.badEmpty.increment(); return null; }
+        for (BlockElement e : elements) {
+            if (e == null || e.faces == null || e.faces.isEmpty()) { r.badMalformed.increment(); return null; }
+            if (!ExtraFaceData.DEFAULT.equals(e.getFaceData())) { r.badFaceData.increment(); return null; }
+            for (Map.Entry<Direction, BlockElementFace> entry : e.faces.entrySet()) {
+                BlockElementFace f = entry.getValue();
+                if (entry.getKey() == null || f == null || f.uv() == null || f.uv().uvs == null || f.uv().uvs.length != 4 || !ExtraFaceData.DEFAULT.equals(f.faceData())) { r.badFaceData.increment(); return null; }
             }
         }
-        if (elements == null || elements.isEmpty()) {
-            run.ineligibleEmpty.increment();
-            return null;
-        }
-        for (BlockElement element : elements) {
-            if (element == null || element.faces == null || element.faces.isEmpty()) {
-                run.ineligibleMalformed.increment();
-                return null;
-            }
-            if (!ExtraFaceData.DEFAULT.equals(element.getFaceData())) {
-                run.ineligibleExtraFaceData.increment();
-                return null;
-            }
-            for (Map.Entry<Direction, BlockElementFace> entry : element.faces.entrySet()) {
-                BlockElementFace face = entry.getValue();
-                if (entry.getKey() == null || face == null || face.uv() == null || face.uv().uvs == null || face.uv().uvs.length != 4
-                        || !ExtraFaceData.DEFAULT.equals(face.faceData())) {
-                    run.ineligibleExtraFaceData.increment();
-                    return null;
-                }
-            }
-        }
-        return new Eligibility(blockContext);
+        return ctx;
     }
 
-    private static String compare(List<QuadRecord> stock, List<QuadRecord> candidate) {
-        if (stock.size() != candidate.size()) return "quad_count stock=" + stock.size() + " candidate=" + candidate.size();
-        for (int i = 0; i < stock.size(); i++) {
-            QuadRecord a = stock.get(i);
-            QuadRecord b = candidate.get(i);
-            if (a.cullDirection != b.cullDirection) return "cull_bucket@" + i;
-            BakedQuad aq = a.quad;
-            BakedQuad bq = b.quad;
-            if (aq.getClass() != bq.getClass()) return "quad_class@" + i;
-            if (aq.getSprite() != bq.getSprite()) return "sprite_identity@" + i;
-            if (aq.getTintIndex() != bq.getTintIndex()) return "tint@" + i;
-            if (aq.getDirection() != bq.getDirection()) return "direction@" + i;
-            if (aq.isShade() != bq.isShade()) return "shade@" + i;
-            if (aq.hasAmbientOcclusion() != bq.hasAmbientOcclusion()) return "ambient_occlusion@" + i;
-            if (!Arrays.equals(aq.getVertices(), bq.getVertices())) return "vertices@" + i;
+    private static String compare(List<QuadRecord> a, List<QuadRecord> b) {
+        if (a.size() != b.size()) return "quad_count:" + a.size() + "/" + b.size();
+        for (int i = 0; i < a.size(); i++) {
+            QuadRecord x = a.get(i), y = b.get(i); BakedQuad q = x.quad, z = y.quad;
+            if (x.cull != y.cull) return "cull@" + i;
+            if (q.getClass() != z.getClass()) return "class@" + i;
+            if (q.getSprite() != z.getSprite()) return "sprite_identity@" + i;
+            if (q.getTintIndex() != z.getTintIndex() || q.getDirection() != z.getDirection() || q.isShade() != z.isShade() || q.hasAmbientOcclusion() != z.hasAmbientOcclusion()) return "metadata@" + i;
+            if (!Arrays.equals(q.getVertices(), z.getVertices())) return "vertices@" + i;
         }
         return null;
     }
 
-    private static long cpuNanos() {
-        return CPU_BEAN.isCurrentThreadCpuTimeSupported() ? CPU_BEAN.getCurrentThreadCpuTime() : -1L;
+    private static long cpu() { return CPU.isCurrentThreadCpuTimeSupported() ? CPU.getCurrentThreadCpuTime() : -1; }
+    private static long alloc() { return Allocation.BEAN == null ? -1 : Allocation.BEAN.getThreadAllocatedBytes(Thread.currentThread().threadId()); }
+    private static void delta(LongAdder out, long a, long b) { if (a >= 0 && b >= a) out.add(b - a); }
+    private static long gcMillis() { long v = 0; for (GarbageCollectorMXBean g : ManagementFactory.getGarbageCollectorMXBeans()) if (g.getCollectionTime() > 0) v += g.getCollectionTime(); return v; }
+    private static String ms(long n) { return n < 0 ? "n/a" : String.format(Locale.ROOT, "%.3f", n / 1_000_000d); }
+
+    private static final class Allocation {
+        static final ThreadMXBean BEAN = make();
+        static ThreadMXBean make() { java.lang.management.ThreadMXBean b = ManagementFactory.getThreadMXBean(); if (!(b instanceof ThreadMXBean s) || !s.isThreadAllocatedMemorySupported()) return null; if (!s.isThreadAllocatedMemoryEnabled()) s.setThreadAllocatedMemoryEnabled(true); return s; }
     }
 
-    private static long allocatedBytes() {
-        return AllocationSupport.currentThreadBytes();
-    }
-
-    private static void addDelta(LongAdder target, long before, long after) {
-        if (before >= 0L && after >= before) target.add(after - before);
-    }
-
-    private static long gcMillis() {
-        long sum = 0L;
-        for (GarbageCollectorMXBean gc : ManagementFactory.getGarbageCollectorMXBeans()) {
-            long value = gc.getCollectionTime();
-            if (value > 0L) sum += value;
-        }
-        return sum;
-    }
-
-    private static String ms(long nanos) {
-        return nanos < 0L ? "n/a" : String.format(Locale.ROOT, "%.3f", nanos / 1_000_000.0D);
-    }
-
-    private static final class AllocationSupport {
-        private static final ThreadMXBean BEAN = create();
-
-        private static ThreadMXBean create() {
-            java.lang.management.ThreadMXBean bean = ManagementFactory.getThreadMXBean();
-            if (!(bean instanceof ThreadMXBean sun) || !sun.isThreadAllocatedMemorySupported()) return null;
-            if (!sun.isThreadAllocatedMemoryEnabled()) sun.setThreadAllocatedMemoryEnabled(true);
-            return sun;
-        }
-
-        private static long currentThreadBytes() {
-            ThreadMXBean bean = BEAN;
-            return bean == null ? -1L : bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
-        }
-    }
-
-    private record Eligibility(BlockGeometryBakingContext context) {}
-
-    private static final class VerificationState {
-        private final ModelPreparationPlanHolder holder;
-        private final String modelName;
-        private final List<QuadRecord> candidate;
-        private final List<QuadRecord> stock;
-        private final long stockWallStart;
-        private final long stockCpuStart;
-        private final long stockAllocStart;
-
-        private VerificationState(ModelPreparationPlanHolder holder, String modelName, List<QuadRecord> candidate,
-                List<QuadRecord> stock, long stockWallStart, long stockCpuStart, long stockAllocStart) {
-            this.holder = holder;
-            this.modelName = modelName;
-            this.candidate = candidate;
-            this.stock = stock;
-            this.stockWallStart = stockWallStart;
-            this.stockCpuStart = stockCpuStart;
-            this.stockAllocStart = stockAllocStart;
-        }
-    }
-
-    private record QuadRecord(Direction cullDirection, BakedQuad quad) {}
+    private record State(ModelPreparationPlanHolder holder, String name, List<QuadRecord> candidate, List<QuadRecord> stock, long wall, long cpu, long alloc) {}
+    private record QuadRecord(Direction cull, BakedQuad quad) {}
 
     public static final class Plan {
-        private final List<ElementIr> elements;
-        private final int faceCount;
-
-        private Plan(List<ElementIr> elements, int faceCount) {
-            this.elements = List.copyOf(elements);
-            this.faceCount = faceCount;
-        }
-
+        private final List<ElementIr> elements; private final int faceCount;
+        private Plan(List<ElementIr> elements, int faceCount) { this.elements = List.copyOf(elements); this.faceCount = faceCount; }
         private static Plan build(List<BlockElement> source) {
-            ArrayList<ElementIr> elements = new ArrayList<>(source.size());
-            int faceCount = 0;
-            for (BlockElement element : source) {
-                ArrayList<FaceIr> faces = new ArrayList<>(element.faces.size());
-                for (Map.Entry<Direction, BlockElementFace> entry : element.faces.entrySet()) {
-                    BlockElementFace face = entry.getValue();
-                    float[] uv = face.uv().uvs;
-                    faces.add(new FaceIr(entry.getKey(), face.cullForDirection(), face.tintIndex(), face.texture(),
-                            Float.floatToRawIntBits(uv[0]), Float.floatToRawIntBits(uv[1]),
-                            Float.floatToRawIntBits(uv[2]), Float.floatToRawIntBits(uv[3]), face.uv().rotation));
-                    faceCount++;
+            ArrayList<ElementIr> out = new ArrayList<>(source.size()); int count = 0;
+            for (BlockElement e : source) {
+                ArrayList<FaceIr> faces = new ArrayList<>(e.faces.size());
+                for (Map.Entry<Direction, BlockElementFace> entry : e.faces.entrySet()) {
+                    BlockElementFace f = entry.getValue(); float[] u = f.uv().uvs;
+                    faces.add(new FaceIr(entry.getKey(), f.cullForDirection(), f.tintIndex(), f.texture(), bits(u[0]), bits(u[1]), bits(u[2]), bits(u[3]), f.uv().rotation)); count++;
                 }
-                RotationIr rotation = null;
-                if (element.rotation != null) {
-                    rotation = new RotationIr(Vec3Bits.of(element.rotation.origin), element.rotation.axis,
-                            Float.floatToRawIntBits(element.rotation.angle), element.rotation.rescale);
-                }
-                elements.add(new ElementIr(Vec3Bits.of(element.from), Vec3Bits.of(element.to), rotation, element.shade, List.copyOf(faces)));
+                RotationIr rot = e.rotation == null ? null : new RotationIr(Vec3Bits.of(e.rotation.origin()), e.rotation.axis(), bits(e.rotation.angle()), e.rotation.rescale());
+                out.add(new ElementIr(Vec3Bits.of(e.from), Vec3Bits.of(e.to), rot, e.shade, List.copyOf(faces)));
             }
-            return faceCount == 0 ? null : new Plan(elements, faceCount);
+            return count == 0 ? null : new Plan(out, count);
         }
-
-        private List<QuadRecord> lower(BlockGeometryBakingContext context,
-                Function<Material, TextureAtlasSprite> spriteGetter, ModelState modelState, RunStats run) {
-            ArrayList<QuadRecord> result = new ArrayList<>(faceCount);
-            for (ElementIr elementIr : elements) {
-                LinkedHashMap<Direction, BlockElementFace> faces = new LinkedHashMap<>(elementIr.faces.size());
-                for (FaceIr faceIr : elementIr.faces) {
-                    BlockFaceUV uv = new BlockFaceUV(new float[] {
-                            Float.intBitsToFloat(faceIr.u0), Float.intBitsToFloat(faceIr.v0),
-                            Float.intBitsToFloat(faceIr.u1), Float.intBitsToFloat(faceIr.v1)
-                    }, faceIr.uvRotation);
-                    faces.put(faceIr.direction, new BlockElementFace(faceIr.cullDirection, faceIr.tintIndex, faceIr.texture, uv));
-                }
-                BlockElementRotation rotation = elementIr.rotation == null ? null : elementIr.rotation.materialize();
-                BlockElement element = new BlockElement(elementIr.from.materialize(), elementIr.to.materialize(), faces, rotation, elementIr.shade);
-                for (FaceIr faceIr : elementIr.faces) {
-                    BlockElementFace face = faces.get(faceIr.direction);
-                    TextureAtlasSprite sprite = spriteGetter.apply(context.getMaterial(faceIr.texture));
-                    long faceStart = System.nanoTime();
-                    BakedQuad quad;
-                    try {
-                        quad = BlockModel.bakeFace(element, face, sprite, faceIr.direction, modelState);
-                    } finally {
-                        run.candidateFaceBakery.add(System.nanoTime() - faceStart);
-                    }
-                    Direction bucket = faceIr.cullDirection == null ? null : modelState.getRotation().rotateTransform(faceIr.cullDirection);
-                    result.add(new QuadRecord(bucket, quad));
+        private List<QuadRecord> lower(BlockGeometryBakingContext ctx, Function<Material, TextureAtlasSprite> sprites, ModelState state, RunStats r) {
+            ArrayList<QuadRecord> out = new ArrayList<>(faceCount);
+            for (ElementIr e : elements) {
+                LinkedHashMap<Direction, BlockElementFace> map = new LinkedHashMap<>(e.faces.size());
+                for (FaceIr f : e.faces) map.put(f.direction, new BlockElementFace(f.cull, f.tint, f.texture, new BlockFaceUV(new float[]{val(f.u0), val(f.v0), val(f.u1), val(f.v1)}, f.uvRotation)));
+                BlockElement live = new BlockElement(e.from.make(), e.to.make(), map, e.rotation == null ? null : e.rotation.make(), e.shade);
+                for (FaceIr f : e.faces) {
+                    BlockElementFace face = map.get(f.direction); TextureAtlasSprite sprite = sprites.apply(ctx.getMaterial(f.texture)); long s = System.nanoTime(); BakedQuad quad;
+                    try { quad = BlockModel.bakeFace(live, face, sprite, f.direction, state); } finally { r.candidateFace.add(System.nanoTime() - s); }
+                    Direction bucket = f.cull == null ? null : state.getRotation().rotateTransform(f.cull); out.add(new QuadRecord(bucket, quad));
                 }
             }
-            return List.copyOf(result);
+            return List.copyOf(out);
         }
     }
 
     private record ElementIr(Vec3Bits from, Vec3Bits to, RotationIr rotation, boolean shade, List<FaceIr> faces) {}
-
-    private record FaceIr(Direction direction, Direction cullDirection, int tintIndex, String texture,
-            int u0, int v0, int u1, int v1, int uvRotation) {}
-
-    private record RotationIr(Vec3Bits origin, Direction.Axis axis, int angleBits, boolean rescale) {
-        private BlockElementRotation materialize() {
-            return new BlockElementRotation(origin.materialize(), axis, Float.intBitsToFloat(angleBits), rescale);
-        }
-    }
-
-    private record Vec3Bits(int x, int y, int z) {
-        private static Vec3Bits of(Vector3f value) {
-            return new Vec3Bits(Float.floatToRawIntBits(value.x()), Float.floatToRawIntBits(value.y()), Float.floatToRawIntBits(value.z()));
-        }
-
-        private Vector3f materialize() {
-            return new Vector3f(Float.intBitsToFloat(x), Float.intBitsToFloat(y), Float.intBitsToFloat(z));
-        }
-    }
+    private record FaceIr(Direction direction, Direction cull, int tint, String texture, int u0, int v0, int u1, int v1, int uvRotation) {}
+    private record RotationIr(Vec3Bits origin, Direction.Axis axis, int angle, boolean rescale) { BlockElementRotation make() { return new BlockElementRotation(origin.make(), axis, val(angle), rescale); } }
+    private record Vec3Bits(int x, int y, int z) { static Vec3Bits of(Vector3f v) { return new Vec3Bits(bits(v.x()), bits(v.y()), bits(v.z())); } Vector3f make() { return new Vector3f(val(x), val(y), val(z)); } }
+    private static int bits(float v) { return Float.floatToRawIntBits(v); }
+    private static float val(int v) { return Float.intBitsToFloat(v); }
 
     private static final class RunStats {
-        private final long startedNanos;
-        private final long gcStartMillis;
-        private volatile long gcDeltaMillis;
-        private volatile long modelManagerBarrierNanos = -1L;
-        private final LongAdder encountered = new LongAdder();
-        private final LongAdder eligible = new LongAdder();
-        private final LongAdder plansBuilt = new LongAdder();
-        private final LongAdder planElements = new LongAdder();
-        private final LongAdder planFaces = new LongAdder();
-        private final LongAdder matches = new LongAdder();
-        private final LongAdder mismatches = new LongAdder();
-        private final LongAdder fallbacks = new LongAdder();
-        private final LongAdder planBuildWall = new LongAdder();
-        private final LongAdder planBuildCpu = new LongAdder();
-        private final LongAdder planBuildAlloc = new LongAdder();
-        private final LongAdder candidateWall = new LongAdder();
-        private final LongAdder candidateCpu = new LongAdder();
-        private final LongAdder candidateAlloc = new LongAdder();
-        private final LongAdder candidateFaceBakery = new LongAdder();
-        private final LongAdder stockWall = new LongAdder();
-        private final LongAdder stockCpu = new LongAdder();
-        private final LongAdder stockAlloc = new LongAdder();
-        private final LongAdder stockFaceBakery = new LongAdder();
-        private final LongAdder compareWall = new LongAdder();
-        private final LongAdder ineligibleContext = new LongAdder();
-        private final LongAdder ineligibleCustomGeometry = new LongAdder();
-        private final LongAdder ineligibleTransform = new LongAdder();
-        private final LongAdder ineligibleRenderType = new LongAdder();
-        private final LongAdder ineligibleOwner = new LongAdder();
-        private final LongAdder ineligibleParent = new LongAdder();
-        private final LongAdder ineligibleElementsIdentity = new LongAdder();
-        private final LongAdder ineligibleExtraFaceData = new LongAdder();
-        private final LongAdder ineligibleEmpty = new LongAdder();
-        private final LongAdder ineligibleMalformed = new LongAdder();
-
-        private RunStats(long startedNanos, long gcStartMillis) {
-            this.startedNanos = startedNanos;
-            this.gcStartMillis = gcStartMillis;
-        }
+        final long started, gcStart; RunStats(long s, long g) { started=s; gcStart=g; }
+        final LongAdder encountered=new LongAdder(), eligible=new LongAdder(), plans=new LongAdder(), elements=new LongAdder(), faces=new LongAdder(), matches=new LongAdder(), mismatches=new LongAdder(), fallbacks=new LongAdder();
+        final LongAdder planWall=new LongAdder(), planCpu=new LongAdder(), planAlloc=new LongAdder(), candidateWall=new LongAdder(), candidateCpu=new LongAdder(), candidateAlloc=new LongAdder(), candidateFace=new LongAdder(), stockWall=new LongAdder(), stockCpu=new LongAdder(), stockAlloc=new LongAdder(), stockFace=new LongAdder(), compare=new LongAdder();
+        final LongAdder badContext=new LongAdder(), badCustom=new LongAdder(), badTransform=new LongAdder(), badRender=new LongAdder(), badOwner=new LongAdder(), badParent=new LongAdder(), badIdentity=new LongAdder(), badFaceData=new LongAdder(), badEmpty=new LongAdder(), badMalformed=new LongAdder();
     }
 }
