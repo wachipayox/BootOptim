@@ -26,6 +26,10 @@ edges, and emits:
 - optional `interaction_group_closure` variants;
 - missing dependency warnings instead of silently producing an invalid closure.
 
+The fixture may contain more than one artifact declaring the same `modId` (the hosted smoke exposed
+this with two `tfmg` JARs). The planner models that as one logical mod with multiple artifacts and
+keeps all matching artifacts in `full` and closure variants; it does not arbitrarily discard one.
+
 JARs containing BootOptim are rejected so the source fixture cannot accidentally benchmark a stale
 or duplicated build. Metadata-free JARs remain visible as artifact-level records and are not silently
 discarded.

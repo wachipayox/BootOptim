@@ -107,11 +107,11 @@ def read_metadata(jar: Path) -> tuple[list[tuple[str, str | None]], dict[str, se
     return mods, dependencies
 
 
-def scan_pack(pack_dir: Path) -> tuple[dict[str, ModRecord], dict[str, list[str]], str]:
+def scan_pack(pack_dir: Path) -> tuple[dict[str, list[ModRecord]], dict[str, list[str]], str]:
     mods_dir = pack_dir / "mods"
     if not mods_dir.is_dir():
         raise ValueError(f"pack does not contain mods/: {pack_dir}")
-    records: dict[str, ModRecord] = {}
+    records: dict[str, list[ModRecord]] = {}
     artifact_to_ids: dict[str, list[str]] = {}
     fingerprint = hashlib.sha256()
     for jar in sorted(mods_dir.glob("*.jar"), key=lambda value: value.name.lower()):
@@ -125,9 +125,7 @@ def scan_pack(pack_dir: Path) -> tuple[dict[str, ModRecord], dict[str, list[str]
         version = next((entry[1] for entry in mod_entries if entry[1]), None)
         record = ModRecord(jar.name, mod_ids, version, dependencies, sha256(jar))
         for mod_id in mod_ids:
-            if mod_id in records:
-                raise ValueError(f"duplicate mod id {mod_id!r}: {records[mod_id].artifact} and {jar.name}")
-            records[mod_id] = record
+            records.setdefault(mod_id, []).append(record)
         artifact_to_ids[jar.name] = mod_ids
         fingerprint.update(jar.name.encode())
         fingerprint.update(b"\0")
@@ -136,7 +134,7 @@ def scan_pack(pack_dir: Path) -> tuple[dict[str, ModRecord], dict[str, list[str]
     return records, artifact_to_ids, fingerprint.hexdigest()
 
 
-def required_closure(records: dict[str, ModRecord], roots: list[str]) -> tuple[set[str], list[str]]:
+def required_closure(records: dict[str, list[ModRecord]], roots: list[str]) -> tuple[set[str], list[str]]:
     selected: set[str] = set()
     missing: set[str] = set()
     pending = list(roots)
@@ -144,19 +142,25 @@ def required_closure(records: dict[str, ModRecord], roots: list[str]) -> tuple[s
         mod_id = pending.pop()
         if mod_id in selected:
             continue
-        record = records.get(mod_id)
-        if record is None:
+        matching_records = records.get(mod_id)
+        if not matching_records:
             missing.add(mod_id)
             continue
         selected.add(mod_id)
-        for dependency in record.dependencies.get(mod_id, set()):
+        dependencies = set()
+        for record in matching_records:
+            dependencies.update(record.dependencies.get(mod_id, set()))
+        for dependency in dependencies:
             if dependency not in selected:
                 pending.append(dependency)
     return selected, sorted(missing)
 
 
-def artifact_selection(records: dict[str, ModRecord], mod_ids: set[str]) -> list[str]:
-    return sorted({records[mod_id].artifact for mod_id in mod_ids}, key=str.lower)
+def artifact_selection(records: dict[str, list[ModRecord]], mod_ids: set[str]) -> list[str]:
+    return sorted(
+        {record.artifact for mod_id in mod_ids for record in records[mod_id]},
+        key=str.lower,
+    )
 
 
 def parse_group(raw: str) -> tuple[str, list[str]]:
@@ -223,10 +227,13 @@ def build_plan(pack_dir: Path, groups: list[str], baseline: list[str]) -> dict:
         "mods": [
             {
                 "id": mod_id,
-                "artifact": records[mod_id].artifact,
-                "version": records[mod_id].version,
-                "sha256": records[mod_id].sha256,
-                "required_dependencies": sorted(records[mod_id].dependencies.get(mod_id, set())),
+                "artifacts": sorted({record.artifact for record in records[mod_id]}, key=str.lower),
+                "versions": sorted({record.version for record in records[mod_id] if record.version}),
+                "required_dependencies": sorted({
+                    dependency
+                    for record in records[mod_id]
+                    for dependency in record.dependencies.get(mod_id, set())
+                }),
             }
             for mod_id in all_ids
         ],

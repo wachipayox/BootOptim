@@ -84,6 +84,21 @@ class ScalingPlanTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 PLAN.build_plan(pack, [], [])
 
+    def test_duplicate_mod_ids_select_all_matching_artifacts(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir(parents=True)
+            make_mod(mods / "tfmg-dep.jar", "tfmg")
+            make_mod(mods / "tfmg-main.jar", "tfmg")
+
+            plan = PLAN.build_plan(pack, [], [])
+            full = next(item for item in plan["variants"] if item["id"] == "full")
+            single = next(item for item in plan["variants"] if item["id"] == "mod-tfmg")
+            self.assertEqual(full["artifacts"], ["tfmg-dep.jar", "tfmg-main.jar"])
+            self.assertEqual(single["artifacts"], ["tfmg-dep.jar", "tfmg-main.jar"])
+            self.assertEqual(plan["mods"][0]["artifacts"], ["tfmg-dep.jar", "tfmg-main.jar"])
+
     def test_materializer_copies_non_mod_state_and_only_selected_jars(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
