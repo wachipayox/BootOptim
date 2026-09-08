@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * Applies only when MoreCulling has added its initShapeCache method. With the
  * default-false property the redirected call remains stock-equivalent.
  */
-@Mixin(targets = "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase", remap = false)
+@Mixin(targets = "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase", remap = false, priority = 900)
 public abstract class MoreCullingShapeFaceDedupMixin {
     @Redirect(
             method = "moreculling$initShapeCache",

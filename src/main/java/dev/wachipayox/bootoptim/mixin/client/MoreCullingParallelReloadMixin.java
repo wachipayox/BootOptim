@@ -14,7 +14,7 @@ import java.util.function.Consumer;
  * method names and invocation targets as strings means this mixin is inert when
  * MoreCulling is absent; no hard dependency is introduced.
  */
-@Mixin(targets = "net.minecraft.client.Minecraft", remap = false)
+@Mixin(targets = "net.minecraft.client.Minecraft", remap = false, priority = 900)
 public abstract class MoreCullingParallelReloadMixin {
     @Redirect(
             method = "lambda$moreculling$onBlockRenderManagerInitialized$1",
