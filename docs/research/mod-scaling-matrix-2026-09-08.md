@@ -354,3 +354,14 @@ This is not repaired by the Fabric metadata fix. It is evidence that the next
 planner increment needs an explicit, auditable mechanism for runtime-symbol
 provider edges (rather than accumulating accidental timing results or silently
 declaring the complement valid).
+
+That mechanism is now available as the repeatable planner/workflow input
+`runtime-symbol-provider` / `scaling_runtime_symbol_providers` in the form
+`MODID=internal/jvm/package/`. It scans `.class` payloads (including nested
+JARs) and adds a required edge only when a selected artifact actually contains
+that internal-name prefix. The provider is explicitly named by the operator:
+the scanner does not guess arbitrary library ownership. The generated plan
+records every applied artifact/mod/provider edge. The exact local
+CreateStuffNAdditions artifact does contain `com/simibubi/create/`, confirming
+that `create=com/simibubi/create/` will close the observed failure and also
+cover other exact-pack artifacts with the same real bytecode reference.

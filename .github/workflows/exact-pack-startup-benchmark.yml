@@ -66,6 +66,11 @@ on:
         required: false
         default: ''
         type: string
+      scaling_runtime_symbol_providers:
+        description: Semicolon-separated MODID=internal/jvm/package/ runtime closure hints
+        required: false
+        default: ''
+        type: string
       scaling_partitions:
         description: Number of deterministic broad root partitions for scaling mode
         required: false
@@ -99,6 +104,7 @@ jobs:
       scaling_groups: ${{ steps.plan.outputs.scaling_groups }}
       scaling_compatibility_groups: ${{ steps.plan.outputs.scaling_compatibility_groups }}
       scaling_excluded_roots: ${{ steps.plan.outputs.scaling_excluded_roots }}
+      scaling_runtime_symbol_providers: ${{ steps.plan.outputs.scaling_runtime_symbol_providers }}
       scaling_partitions: ${{ steps.plan.outputs.scaling_partitions }}
     env:
       PR_BODY: ${{ github.event.pull_request.body || '' }}
@@ -112,6 +118,7 @@ jobs:
       DISPATCH_SCALING_GROUPS: ${{ inputs.scaling_groups || '' }}
       DISPATCH_SCALING_COMPATIBILITY_GROUPS: ${{ inputs.scaling_compatibility_groups || '' }}
       DISPATCH_SCALING_EXCLUDED_ROOTS: ${{ inputs.scaling_excluded_roots || '' }}
+      DISPATCH_SCALING_RUNTIME_SYMBOL_PROVIDERS: ${{ inputs.scaling_runtime_symbol_providers || '' }}
       DISPATCH_SCALING_PARTITIONS: ${{ inputs.scaling_partitions || '' }}
     steps:
       - name: Build benchmark matrix
@@ -140,6 +147,7 @@ jobs:
               scaling_groups = os.environ.get('DISPATCH_SCALING_GROUPS', '').strip()
               scaling_compatibility_groups = os.environ.get('DISPATCH_SCALING_COMPATIBILITY_GROUPS', '').strip()
               scaling_excluded_roots = os.environ.get('DISPATCH_SCALING_EXCLUDED_ROOTS', '').strip()
+              scaling_runtime_symbol_providers = os.environ.get('DISPATCH_SCALING_RUNTIME_SYMBOL_PROVIDERS', '').strip()
               scaling_partitions = os.environ.get('DISPATCH_SCALING_PARTITIONS', '').strip() or '0'
           else:
               mode_values = directive('exact-pack-mode')
@@ -154,6 +162,7 @@ jobs:
               scaling_groups = ';'.join(directive('exact-pack-scaling-group')).strip()
               scaling_compatibility_groups = ';'.join(directive('exact-pack-scaling-compatibility-group')).strip()
               scaling_excluded_roots = ','.join(directive('exact-pack-scaling-exclude-root')).strip()
+              scaling_runtime_symbol_providers = ';'.join(directive('exact-pack-scaling-runtime-symbol-provider')).strip()
               partition_values = directive('exact-pack-scaling-partitions')
               scaling_partitions = (partition_values[-1] if partition_values else '0').strip() or '0'
 
@@ -213,6 +222,7 @@ jobs:
               output.write(f'scaling_groups={scaling_groups}\n')
               output.write(f'scaling_compatibility_groups={scaling_compatibility_groups}\n')
               output.write(f'scaling_excluded_roots={scaling_excluded_roots}\n')
+              output.write(f'scaling_runtime_symbol_providers={scaling_runtime_symbol_providers}\n')
               output.write(f'scaling_partitions={scaling_partitions_value}\n')
           print(json.dumps({'mode': mode, 'runs': include}, indent=2))
 
@@ -322,6 +332,7 @@ jobs:
       BOOTOPTIM_SCALING_GROUPS: ${{ needs.plan.outputs.scaling_groups }}
       BOOTOPTIM_SCALING_COMPATIBILITY_GROUPS: ${{ needs.plan.outputs.scaling_compatibility_groups }}
       BOOTOPTIM_SCALING_EXCLUDED_ROOTS: ${{ needs.plan.outputs.scaling_excluded_roots }}
+      BOOTOPTIM_SCALING_RUNTIME_SYMBOL_PROVIDERS: ${{ needs.plan.outputs.scaling_runtime_symbol_providers }}
       BOOTOPTIM_SCALING_PARTITIONS: ${{ needs.plan.outputs.scaling_partitions }}
     steps:
       - name: Checkout repository
@@ -476,6 +487,12 @@ jobs:
             IFS=',' read -ra excluded_roots <<< "$BOOTOPTIM_SCALING_EXCLUDED_ROOTS"
             for root in "${excluded_roots[@]}"; do
               [[ -n "$root" ]] && plan_args+=(--exclude-root "$root")
+            done
+          fi
+          if [[ -n "${BOOTOPTIM_SCALING_RUNTIME_SYMBOL_PROVIDERS:-}" ]]; then
+            IFS=';' read -ra runtime_symbol_providers <<< "$BOOTOPTIM_SCALING_RUNTIME_SYMBOL_PROVIDERS"
+            for provider in "${runtime_symbol_providers[@]}"; do
+              [[ -n "$provider" ]] && plan_args+=(--runtime-symbol-provider "$provider")
             done
           fi
           if [[ "${BOOTOPTIM_SCALING_PARTITIONS:-0}" != "0" ]]; then

@@ -379,6 +379,83 @@ def parse_group(raw: str) -> tuple[str, list[str]]:
     return name.strip(), roots
 
 
+def parse_runtime_symbol_provider(raw: str) -> tuple[str, bytes]:
+    """Parse an auditable ``MODID=internal/jvm/package/`` closure hint.
+
+    This is intentionally opt-in. A bytecode symbol reference proves that one
+    artifact needs a package at runtime, but package names are too broad to
+    infer providers across arbitrary third-party libraries. The operator names
+    the provider mod explicitly; the planner only discovers which selected
+    artifacts actually reference its JVM-internal package prefix.
+    """
+    if "=" not in raw:
+        raise ValueError(f"runtime symbol provider must use MODID=package/: {raw}")
+    mod_id, prefix = raw.split("=", 1)
+    mod_id = mod_id.strip()
+    prefix = prefix.strip()
+    if not mod_id or not prefix or not prefix.endswith("/"):
+        raise ValueError(f"runtime symbol provider must use MODID=package/: {raw}")
+    return mod_id, prefix.encode("utf-8")
+
+
+def artifact_references_symbol(artifact: Path, prefix: bytes) -> bool:
+    """Return whether a top-level or nested class constant references prefix."""
+    def archive_references(archive: zipfile.ZipFile) -> bool:
+        for name in archive.namelist():
+            if not name.endswith(".class"):
+                continue
+            if prefix in archive.read(name):
+                return True
+        return False
+
+    with zipfile.ZipFile(artifact) as archive:
+        if archive_references(archive):
+            return True
+        for name in archive.namelist():
+            if not name.lower().endswith(".jar"):
+                continue
+            try:
+                with zipfile.ZipFile(io.BytesIO(archive.read(name))) as nested:
+                    if archive_references(nested):
+                        return True
+            except (OSError, zipfile.BadZipFile):
+                continue
+    return False
+
+
+def add_runtime_symbol_provider_edges(
+    pack_dir: Path,
+    records: dict[str, list[ModRecord]],
+    artifact_to_ids: dict[str, list[str]],
+    providers: list[str],
+) -> list[dict[str, str]]:
+    """Add required edges discovered through explicit provider/package hints."""
+    parsed = [parse_runtime_symbol_provider(raw) for raw in providers]
+    applied: list[dict[str, str]] = []
+    for provider_id, prefix in parsed:
+        if provider_id not in records:
+            raise ValueError(f"runtime symbol provider is not present in pack: {provider_id}")
+        for artifact_name, mod_ids in artifact_to_ids.items():
+            # The provider artifact may expose helper mod IDs too. It is
+            # already selected when any of them is selected, so do not invent
+            # a self-edge merely because its own classes contain the prefix.
+            if provider_id in mod_ids:
+                continue
+            if not artifact_references_symbol(pack_dir / "mods" / artifact_name, prefix):
+                continue
+            for mod_id in mod_ids:
+                for record in records[mod_id]:
+                    if record.artifact == artifact_name:
+                        record.dependencies.setdefault(mod_id, set()).add(provider_id)
+                applied.append({
+                    "artifact": artifact_name,
+                    "mod_id": mod_id,
+                    "provider": provider_id,
+                    "prefix": prefix.decode("utf-8"),
+                })
+    return sorted(applied, key=lambda item: (item["artifact"].lower(), item["mod_id"], item["provider"]))
+
+
 def expand_compatibility_exclusions(
     excluded: set[str], compatibility_groups: list[list[str]],
 ) -> set[str]:
@@ -407,10 +484,14 @@ def build_plan(
     balanced_partitions: int = 0,
     compatibility_groups: list[str] | None = None,
     excluded_roots: list[str] | None = None,
+    runtime_symbol_providers: list[str] | None = None,
 ) -> dict:
     if balanced_partitions < 0:
         raise ValueError("balanced_partitions must not be negative")
     records, artifact_to_ids, fingerprint = scan_pack(pack_dir.resolve())
+    applied_runtime_symbol_edges = add_runtime_symbol_provider_edges(
+        pack_dir.resolve(), records, artifact_to_ids, runtime_symbol_providers or [],
+    )
     parsed_compatibility_groups = [parse_group(raw)[1] for raw in (compatibility_groups or [])]
     explicitly_excluded = set(excluded_roots or [])
     variants = []
@@ -590,6 +671,7 @@ def build_plan(
             for raw, values in zip(compatibility_groups or [], parsed_compatibility_groups)
         ],
         "explicitly_excluded_roots": sorted(explicitly_excluded),
+        "runtime_symbol_provider_edges": applied_runtime_symbol_edges,
         "mods": [
             {
                 "id": mod_id,
@@ -636,6 +718,12 @@ def main() -> None:
         default=[],
         help="Root to omit from balanced partitions when the host cannot run it; exclusion is recorded",
     )
+    parser.add_argument(
+        "--runtime-symbol-provider",
+        action="append",
+        default=[],
+        help="MODID=internal/jvm/package/ explicit provider hint for bytecode-discovered runtime closure edges",
+    )
     args = parser.parse_args()
     try:
         plan = build_plan(
@@ -645,6 +733,7 @@ def main() -> None:
             args.balanced_partitions,
             args.compatibility_group,
             args.exclude_root,
+            args.runtime_symbol_provider,
         )
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         raise SystemExit(str(error)) from error

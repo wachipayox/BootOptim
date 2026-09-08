@@ -213,6 +213,34 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertEqual(variant["missing_dependencies"], [])
             self.assertEqual(plan["mod_count"], 2)
 
+    def test_explicit_runtime_symbol_provider_adds_only_observed_bytecode_edges(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "create.jar", "create")
+            make_mod(mods / "addon.jar", "addon")
+            with zipfile.ZipFile(mods / "addon.jar", "a") as archive:
+                archive.writestr(
+                    "example/Addon.class",
+                    b"constant:com/simibubi/create/content/processing/Example",
+                )
+            make_mod(mods / "unrelated.jar", "unrelated")
+
+            plan = PLAN.build_plan(
+                pack, [], [], runtime_symbol_providers=["create=com/simibubi/create/"],
+            )
+            addon = next(item for item in plan["variants"] if item["id"] == "mod-addon")
+            unrelated = next(item for item in plan["variants"] if item["id"] == "mod-unrelated")
+            self.assertEqual(addon["mod_ids"], ["addon", "create"])
+            self.assertEqual(unrelated["mod_ids"], ["unrelated"])
+            self.assertEqual(plan["runtime_symbol_provider_edges"], [{
+                "artifact": "addon.jar",
+                "mod_id": "addon",
+                "provider": "create",
+                "prefix": "com/simibubi/create/",
+            }])
+
     def test_platform_dependencies_are_not_reported_as_missing_artifacts(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)
