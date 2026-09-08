@@ -246,7 +246,10 @@ def read_metadata(
         for candidate in metadata_names:
             if candidate in names:
                 merge(_parse_metadata_text(archive.read(candidate).decode("utf-8", errors="replace")))
-                return
+                break
+        # A Connector-converted artifact can expose FML metadata for NeoForge
+        # and retain its Fabric descriptor for the original dependency graph.
+        # Merge both rather than letting the presence of one mask the other.
         if fabric_metadata_name in names:
             merge(_parse_fabric_metadata_text(
                 archive.read(fabric_metadata_name).decode("utf-8", errors="replace")
