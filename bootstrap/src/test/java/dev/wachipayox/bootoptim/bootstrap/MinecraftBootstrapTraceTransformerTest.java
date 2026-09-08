@@ -16,70 +16,66 @@ class MinecraftBootstrapTraceTransformerTest {
     private static final String HOOKS = "dev/wachipayox/bootoptim/bootstrap/MinecraftBootstrapTraceHooks";
 
     @Test
-    void wrapsPatchedBootstrapBoundaryInOrder() {
-        var input = mainClass();
+    void wrapsExactBootstrapMethodInOrder() {
+        var input = bootstrapClass();
         var method = input.methods.getFirst();
-        var runAndTick = call("net/neoforged/fml/loading/BackgroundWaiter", "runAndTick", "(Ljava/lang/Runnable;Ljava/lang/Runnable;)V");
-        var validate = call("net/minecraft/server/Bootstrap", "validate", "()V");
-        var begin = call("net/neoforged/neoforge/client/loading/ClientModLoader", "begin", "()V");
-        method.instructions.add(runAndTick);
-        method.instructions.add(validate);
-        method.instructions.add(begin);
+        var bodyCall = call("net/minecraft/core/registries/BuiltInRegistries", "bootStrap", "()V");
+        method.instructions.add(bodyCall);
         method.instructions.add(new InsnNode(Opcodes.RETURN));
 
         var output = new MinecraftBootstrapTraceTransformer().transform(input, null);
         assertSame(input, output);
 
         List<MethodInsnNode> calls = methodCalls(method);
-        assertEquals(5, calls.size());
+        assertEquals(3, calls.size());
         assertEquals(HOOKS, calls.get(0).owner);
-        assertEquals("beginBootstrapAndValidate", calls.get(0).name);
-        assertSame(runAndTick, calls.get(1));
-        assertSame(validate, calls.get(2));
-        assertEquals(HOOKS, calls.get(3).owner);
-        assertEquals("endBootstrapAndValidate", calls.get(3).name);
-        assertSame(begin, calls.get(4));
+        assertEquals("beginBootstrap", calls.get(0).name);
+        assertSame(bodyCall, calls.get(1));
+        assertEquals(HOOKS, calls.get(2).owner);
+        assertEquals("endBootstrap", calls.get(2).name);
     }
 
     @Test
-    void rejectsMissingOrAmbiguousAnchors() {
-        var missingEnd = mainClass();
-        missingEnd.methods.getFirst().instructions.add(call(
-                "net/neoforged/fml/loading/BackgroundWaiter", "runAndTick", "()V"));
-        missingEnd.methods.getFirst().instructions.add(new InsnNode(Opcodes.RETURN));
-        new MinecraftBootstrapTraceTransformer().transform(missingEnd, null);
-        assertEquals(1, methodCalls(missingEnd.methods.getFirst()).size());
-
-        var duplicateStart = mainClass();
-        duplicateStart.methods.getFirst().instructions.add(call(
-                "net/neoforged/fml/loading/BackgroundWaiter", "runAndTick", "()V"));
-        duplicateStart.methods.getFirst().instructions.add(call(
-                "net/neoforged/fml/loading/BackgroundWaiter", "runAndTick", "()V"));
-        duplicateStart.methods.getFirst().instructions.add(call(
-                "net/neoforged/neoforge/client/loading/ClientModLoader", "begin", "()V"));
-        duplicateStart.methods.getFirst().instructions.add(new InsnNode(Opcodes.RETURN));
-        new MinecraftBootstrapTraceTransformer().transform(duplicateStart, null);
-        assertEquals(3, methodCalls(duplicateStart.methods.getFirst()).size());
-    }
-
-    @Test
-    void ignoresNonMainTarget() {
-        var input = mainClass();
-        input.name = "net/minecraft/client/Minecraft";
-        input.methods.getFirst().instructions.add(call(
-                "net/neoforged/fml/loading/BackgroundWaiter", "runAndTick", "()V"));
-        input.methods.getFirst().instructions.add(call(
-                "net/neoforged/neoforge/client/loading/ClientModLoader", "begin", "()V"));
-        input.methods.getFirst().instructions.add(new InsnNode(Opcodes.RETURN));
+    void closesEveryNormalReturn() {
+        var input = bootstrapClass();
+        var method = input.methods.getFirst();
+        method.instructions.add(new InsnNode(Opcodes.NOP));
+        method.instructions.add(new InsnNode(Opcodes.RETURN));
+        method.instructions.add(new InsnNode(Opcodes.RETURN));
 
         new MinecraftBootstrapTraceTransformer().transform(input, null);
-        assertEquals(2, methodCalls(input.methods.getFirst()).size());
+        assertEquals(3, methodCalls(method).size());
+        assertEquals("beginBootstrap", methodCalls(method).get(0).name);
+        assertEquals("endBootstrap", methodCalls(method).get(1).name);
+        assertEquals("endBootstrap", methodCalls(method).get(2).name);
     }
 
-    private static ClassNode mainClass() {
+    @Test
+    void rejectsMissingAmbiguousOrWrongTargets() {
+        var missing = bootstrapClass();
+        missing.methods.getFirst().instructions.add(new InsnNode(Opcodes.ATHROW));
+        new MinecraftBootstrapTraceTransformer().transform(missing, null);
+        assertEquals(0, methodCalls(missing.methods.getFirst()).size());
+
+        var duplicate = bootstrapClass();
+        duplicate.methods.add(new MethodNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "bootStrap", "()V", null, null));
+        duplicate.methods.getFirst().instructions.add(new InsnNode(Opcodes.RETURN));
+        duplicate.methods.get(1).instructions.add(new InsnNode(Opcodes.RETURN));
+        new MinecraftBootstrapTraceTransformer().transform(duplicate, null);
+        assertEquals(0, methodCalls(duplicate.methods.getFirst()).size());
+        assertEquals(0, methodCalls(duplicate.methods.get(1)).size());
+
+        var wrong = bootstrapClass();
+        wrong.name = "net/minecraft/client/main/Main";
+        wrong.methods.getFirst().instructions.add(new InsnNode(Opcodes.RETURN));
+        new MinecraftBootstrapTraceTransformer().transform(wrong, null);
+        assertEquals(0, methodCalls(wrong.methods.getFirst()).size());
+    }
+
+    private static ClassNode bootstrapClass() {
         var input = new ClassNode();
-        input.name = "net/minecraft/client/main/Main";
-        input.methods.add(new MethodNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "main", "([Ljava/lang/String;)V", null, null));
+        input.name = "net/minecraft/server/Bootstrap";
+        input.methods.add(new MethodNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "bootStrap", "()V", null, null));
         return input;
     }
 
