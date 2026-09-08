@@ -161,3 +161,18 @@ absent. These are pack-validity failures, not startup measurements. The
 planner therefore keeps such variants out of the performance ledger and now
 includes optional dependencies that are actually present in the source pack,
 while recording unmaterializable roots explicitly.
+
+### Run 34245748631 disposition
+
+The corrected broad-partition run produced two valid endpoints and four
+contract failures. `baseline` reached 15,362 ms and `full` 91,877 ms; both had
+`resource_contract_valid=true`, `diagnostic_only=false` and zero BootOptim/Mixin
+errors. No partition TTMM is admitted to the ledger: partition-1 and
+partition-4 failed in `NarratorLinux` because hosted Linux lacks `libflite.so`,
+partition-2 reached a reduced-pack crash where Iris referenced Sodium's
+`VertexSerializer` without Sodium, and partition-3 crashed because
+Bits'n'Bobs referenced Create's `TooltipModifier` without the Create family.
+The run was cancelled after all benchmark jobs had terminated but before the
+aggregate could make a misleading summary. These failures motivate the next
+planner revision: include present optional dependencies and preserve explicit
+compatibility-family exclusions before trying another broad attribution run.
