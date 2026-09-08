@@ -12,6 +12,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Player;
 import net.neoforged.bus.api.Event;
 import net.neoforged.fml.ModLoader;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -52,7 +53,8 @@ abstract class EntityRenderDispatcherReloadInventoryMixin {
             at = @At(value = "INVOKE", target = "Lnet/neoforged/fml/ModLoader;postEvent(Lnet/neoforged/bus/api/Event;)V", remap = false),
             require = 0)
     private void bootoptim$timeAddLayersPost(Event event) {
-        EntityRendererReloadProfiler.timeVoid("add_layers_post", () -> ModLoader.postEvent(event));
+        EntityRenderersEvent.AddLayers addLayers = (EntityRenderersEvent.AddLayers) event;
+        EntityRendererReloadProfiler.timeVoid("add_layers_post", () -> ModLoader.postEvent(addLayers));
     }
 
     @Inject(method = "onResourceManagerReload", at = @At("RETURN"), require = 1)
