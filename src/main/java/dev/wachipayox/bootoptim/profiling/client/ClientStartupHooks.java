@@ -27,7 +27,10 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        FlywheelShaderSourcesProbe.onTitleOpened();
+        if (StartupProfiler.markMainMenu()
+                && StartupProfiler.shouldExitOnTitle()
+                && !FlywheelShaderSourcesProbe.waitForPresentedTitle()) {
             Minecraft.getInstance().stop();
         }
     }
