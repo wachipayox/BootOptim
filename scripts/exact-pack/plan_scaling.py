@@ -144,9 +144,10 @@ def _parse_metadata_text(
     # [[dependencies]] table. Without this edge a reduced variant can copy a
     # Kotlin mod and fail in NeoForge's loading screen instead of producing a
     # valid attribution point.
-    if language_provider and language_provider.lower() not in BUILTIN_LANGUAGE_PROVIDERS:
+    provider_id = language_provider.lower() if language_provider else None
+    if provider_id and provider_id not in BUILTIN_LANGUAGE_PROVIDERS:
         for mod_id, _ in mods:
-            dependencies.setdefault(mod_id, set()).add(language_provider)
+            dependencies.setdefault(mod_id, set()).add(provider_id)
     return mods, dependencies, optional_dependencies
 
 
