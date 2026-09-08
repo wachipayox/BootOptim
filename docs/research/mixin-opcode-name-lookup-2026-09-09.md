@@ -15,15 +15,20 @@ Mixin 0.8.7 implements `getOpcodeName(int)` by scanning `Opcodes.getDeclaredFiel
 - `UNKNOWN` for negative values;
 - the decimal string for non-negative values.
 
-There is one important edge case that makes a blind copy of the newer Fabric direct-table implementation non-equivalent: stock 0.8.7 does not enter the reflective scan for opcode `0`, so it returns `"0"`, not `"NOP"`.
+A blind copy of the newer Fabric `Printer.OPCODES` implementation is not equivalent for two independent reasons:
 
-The test-only direct candidate therefore uses `Printer.OPCODES` for positive in-range values, preserves `0 -> "0"`, preserves `negative -> "UNKNOWN"`, and preserves decimal fallback for positive values outside the table or null table entries.
+1. Stock 0.8.7 does not enter the reflective scan for opcode `0`, so it returns `"0"`, not `"NOP"`.
+2. `Printer.OPCODES` names raw class-file opcodes for which ASM deliberately exposes no primitive-int `Opcodes` constant (for example `LDC_W`, compact local-variable forms and `WIDE`). The reflective 0.8.7 method cannot discover those names and returns their decimal values instead.
 
-`MixinOpcodeNameSemanticsTest` compares that candidate directly with the resolved stock `Bytecode.getOpcodeName` across the complete opcode table plus a broad invalid boundary domain, integer extrema, and every primitive-int value reachable by the exact legacy reflective scan. The latter closes the finite collision/first-name domain: values not present in those reflected fields necessarily fall through to the documented negative/decimal fallback.
+For the resolved ASM contract, the primitive-int opcode fields reachable after `UNINITIALIZED_THIS` occupy positive ranges `1–18`, `21–25`, `46–58`, `79–195`, and `197–199`. The test-only direct candidate indexes `Printer.OPCODES` only in those ranges and keeps decimal fallback everywhere else. This preserves `0 -> "0"`, the raw-opcode holes, positive invalid values, and `negative -> "UNKNOWN"`.
+
+The first CI build intentionally disproved the broader table hypothesis: indexing every non-null `Printer.OPCODES` entry failed the stock-vs-candidate exhaustive test. The candidate was narrowed to the actual reflection-reachable ranges rather than weakening the assertion.
+
+`MixinOpcodeNameSemanticsTest` compares the corrected candidate directly with the resolved stock `Bytecode.getOpcodeName` across the complete opcode-table neighborhood plus a broad invalid boundary domain, integer extrema, every primitive-int value reachable by the exact legacy reflective scan, and explicit representatives of the raw JVM opcode holes. This closes the finite name/collision domain for the pinned ASM contract; values not exposed by those reflected primitive-int fields retain the stock fallback.
 
 ## Dependency ownership
 
-BootOptim targets NeoForge `21.1.248`. NeoForge 1.21.1 declares Fabric Sponge Mixin as a launcher `libraries(...)` dependency (`0.15.2+mixin.0.8.7` on the maintained 1.21.1 branch), rather than a JarJar dependency owned by BootOptim. Replacing it from the regular mod would therefore introduce a second provider or require launcher-level dependency replacement.
+BootOptim targets NeoForge `21.1.248`. NeoForge 1.21.1 declares Fabric Sponge Mixin as a launcher `libraries(...)` dependency (`0.15.2+mixin.0.8.7` for this NeoForge line), rather than a JarJar dependency owned by BootOptim. Replacing it from the regular mod would therefore introduce a second provider or require launcher-level dependency replacement.
 
 That makes a direct BootOptim fork inappropriate. A whole-Mixin upgrade would also change substantially more than this one lookup and could not attribute any startup delta to the opcode-name path alone.
 
@@ -43,7 +48,7 @@ The following alternatives were rejected:
 
 ## Decision
 
-The algorithmic replacement is verifiably equivalent for the resolved 0.8.7/ASM contract when the opcode-0 exception is retained, but there is no sufficiently local, fail-open delivery mechanism available to the BootOptim distributable under the current ModLauncher/NeoForge classloader architecture.
+The algorithmic replacement is verifiably equivalent for the resolved 0.8.7/ASM contract when both the opcode-0 exception and the raw-opcode holes are retained, but there is no sufficiently local, fail-open delivery mechanism available to the BootOptim distributable under the current ModLauncher/NeoForge classloader architecture.
 
 Therefore this branch intentionally contains **no runtime optimization toggle and no A/B candidate**. It records the semantics proof and the delivery no-go rather than forcing a classloading intervention whose maintenance/safety cost exceeds the expected micro-scale gain.
 
@@ -51,7 +56,7 @@ No performance claim is made from the 39 JFR samples. No laptop run is justified
 
 ## Validation gates
 
-- Unit test: exact stock-vs-direct semantic equivalence, including invalid values and reflection-order collisions.
+- Unit test: exact stock-vs-direct semantic equivalence, including invalid values, reflection-reachable values and raw JVM opcode holes.
 - Normal build/package/startup CI must remain green.
 - Hosted exact-pack smoke is requested only to prove the research/test branch leaves the packaged startup path unchanged; it is not a performance comparison.
 - No A/B is run because no runtime candidate exists.

@@ -15,9 +15,10 @@ import org.spongepowered.asm.util.Bytecode;
  * Locks down the observable name semantics of Mixin 0.8.7's reflective
  * Bytecode.getOpcodeName(int) before considering a direct-table replacement.
  *
- * <p>The obvious upstream-style Printer.OPCODES lookup is not quite equivalent:
- * stock 0.8.7 deliberately skips reflection for opcode 0 and therefore returns
- * the decimal string "0" instead of "NOP".</p>
+ * <p>A blind Printer.OPCODES lookup is not equivalent. Stock 0.8.7 skips
+ * reflection for opcode 0, and ASM's printer also names raw JVM opcodes for
+ * which {@link Opcodes} deliberately exposes no primitive-int constant. The
+ * legacy method returns decimal strings for both cases.</p>
  */
 final class MixinOpcodeNameSemanticsTest {
     @Test
@@ -53,11 +54,19 @@ final class MixinOpcodeNameSemanticsTest {
     }
 
     @Test
-    void invalidOpcodeContractIsExplicit() {
+    void invalidAndRawJvmOpcodeFallbackContractIsExplicit() {
         assertEquals("UNKNOWN", Bytecode.getOpcodeName(-1));
         assertEquals("UNKNOWN", directCandidate(-1));
         assertEquals("0", Bytecode.getOpcodeName(0));
         assertEquals("0", directCandidate(0));
+
+        // Printer.OPCODES has names for these class-file opcodes, but Opcodes has
+        // no public primitive-int constants for them, so Mixin 0.8.7 returns digits.
+        int[] rawHoles = {19, 20, 26, 45, 59, 78, 196};
+        for (int opcode : rawHoles) {
+            assertEquals(Integer.toString(opcode), Bytecode.getOpcodeName(opcode), "raw hole=" + opcode);
+            assertEquals(Integer.toString(opcode), directCandidate(opcode), "raw hole=" + opcode);
+        }
 
         int invalid = Printer.OPCODES.length + 1000;
         assertEquals(Integer.toString(invalid), Bytecode.getOpcodeName(invalid));
@@ -73,15 +82,22 @@ final class MixinOpcodeNameSemanticsTest {
         if (opcode < 0) {
             return "UNKNOWN";
         }
-        if (opcode == 0) {
-            return "0";
-        }
-        if (opcode < Printer.OPCODES.length) {
-            String name = Printer.OPCODES[opcode];
-            if (name != null) {
-                return name;
-            }
+        if (isLegacyReflectedOpcode(opcode)) {
+            return Printer.OPCODES[opcode];
         }
         return Integer.toString(opcode);
+    }
+
+    /**
+     * Positive opcode values for primitive-int fields declared by ASM Opcodes after
+     * UNINITIALIZED_THIS in the resolved NeoForge/Mixin contract. NOP (0) is
+     * deliberately excluded because Mixin 0.8.7's minimum lookup value is 1.
+     */
+    private static boolean isLegacyReflectedOpcode(int opcode) {
+        return (opcode >= 1 && opcode <= 18)
+                || (opcode >= 21 && opcode <= 25)
+                || (opcode >= 46 && opcode <= 58)
+                || (opcode >= 79 && opcode <= 195)
+                || (opcode >= 197 && opcode <= 199);
     }
 }
