@@ -67,7 +67,7 @@ public final class ModelClassReplayFmlProbe {
 
     private static void requirePositive(JsonObject phases, String phase) {
         JsonObject metric = phases.getAsJsonObject(phase);
-        if (metric == null || metric.get("operations").getAsLong() <= 0L) {
+        if (metric == null || metric.get("count").getAsLong() <= 0L) {
             throw new IllegalStateException("phase did not execute real operations: " + phase);
         }
     }
