@@ -38,4 +38,19 @@ gradle.afterProject { project, state ->
         classpath = replay.runtimeClasspath
         mainClass.set('dev.wachipayox.bootoptim.replay.model.ModelClassReplayLauncher')
     }
+
+    // Allocation-stack profiling is opt-in and applies only to the FML runData JVM.
+    // It is never active for normal build/package/client startup and is not a TTMM probe.
+    def jfrPath = System.getenv('BOOTOPTIM_MODEL_REPLAY_JFR_PATH')
+    if (jfrPath != null && !jfrPath.isBlank()) {
+        project.tasks.matching { it.name == 'runData' }.configureEach { task ->
+            if (task.metaClass.respondsTo(task, 'jvmArgs', Object[].class)) {
+                task.jvmArgs("-XX:StartFlightRecording=filename=${jfrPath},settings=profile,dumponexit=true")
+            } else if (task.hasProperty('jvmArgs')) {
+                task.jvmArgs.add("-XX:StartFlightRecording=filename=${jfrPath},settings=profile,dumponexit=true")
+            } else {
+                throw new GradleException("runData task does not expose JVM arguments for allocation JFR")
+            }
+        }
+    }
 }
