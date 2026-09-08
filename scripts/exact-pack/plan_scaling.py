@@ -217,10 +217,15 @@ def scan_pack(pack_dir: Path) -> tuple[dict[str, list[ModRecord]], dict[str, lis
     return records, artifact_to_ids, fingerprint.hexdigest()
 
 
-def required_closure(records: dict[str, list[ModRecord]], roots: list[str]) -> tuple[set[str], list[str]]:
+def required_closure(
+    records: dict[str, list[ModRecord]],
+    roots: list[str],
+    compatibility_groups: list[list[str]] | None = None,
+) -> tuple[set[str], list[str]]:
     selected: set[str] = set()
     missing: set[str] = set()
     pending = list(roots)
+    groups = compatibility_groups or []
     while pending:
         mod_id = pending.pop()
         if mod_id in PLATFORM_PROVIDED_MOD_IDS:
@@ -232,6 +237,9 @@ def required_closure(records: dict[str, list[ModRecord]], roots: list[str]) -> t
             missing.add(mod_id)
             continue
         selected.add(mod_id)
+        for group in groups:
+            if mod_id in group:
+                pending.extend(member for member in group if member not in selected)
         dependencies = set()
         for record in matching_records:
             dependencies.update(record.dependencies.get(mod_id, set()))
@@ -268,10 +276,14 @@ def build_plan(
     groups: list[str],
     baseline: list[str],
     balanced_partitions: int = 0,
+    compatibility_groups: list[str] | None = None,
+    excluded_roots: list[str] | None = None,
 ) -> dict:
     if balanced_partitions < 0:
         raise ValueError("balanced_partitions must not be negative")
     records, artifact_to_ids, fingerprint = scan_pack(pack_dir.resolve())
+    parsed_compatibility_groups = [parse_group(raw)[1] for raw in (compatibility_groups or [])]
+    explicitly_excluded = set(excluded_roots or [])
     variants = []
 
     all_ids = sorted(records)
@@ -284,7 +296,7 @@ def build_plan(
         "missing_dependencies": [],
     })
 
-    baseline_ids, baseline_missing = required_closure(records, baseline)
+    baseline_ids, baseline_missing = required_closure(records, baseline, parsed_compatibility_groups)
     variants.append({
         "id": "baseline",
         "kind": "baseline",
@@ -295,7 +307,7 @@ def build_plan(
     })
 
     for mod_id in all_ids:
-        selected, missing = required_closure(records, [mod_id])
+        selected, missing = required_closure(records, [mod_id], parsed_compatibility_groups)
         variants.append({
             "id": f"mod-{mod_id}",
             "kind": "single_mod_closure",
@@ -306,7 +318,7 @@ def build_plan(
         })
     for raw_group in groups:
         name, roots = parse_group(raw_group)
-        selected, missing = required_closure(records, roots)
+        selected, missing = required_closure(records, roots, parsed_compatibility_groups)
         variants.append({
             "id": f"group-{name}",
             "kind": "interaction_group_closure",
@@ -326,15 +338,21 @@ def build_plan(
             runnable_roots = []
             excluded_roots = []
             for root in roots:
-                _, root_missing = required_closure(records, [root])
-                if root_missing:
+                _, root_missing = required_closure(records, [root], parsed_compatibility_groups)
+                if root in explicitly_excluded:
+                    excluded_roots.append({
+                        "id": root,
+                        "reason": "operator_excluded",
+                        "missing_dependencies": [],
+                    })
+                elif root_missing:
                     excluded_roots.append({
                         "id": root,
                         "missing_dependencies": root_missing,
                     })
                 else:
                     runnable_roots.append(root)
-            selected, missing = required_closure(records, runnable_roots)
+            selected, missing = required_closure(records, runnable_roots, parsed_compatibility_groups)
             if missing:
                 raise ValueError(
                     f"balanced partition {index + 1} has an unexpected missing dependency closure: {missing}"
@@ -355,6 +373,11 @@ def build_plan(
         "pack_directory": str(pack_dir.resolve()),
         "pack_fingerprint": fingerprint,
         "mod_count": len(all_ids),
+        "compatibility_groups": [
+            {"name": raw.split("=", 1)[0].strip(), "mod_ids": sorted(values)}
+            for raw, values in zip(compatibility_groups or [], parsed_compatibility_groups)
+        ],
+        "explicitly_excluded_roots": sorted(explicitly_excluded),
         "mods": [
             {
                 "id": mod_id,
@@ -389,9 +412,28 @@ def main() -> None:
         default=0,
         help="Add deterministic round-robin root partitions; repeatable closures expose broad scaling blocks",
     )
+    parser.add_argument(
+        "--compatibility-group",
+        action="append",
+        default=[],
+        help="Runtime family NAME=mod1,mod2 whose members must stay together in closures",
+    )
+    parser.add_argument(
+        "--exclude-root",
+        action="append",
+        default=[],
+        help="Root to omit from balanced partitions when the host cannot run it; exclusion is recorded",
+    )
     args = parser.parse_args()
     try:
-        plan = build_plan(args.pack_dir, args.group, args.baseline, args.balanced_partitions)
+        plan = build_plan(
+            args.pack_dir,
+            args.group,
+            args.baseline,
+            args.balanced_partitions,
+            args.compatibility_group,
+            args.exclude_root,
+        )
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         raise SystemExit(str(error)) from error
     serialized = json.dumps(plan, indent=2, sort_keys=True) + "\n"

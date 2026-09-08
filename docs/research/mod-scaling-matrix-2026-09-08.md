@@ -152,6 +152,28 @@ hand-maintaining another list of 160 IDs. The next hosted run should compare
 `baseline`, `full`, and four `partition-*` variants with one fresh repetition;
 the goal is localization of the broad scaling block, not a product claim.
 
+The closure reader now also inspects JARs nested under `META-INF/jarjar`. This
+matters for the pinned pack: Create 6.0.10 embeds Flywheel 1.0.6 and Ponder
+1.0.82, so those IDs are provided by the Create artifact and must not be
+reported as missing when a reduced closure includes Create. The materializer
+still copies one top-level artifact and never extracts or edits nested JARs.
+
+Some compatibility is intentionally not declared in loader metadata. The
+planner therefore accepts explicit, evidence-backed runtime families:
+
+```text
+--compatibility-group render=iris,sodium
+--compatibility-group create-ui=bits_n_bobs,create
+```
+
+When a member is selected, the whole family is included in that closure. A
+host-specific root can be omitted from broad partitions with
+`--exclude-root analogaudio`; the exclusion is recorded rather than silently
+treated as a fast measurement. The hosted workflow exposes these as
+`scaling_compatibility_groups` and `scaling_excluded_roots` (or the matching
+`exact-pack-scaling-compatibility-group` / `exact-pack-scaling-exclude-root`
+PR directives).
+
 The first broad-partition attempt exposed a second contract class before any
 optimization could be judged: a reduced set can satisfy declared required
 dependencies and still be invalid. Iris reached a Sodium API class without
@@ -176,3 +198,15 @@ The run was cancelled after all benchmark jobs had terminated but before the
 aggregate could make a misleading summary. These failures motivate the next
 planner revision: include present optional dependencies and preserve explicit
 compatibility-family exclusions before trying another broad attribution run.
+
+### Run 34247227311 disposition
+
+The optional-dependency revision did not make partition-2 runnable: Iris 1.8.14
+does not declare Sodium in `neoforge.mods.toml`, although its runtime classes
+reference Sodium's API. Partition-3 showed the same class of issue for the
+CreateBitsNBobs integration. This is evidence for explicit compatibility
+families, not evidence against Iris or Create. The next planner revision also
+recognizes nested `META-INF/jarjar` mods, which removes false missing-dependency
+reports for Create's embedded Flywheel/Ponder. The Linux `libflite.so` failure
+from AnalogAudio remains a host capability issue and must be excluded and
+recorded for hosted partition attribution.

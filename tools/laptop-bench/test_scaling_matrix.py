@@ -194,6 +194,34 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertEqual(variant["artifacts"], ["feature.jar"])
             self.assertIn("embedded", variant["mod_ids"])
 
+    def test_compatibility_group_keeps_runtime_family_together(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "iris.jar", "iris")
+            make_mod(mods / "sodium.jar", "sodium")
+            plan = PLAN.build_plan(pack, [], [], compatibility_groups=["render=iris,sodium"])
+            variant = next(item for item in plan["variants"] if item["id"] == "mod-iris")
+            self.assertEqual(variant["mod_ids"], ["iris", "sodium"])
+            self.assertEqual(plan["compatibility_groups"], [{"name": "render", "mod_ids": ["iris", "sodium"]}])
+
+    def test_explicit_partition_exclusion_is_recorded(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "audio.jar", "audio")
+            make_mod(mods / "clean.jar", "clean")
+            plan = PLAN.build_plan(pack, [], [], balanced_partitions=1, excluded_roots=["audio"])
+            variant = next(item for item in plan["variants"] if item["id"] == "partition-1")
+            self.assertEqual(variant["runnable_roots"], ["clean"])
+            self.assertEqual(variant["excluded_roots"], [{
+                "id": "audio",
+                "reason": "operator_excluded",
+                "missing_dependencies": [],
+            }])
+
     def test_source_pack_rejects_bootoptim_duplicate(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)
