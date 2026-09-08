@@ -14,11 +14,11 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 /**
- * Instruments only Minecraft's exact {@code Bootstrap.bootStrap()V} body.
+ * Instruments only Minecraft's exact {@code Bootstrap.bootStrap()V} and {@code Bootstrap.validate()V} bodies.
  *
  * <p>The earlier Main.main callsite candidate is deliberately not used: hosted exact-pack showed no hook from that
- * target on NeoForge 21.1.248. This narrower game-class method has an independent semantic boundary and fails closed
- * unless exactly one matching method with at least one normal RETURN exists.</p>
+ * target on NeoForge 21.1.248. These narrower game-class methods have independent semantic boundaries and each fails
+ * closed unless exactly one matching method with at least one normal RETURN exists.</p>
  */
 public final class MinecraftBootstrapTraceTransformer implements ITransformer<ClassNode> {
     private static final String TARGET = "net/minecraft/server/Bootstrap";
@@ -28,29 +28,34 @@ public final class MinecraftBootstrapTraceTransformer implements ITransformer<Cl
     public ClassNode transform(ClassNode input, ITransformerVotingContext context) {
         if (input == null || !TARGET.equals(input.name)) return input;
 
-        MethodNode bootstrap = null;
+        instrumentExactVoid(input, "bootStrap", "beginBootstrap", "endBootstrap");
+        instrumentExactVoid(input, "validate", "beginValidate", "endValidate");
+        return input;
+    }
+
+    private static void instrumentExactVoid(ClassNode input, String methodName, String beginHook, String endHook) {
+        MethodNode target = null;
         for (var method : input.methods) {
-            if ("bootStrap".equals(method.name) && "()V".equals(method.desc)) {
-                if (bootstrap != null) return input;
-                bootstrap = method;
+            if (methodName.equals(method.name) && "()V".equals(method.desc)) {
+                if (target != null) return;
+                target = method;
             }
         }
-        if (bootstrap == null) return input;
+        if (target == null) return;
 
-        AbstractInsnNode firstExecutable = firstExecutable(bootstrap);
-        if (firstExecutable == null) return input;
+        AbstractInsnNode firstExecutable = firstExecutable(target);
+        if (firstExecutable == null) return;
 
         List<AbstractInsnNode> normalReturns = new ArrayList<>();
-        for (var instruction : bootstrap.instructions.toArray()) {
+        for (var instruction : target.instructions.toArray()) {
             if (instruction.getOpcode() == Opcodes.RETURN) normalReturns.add(instruction);
         }
-        if (normalReturns.isEmpty()) return input;
+        if (normalReturns.isEmpty()) return;
 
-        bootstrap.instructions.insertBefore(firstExecutable, call("beginBootstrap"));
+        target.instructions.insertBefore(firstExecutable, call(beginHook));
         for (var normalReturn : normalReturns) {
-            bootstrap.instructions.insertBefore(normalReturn, call("endBootstrap"));
+            target.instructions.insertBefore(normalReturn, call(endHook));
         }
-        return input;
     }
 
     private static AbstractInsnNode firstExecutable(MethodNode method) {
