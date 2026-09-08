@@ -312,3 +312,9 @@ For a future diagnostic rerun, the benchmark-only JVM property
 and must not be enabled for timed optimization A/Bs; its purpose is to tell a
 reduced variant apart when resource reload completes but the client is parked
 on a loading/error/custom screen instead of opening `TitleScreen`.
+
+`-Dboot_optim.benchmark.exitOnLoadingError=true` is a second diagnostic-only
+property. If NeoForge actually opens `LoadingErrorScreen`, BootOptim records the
+screen and stops the client immediately. It exists to prevent an already-invalid
+reduced variant from consuming the full hosted timeout; it is never enabled in
+a performance comparison.
