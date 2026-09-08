@@ -66,6 +66,11 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
+        // Diagnostic branch only. Enable Sponge Mixin's own performance profiler before the first GAME
+        // class is defined, then wrap ModLauncher's stock loader/plugins with BootOptim's outer timers.
+        // No transform result is changed or skipped.
+        MixinInternalProfilerBridge.enable();
+        TransformProfilingClassLoaderInstaller.installIfRequested();
         return List.of();
     }
 
