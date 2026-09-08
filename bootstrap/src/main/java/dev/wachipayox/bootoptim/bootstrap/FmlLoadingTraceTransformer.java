@@ -5,15 +5,20 @@ import cpw.mods.modlauncher.api.ITransformerVotingContext;
 import cpw.mods.modlauncher.api.TargetType;
 import cpw.mods.modlauncher.api.TransformerVoteResult;
 import java.util.Set;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 
-/** Injects the minimum causal post-discovery trace hooks into FML's ModLoader. */
+/**
+ * Instruments the game-layer NeoForge boundary that calls into FML mod construction.
+ *
+ * <p>FML's own {@code ModLoader} lives in the MC-BOOTSTRAP/SERVICE layer in 4.0.43 and is not a reliable target for
+ * ordinary transformation-service transformers. {@code CommonModLoader} is a transformed NeoForge game-layer class
+ * and has one direct call to {@code ModLoader.gatherAndInitializeMods}; wrapping that call gives a causal boundary
+ * without changing executors, futures, callbacks, classloading order or the FML implementation itself.</p>
+ */
 public final class FmlLoadingTraceTransformer implements ITransformer<ClassNode> {
-    private static final String TARGET = "net/neoforged/fml/ModLoader";
+    private static final String TARGET = "net/neoforged/neoforge/internal/CommonModLoader";
+    private static final String FML_MOD_LOADER = "net/neoforged/fml/ModLoader";
     private static final String HOOKS = "dev/wachipayox/bootoptim/bootstrap/FmlLoadingTraceHooks";
 
     @Override
@@ -21,49 +26,26 @@ public final class FmlLoadingTraceTransformer implements ITransformer<ClassNode>
         if (input == null || !TARGET.equals(input.name)) return input;
 
         for (var method : input.methods) {
-            var original = method.instructions.toArray();
-            boolean ownsBackgroundScanBarrier = false;
-            for (var instruction : original) {
-                if (instruction instanceof MethodInsnNode invoke
-                        && "waitForScanToComplete".equals(invoke.name)) {
-                    ownsBackgroundScanBarrier = true;
-                    break;
-                }
-            }
-
-            if (ownsBackgroundScanBarrier) {
-                method.instructions.insert(call("beginGatherAndInitialize", "()V"));
-                for (var instruction : original) {
-                    if (instruction instanceof MethodInsnNode invoke
-                            && "waitForScanToComplete".equals(invoke.name)) {
-                        method.instructions.insertBefore(invoke, call("beforeBackgroundScanWait", "()V"));
-                        method.instructions.insert(invoke, call("afterBackgroundScanWait", "()V"));
-                    }
-                    if (instruction.getOpcode() == Opcodes.RETURN) {
-                        method.instructions.insertBefore(instruction, call("endGatherAndInitialize", "()V"));
-                    }
-                }
-            }
-
-            for (var instruction : original) {
+            for (var instruction : method.instructions.toArray()) {
                 if (!(instruction instanceof MethodInsnNode invoke)) continue;
-                if (!"constructMod".equals(invoke.name) || !"()V".equals(invoke.desc)) continue;
+                if (!FML_MOD_LOADER.equals(invoke.owner)
+                        || !"gatherAndInitializeMods".equals(invoke.name)
+                        || !invoke.desc.endsWith(")V")) continue;
 
-                // The exact FML 4.0.x bytecode may statically own this call on a concrete container subtype.
-                // Matching the zero-arg constructMod call inside ModLoader is structural and avoids synthetic
-                // lambda numbering and static-owner drift while remaining scoped to this one target class.
-                var before = new InsnList();
-                before.add(new InsnNode(Opcodes.DUP));
-                before.add(call("beginModConstruction", "(Lnet/neoforged/fml/ModContainer;)V"));
-                method.instructions.insertBefore(invoke, before);
-                method.instructions.insert(invoke, call("endModConstruction", "()V"));
+                method.instructions.insertBefore(invoke, call("beginGatherAndInitialize"));
+                method.instructions.insert(invoke, call("endGatherAndInitialize"));
             }
         }
         return input;
     }
 
-    private static MethodInsnNode call(String name, String descriptor) {
-        return new MethodInsnNode(Opcodes.INVOKESTATIC, HOOKS, name, descriptor, false);
+    private static MethodInsnNode call(String name) {
+        return new MethodInsnNode(
+                org.objectweb.asm.Opcodes.INVOKESTATIC,
+                HOOKS,
+                name,
+                "()V",
+                false);
     }
 
     @Override
@@ -73,7 +55,7 @@ public final class FmlLoadingTraceTransformer implements ITransformer<ClassNode>
 
     @Override
     public Set<Target<ClassNode>> targets() {
-        return Set.of(Target.targetClass("net.neoforged.fml.ModLoader"));
+        return Set.of(Target.targetClass("net.neoforged.neoforge.internal.CommonModLoader"));
     }
 
     @Override
