@@ -6,7 +6,8 @@ import java.util.concurrent.atomic.AtomicLong;
 /** Low-overhead timing for FML discovery phases, active only during startup profiling. */
 final class DiscoveryProfiler {
     private static final boolean ENABLED = Boolean.getBoolean("boot_optim.profileStartup")
-            || Boolean.getBoolean("boot_optim.benchmark.exitOnTitle");
+            || Boolean.getBoolean("boot_optim.benchmark.exitOnTitle")
+            || Boolean.getBoolean("boot_optim.profileDiscoveryDetail");
     private static final AtomicLong ROOT_START = new AtomicLong();
     private static final AtomicLong DEPENDENCY_START = new AtomicLong();
 
@@ -14,18 +15,22 @@ final class DiscoveryProfiler {
 
     static void beginRoot() {
         begin("root_mod_discovery", ROOT_START);
+        DiscoveryDetailProfiler.snapshot("root_begin");
     }
 
     static void endRoot() {
         end("root_mod_discovery", ROOT_START);
+        DiscoveryDetailProfiler.snapshot("root_end");
     }
 
     static void beginDependencies() {
         begin("dependency_discovery", DEPENDENCY_START);
+        DiscoveryDetailProfiler.snapshot("dependency_begin");
     }
 
     static void endDependencies() {
         end("dependency_discovery", DEPENDENCY_START);
+        DiscoveryDetailProfiler.snapshot("dependency_end");
     }
 
     private static void begin(String phase, AtomicLong holder) {
