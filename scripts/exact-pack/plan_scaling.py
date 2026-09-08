@@ -178,9 +178,9 @@ def _parse_fabric_metadata_text(
 
     Connector ports are still ordinary artifacts in the exact pack.  Ignoring
     their JSON metadata made the planner invent filename-based IDs and drop
-    their declared Fabric API requirement.  ``depends`` and ``breaks`` can be
-    objects or arrays in Fabric metadata; only positive dependency objects are
-    closure edges.  Alias providers are represented separately so a value such
+    their declared Fabric API requirement. ``depends`` and ``recommends`` are
+    dependency maps in Fabric metadata; only positive dependency maps become
+    closure edges. Alias providers are represented separately so a value such
     as ``fabric-api`` resolves to Forgified Fabric API without becoming a
     second scaling root.
     """
