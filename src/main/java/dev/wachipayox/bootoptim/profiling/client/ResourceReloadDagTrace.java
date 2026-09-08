@@ -86,6 +86,62 @@ public final class ResourceReloadDagTrace {
         };
     }
 
+    public static void beginTailListener(long generation, int listenerIndex, String listenerClassName) {
+        if (!isStartupGeneration(generation)) {
+            return;
+        }
+        String phase = tailListenerPhase(listenerIndex);
+        String detail = listenerDetail(listenerIndex, listenerClassName);
+        RegularBootTraceBridge.record("phase_begin", 0L, 0L, null,
+                phase, -1L, "boot_optim", null, generation, detail + ";inclusive_listener_future");
+        RegularBootTraceBridge.record("phase_begin", 0L, 0L, null,
+                phase + "_preparation", -1L, "boot_optim", null, generation,
+                detail + ";prepare_until_stock_barrier");
+    }
+
+    /**
+     * Observes the stock preparation/apply-turn barrier for one listener after ModelManager.
+     * The original barrier is called exactly once and the exact same future is returned.
+     */
+    public static PreparableReloadListener.PreparationBarrier wrapTailListenerBarrier(
+            long generation, PreparableReloadListener.PreparationBarrier original,
+            int listenerIndex, String listenerClassName) {
+        if (!isStartupGeneration(generation) || original == null) {
+            return original;
+        }
+        String phase = tailListenerPhase(listenerIndex);
+        String detail = listenerDetail(listenerIndex, listenerClassName);
+        return new PreparableReloadListener.PreparationBarrier() {
+            @Override
+            public <V> CompletableFuture<V> wait(V value) {
+                RegularBootTraceBridge.record("phase_end", 0L, 0L, null,
+                        phase + "_preparation", -1L, "boot_optim", null, generation,
+                        detail + ";preparation_reached_stock_barrier");
+                RegularBootTraceBridge.record("barrier_wait", 0L, 0L, null,
+                        phase + "_apply_turn", -1L, "boot_optim", null, generation,
+                        detail + ";waiting_for_stock_ordered_apply_turn");
+                CompletableFuture<V> future = original.wait(value);
+                future.whenComplete((ignored, failure) -> RegularBootTraceBridge.record(
+                        "barrier_open", 0L, 0L, null,
+                        phase + "_apply_turn", -1L, "boot_optim", null, generation,
+                        resultDetail(failure, detail + ";stock_ordered_apply_turn_ready")));
+                return future;
+            }
+        };
+    }
+
+    public static void observeTailListenerCompletion(long generation, int listenerIndex,
+            String listenerClassName, CompletableFuture<?> future) {
+        if (!isStartupGeneration(generation) || future == null) {
+            return;
+        }
+        String phase = tailListenerPhase(listenerIndex);
+        String detail = listenerDetail(listenerIndex, listenerClassName);
+        future.whenComplete((ignored, failure) -> RegularBootTraceBridge.record(
+                "phase_end", 0L, 0L, null, phase, -1L, "boot_optim", null, generation,
+                resultDetail(failure, detail + ";listener_future_complete")));
+    }
+
     public static void enterListener(long generation) {
         if (isStartupGeneration(generation)) {
             LISTENER_GENERATION.set(generation);
@@ -243,6 +299,14 @@ public final class ResourceReloadDagTrace {
 
     private static boolean isStartupGeneration(long generation) {
         return enabled() && generation == 1L;
+    }
+
+    private static String tailListenerPhase(int listenerIndex) {
+        return "reload_listener_post_model_" + listenerIndex;
+    }
+
+    private static String listenerDetail(int listenerIndex, String listenerClassName) {
+        return "listener_index=" + listenerIndex + ";listener=" + listenerClassName;
     }
 
     private static void endAggregatePhase(String phase, long generation, long taskId,
