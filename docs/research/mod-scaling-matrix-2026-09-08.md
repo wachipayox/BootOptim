@@ -297,3 +297,10 @@ shown the same model warning while reaching the menu. No p2/p3 time is admitted
 to the performance ledger. The next matrix should select `baseline`, `full`,
 and `complement-*` variants; subset partitions remain useful only as explicitly
 diagnostic evidence for phase disappearance.
+
+For a future diagnostic rerun, the benchmark-only JVM property
+`-Dboot_optim.benchmark.screenProbe=true` records every NeoForge
+`ScreenEvent.Opening` class as `BOOTOPTIM_SCREEN`. It is intentionally opt-in
+and must not be enabled for timed optimization A/Bs; its purpose is to tell a
+reduced variant apart when resource reload completes but the client is parked
+on a loading/error/custom screen instead of opening `TitleScreen`.
