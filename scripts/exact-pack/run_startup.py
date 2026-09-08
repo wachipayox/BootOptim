@@ -101,6 +101,53 @@ def wait_for_process(process: subprocess.Popen, timeout_seconds: int) -> tuple[b
         return False, "timeout"
 
 
+def capture_prebootstrap_jfr(root: Path, console_log: Path) -> None:
+    """Post-process opt-in JFR only after the timed JVM is gone.
+
+    No JFR recording is enabled by this harness. A diagnostic PR must request it
+    explicitly through an exact-pack JVM arg and use the fixed filename below.
+    Missing JFR is therefore a normal no-op, while malformed/failed analysis is
+    reported fail-open in the already-uploaded console log.
+    """
+    candidates = sorted(root.rglob("bootoptim-prebootstrap.jfr"))
+    if not candidates:
+        return
+    trace = root / "run-pack-benchmark" / "logs" / "bootoptim-trace.jsonl"
+    if not trace.is_file():
+        return
+    output = root / "bootoptim-prebootstrap-jfr-summary.json"
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "tools/boot-trace/analyze_prebootstrap_jfr.py",
+                "--jfr", str(candidates[0]),
+                "--trace", str(trace),
+                "--output", str(output),
+            ],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        with console_log.open("a", encoding="utf-8", errors="replace") as log:
+            if result.returncode == 0 and output.is_file():
+                compact = json_compact(output.read_text(encoding="utf-8"))
+                log.write(f"\nBOOTOPTIM_PREBOOTSTRAP_JFR_SUMMARY {compact}\n")
+            else:
+                error = (result.stderr or result.stdout or "unknown error").strip().replace("\n", " ")
+                log.write(f"\nBOOTOPTIM_PREBOOTSTRAP_JFR_ERROR {error}\n")
+    except Exception as exc:
+        with console_log.open("a", encoding="utf-8", errors="replace") as log:
+            log.write(f"\nBOOTOPTIM_PREBOOTSTRAP_JFR_ERROR {type(exc).__name__}: {exc}\n")
+
+
+def json_compact(text: str) -> str:
+    import json
+    return json.dumps(json.loads(text), separators=(",", ":"), sort_keys=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--variant", required=True)
@@ -220,6 +267,11 @@ def main() -> None:
         )
         if summary.returncode != 0:
             raise SystemExit(f"Exact-pack summarizer failed with exit {summary.returncode}")
+
+        # Opt-in JFR analysis is deliberately post-exit and fail-open. It cannot
+        # alter launch-plugin ordering, class transformation, callbacks or the
+        # main-menu endpoint used by the benchmark.
+        capture_prebootstrap_jfr(root, console_log)
     finally:
         if process is not None:
             terminate_tree(process)
