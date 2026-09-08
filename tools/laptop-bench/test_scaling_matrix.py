@@ -266,6 +266,8 @@ class ScalingPlanTest(unittest.TestCase):
             manifest = MATERIALIZER.materialize(pack, destination, plan_path, "baseline")
 
             self.assertEqual(manifest["selected_artifacts"], ["base.jar"])
+            self.assertEqual(manifest["compatibility_groups"], [])
+            self.assertEqual(manifest["explicitly_excluded_roots"], [])
             self.assertTrue((destination / "config" / "example.cfg").is_file())
             self.assertTrue((destination / "mods" / "mcef-libraries" / "native.bin").is_file())
             self.assertTrue((destination / "mods" / "base.jar").is_file())

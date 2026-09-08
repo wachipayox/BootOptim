@@ -78,6 +78,8 @@ def materialize(source: Path, destination: Path, plan_path: Path, variant_id: st
             "schema": 1,
             "source_pack_fingerprint": plan.get("pack_fingerprint"),
             "source_pack_directory": str(source),
+            "compatibility_groups": plan.get("compatibility_groups", []),
+            "explicitly_excluded_roots": plan.get("explicitly_excluded_roots", []),
             "variant_id": variant["id"],
             "variant_kind": variant.get("kind"),
             "roots": variant.get("roots", []),
