@@ -3,6 +3,7 @@ package dev.wachipayox.bootoptim.profiling.client;
 import com.mojang.logging.LogUtils;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.security.CodeSource;
 import java.util.ArrayList;
@@ -14,8 +15,13 @@ import java.util.function.Supplier;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
+import net.neoforged.bus.ListenerList;
 import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.EventListener;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import org.slf4j.Logger;
 
@@ -26,8 +32,11 @@ public final class EntityRendererReloadProfiler {
             System.getProperty("boot_optim.profileEntityRendererReload", "false"));
     private static final ThreadMXBean THREAD_MX_BEAN = ManagementFactory.getThreadMXBean();
     private static final ThreadLocal<Scope> ACTIVE_SCOPE = new ThreadLocal<>();
+    private static final StackWalker STACK_WALKER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final List<Row> ROWS = new ArrayList<>();
     private static final List<String> PROVIDERS = new ArrayList<>();
+    private static final List<String> SUBSCRIBERS = new ArrayList<>();
+    private static final Map<String, Map<String, Integer>> CALLER_ACCESSES = new LinkedHashMap<>();
     private static boolean active;
     private static long reloadStartNanos;
     private static long reloadStartCpuNanos;
@@ -46,6 +55,8 @@ public final class EntityRendererReloadProfiler {
         synchronized (ROWS) {
             ROWS.clear();
             PROVIDERS.clear();
+            SUBSCRIBERS.clear();
+            CALLER_ACCESSES.clear();
         }
         active = true;
         reloadStartNanos = System.nanoTime();
@@ -85,6 +96,7 @@ public final class EntityRendererReloadProfiler {
         });
     }
 
+    /** Kept fail-open for older diagnostic heads where EventBus itself could be transformed. */
     public static void invokeListener(EventListener listener, Event event) {
         if (!ENABLED || !active || !(event instanceof EntityRenderersEvent.AddLayers)) {
             listener.invoke(event);
@@ -107,6 +119,21 @@ public final class EntityRendererReloadProfiler {
         Scope scope = ACTIVE_SCOPE.get();
         if (scope != null) {
             scope.accesses.merge(access, 1, Integer::sum);
+            if (isSensitiveContextAccess(access)) {
+                recordCallerAccess("context." + access);
+            }
+        }
+    }
+
+    /** Records accesses to mutable renderer maps/context exposed by AddLayers itself. */
+    public static void addLayersAccess(String access) {
+        if (!ENABLED || !active) {
+            return;
+        }
+        Scope scope = ACTIVE_SCOPE.get();
+        if (scope != null && "add_layers_post".equals(scope.name)) {
+            scope.accesses.merge("event_" + access, 1, Integer::sum);
+            recordCallerAccess("addlayers." + access);
         }
     }
 
@@ -128,24 +155,77 @@ public final class EntityRendererReloadProfiler {
         }
     }
 
+    /**
+     * Read-only inventory of the exact listeners that ModLoader.postEvent(AddLayers) will dispatch.
+     * EventBus itself is intentionally not transformed: the private list accessor is reflected only
+     * after the measured dispatcher wall has been captured, and callbacks are never invoked here.
+     */
+    private static void snapshotAddLayersSubscribers() {
+        SUBSCRIBERS.clear();
+        int order = 0;
+        try {
+            Method getListenerList = null;
+            Method getRawPhaseListeners = ListenerList.class.getDeclaredMethod("getListeners", EventPriority.class);
+            getRawPhaseListeners.setAccessible(true);
+            for (EventPriority phase : EventPriority.values()) {
+                for (ModContainer container : ModList.get().getSortedMods()) {
+                    IEventBus bus = container.getEventBus();
+                    if (bus == null) {
+                        continue;
+                    }
+                    if (getListenerList == null || getListenerList.getDeclaringClass() != bus.getClass()) {
+                        getListenerList = bus.getClass().getDeclaredMethod("getListenerList", Class.class);
+                        getListenerList.setAccessible(true);
+                    }
+                    Object rawList = getListenerList.invoke(bus, EntityRenderersEvent.AddLayers.class);
+                    if (!(rawList instanceof ListenerList listenerList)) {
+                        continue;
+                    }
+                    @SuppressWarnings("unchecked")
+                    List<EventListener> listeners = (List<EventListener>) getRawPhaseListeners.invoke(listenerList, phase);
+                    for (EventListener listener : listeners) {
+                        SUBSCRIBERS.add("order=" + order++
+                                + " phase=" + phase
+                                + " mod=" + container.getModId()
+                                + " listener=" + quote(safeListenerIdentity(listener)));
+                    }
+                }
+            }
+        } catch (Throwable throwable) {
+            SUBSCRIBERS.add("inventory_error=" + quote(throwable.getClass().getName() + ":" + String.valueOf(throwable.getMessage())));
+        }
+    }
+
     public static void finishReload() {
         if (!ENABLED || !active) {
             return;
         }
         long totalWall = System.nanoTime() - reloadStartNanos;
         long totalCpu = cpuDelta(reloadStartCpuNanos);
+        // Subscriber reflection is deliberately outside the reported dispatcher duration.
+        snapshotAddLayersSubscribers();
         List<Row> rows;
         List<String> providers;
+        List<String> subscribers;
+        Map<String, Map<String, Integer>> callerAccesses;
         synchronized (ROWS) {
             rows = List.copyOf(ROWS);
             providers = List.copyOf(PROVIDERS);
+            subscribers = List.copyOf(SUBSCRIBERS);
+            callerAccesses = new LinkedHashMap<>();
+            CALLER_ACCESSES.forEach((caller, accesses) -> callerAccesses.put(caller, new LinkedHashMap<>(accesses)));
         }
         LOGGER.info(
-                "BOOTOPTIM_ENTITY_RENDER_RELOAD summary total_ms={} cpu_ms={} thread={} providers={} rows={}",
-                formatNanos(totalWall), formatCpuNanos(totalCpu), reloadThread, providers.size(), rows.size());
+                "BOOTOPTIM_ENTITY_RENDER_RELOAD summary total_ms={} cpu_ms={} thread={} providers={} subscribers={} rows={} callers={}",
+                formatNanos(totalWall), formatCpuNanos(totalCpu), reloadThread, providers.size(), subscribers.size(), rows.size(), callerAccesses.size());
         for (String provider : providers) {
             LOGGER.info("BOOTOPTIM_ENTITY_RENDER_PROVIDER {}", provider);
         }
+        for (String subscriber : subscribers) {
+            LOGGER.info("BOOTOPTIM_ENTITY_RENDER_SUBSCRIBER {}", subscriber);
+        }
+        callerAccesses.forEach((caller, accesses) -> LOGGER.info(
+                "BOOTOPTIM_ENTITY_RENDER_ACCESS caller={} accesses={}", quote(caller), quote(formatAccesses(accesses))));
         for (Row row : rows) {
             LOGGER.info(
                     "BOOTOPTIM_ENTITY_RENDER_ROW name={} wall_ms={} cpu_ms={} thread={} accesses={}",
@@ -154,6 +234,47 @@ public final class EntityRendererReloadProfiler {
         }
         active = false;
         ACTIVE_SCOPE.remove();
+    }
+
+    private static boolean isSensitiveContextAccess(String access) {
+        return "resource_manager".equals(access)
+                || "model_manager".equals(access)
+                || "model_set".equals(access)
+                || "bake_layer".equals(access);
+    }
+
+    private static void recordCallerAccess(String access) {
+        String caller;
+        try {
+            caller = STACK_WALKER.walk(stream -> stream
+                    .filter(frame -> !isInfrastructureFrame(frame.getClassName()))
+                    .findFirst()
+                    .map(frame -> frame.getClassName() + "#" + frame.getMethodName())
+                    .orElse("unknown"));
+        } catch (Throwable ignored) {
+            caller = "unknown";
+        }
+        synchronized (ROWS) {
+            CALLER_ACCESSES.computeIfAbsent(caller, ignored -> new LinkedHashMap<>())
+                    .merge(access, 1, Integer::sum);
+        }
+    }
+
+    private static boolean isInfrastructureFrame(String className) {
+        return className.startsWith("dev.wachipayox.bootoptim.")
+                || className.startsWith("net.neoforged.bus.")
+                || className.startsWith("net.neoforged.fml.")
+                || className.startsWith("net.neoforged.neoforge.client.event.EntityRenderersEvent")
+                || className.startsWith("net.minecraft.client.renderer.entity.EntityRendererProvider$Context")
+                || className.startsWith("java.lang.invoke.");
+    }
+
+    private static String safeListenerIdentity(EventListener listener) {
+        try {
+            return listener.toString().replace('\n', ' ').replace('\r', ' ');
+        } catch (Throwable ignored) {
+            return listener.getClass().getName();
+        }
     }
 
     private static String formatAccesses(Map<String, Integer> accesses) {
