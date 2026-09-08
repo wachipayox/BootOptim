@@ -75,6 +75,17 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertEqual(variant["missing_dependencies"], ["missing"])
             self.assertEqual(variant["artifacts"], ["feature.jar"])
 
+    def test_platform_dependencies_are_not_reported_as_missing_artifacts(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "feature.jar", "feature", ["minecraft", "neoforge", "missing"])
+
+            plan = PLAN.build_plan(pack, [], [])
+            variant = next(item for item in plan["variants"] if item["id"] == "mod-feature")
+            self.assertEqual(variant["missing_dependencies"], ["missing"])
+
     def test_quoted_dependency_table_owner_is_joined_to_mod(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)

@@ -20,6 +20,9 @@ from pathlib import Path
 SECTION_RE = re.compile(r"^\[+([^\]]+)\]+$")
 KEY_VALUE_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 QUOTED_RE = re.compile(r'^"([^"]*)"')
+# These are supplied by the Minecraft/NeoForge runtime rather than by a
+# selectable mod artifact in the exact-pack `mods/` directory.
+PLATFORM_PROVIDED_MOD_IDS = {"minecraft", "neoforge", "forge", "javafml"}
 
 
 @dataclass
@@ -145,6 +148,8 @@ def required_closure(records: dict[str, list[ModRecord]], roots: list[str]) -> t
     pending = list(roots)
     while pending:
         mod_id = pending.pop()
+        if mod_id in PLATFORM_PROVIDED_MOD_IDS:
+            continue
         if mod_id in selected:
             continue
         matching_records = records.get(mod_id)
