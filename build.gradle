@@ -29,6 +29,11 @@ sourceSets.main.resources {
 repositories {
 }
 
+dependencies {
+    // Shared JDK-only trace schema/API. The packaged bootstrap embeds these classes for SERVICE-layer access.
+    implementation project(':trace-core')
+}
+
 var packBenchmarkDirectory = project.file('run-pack-benchmark')
 var externalPackDirectory = providers.gradleProperty('bootoptimPackDir')
         .orElse(providers.environmentVariable('BOOTOPTIM_PACK_DIR'))

@@ -19,6 +19,8 @@ neoForge {
 }
 
 dependencies {
+    implementation project(':trace-core')
+
     // The regular NeoForge mod remains isolated from ModLauncher's SERVICE layer and is loaded from JarJar.
     jarJar project(':')
 
@@ -32,6 +34,8 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.named('jar', Jar).configure {
+    // The trace core must be available to the earliest SERVICE-layer hooks before the nested mod is loaded.
+    from { project(':trace-core').sourceSets.main.output }
     manifest {
         attributes(
                 'Automatic-Module-Name': 'dev.wachipayox.bootoptim.bootstrap',
