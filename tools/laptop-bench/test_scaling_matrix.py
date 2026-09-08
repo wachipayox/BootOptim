@@ -77,9 +77,30 @@ class ScalingPlanTest(unittest.TestCase):
             by_id = {variant["id"]: variant for variant in plan["variants"]}
             self.assertEqual(by_id["partition-1"]["roots"], ["base", "last"])
             self.assertEqual(by_id["partition-2"]["roots"], ["feature", "other"])
+            self.assertEqual(by_id["partition-1"]["runnable_roots"], ["base", "last"])
+            self.assertEqual(by_id["partition-2"]["runnable_roots"], ["feature", "other"])
             self.assertEqual(by_id["partition-1"]["mod_ids"], ["base", "last"])
             self.assertEqual(by_id["partition-2"]["mod_ids"], ["base", "feature", "other"])
             self.assertEqual(by_id["partition-2"]["missing_dependencies"], [])
+
+    def test_balanced_partition_excludes_only_roots_with_unmaterializable_dependencies(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "clean.jar", "clean")
+            make_mod(mods / "broken.jar", "broken", ["not-shipped"])
+
+            plan = PLAN.build_plan(pack, [], [], balanced_partitions=1)
+            variant = next(item for item in plan["variants"] if item["id"] == "partition-1")
+            self.assertEqual(variant["roots"], ["broken", "clean"])
+            self.assertEqual(variant["runnable_roots"], ["clean"])
+            self.assertEqual(variant["mod_ids"], ["clean"])
+            self.assertEqual(variant["missing_dependencies"], [])
+            self.assertEqual(variant["excluded_roots"], [{
+                "id": "broken",
+                "missing_dependencies": ["not-shipped"],
+            }])
 
     def test_missing_required_dependency_is_reported_not_silently_dropped(self):
         with tempfile.TemporaryDirectory() as raw:

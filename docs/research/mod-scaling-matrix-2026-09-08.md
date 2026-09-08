@@ -142,8 +142,12 @@ The planner now supports `--balanced-partitions N`. It assigns the sorted mod
 ID inventory to deterministic round-robin root partitions and computes a full
 required-dependency closure for each partition. A dependency can therefore be
 present in multiple partitions when the metadata requires it; a partition with
-missing dependencies is diagnostic-only and must not be treated as a clean
-performance point. This keeps the attribution experiment reproducible without
+missing dependencies is not launchable and must not be treated as a clean
+performance point. The planner now excludes such roots from the runnable
+closure, records them in `excluded_roots`, and keeps the original assignment in
+`roots`; this makes the coverage loss explicit instead of silently dropping a
+mod. A partition with exclusions remains attribution-only and is not evidence
+that the excluded mod is cheap. This keeps the experiment reproducible without
 hand-maintaining another list of 160 IDs. The next hosted run should compare
 `baseline`, `full`, and four `partition-*` variants with one fresh repetition;
 the goal is localization of the broad scaling block, not a product claim.

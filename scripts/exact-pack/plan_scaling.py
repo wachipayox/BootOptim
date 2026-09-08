@@ -259,14 +259,31 @@ def build_plan(
         # appear in more than one partition rather than being silently omitted.
         for index in range(balanced_partitions):
             roots = all_ids[index::balanced_partitions]
-            selected, missing = required_closure(records, roots)
+            runnable_roots = []
+            excluded_roots = []
+            for root in roots:
+                _, root_missing = required_closure(records, [root])
+                if root_missing:
+                    excluded_roots.append({
+                        "id": root,
+                        "missing_dependencies": root_missing,
+                    })
+                else:
+                    runnable_roots.append(root)
+            selected, missing = required_closure(records, runnable_roots)
+            if missing:
+                raise ValueError(
+                    f"balanced partition {index + 1} has an unexpected missing dependency closure: {missing}"
+                )
             variants.append({
                 "id": f"partition-{index + 1}",
                 "kind": "balanced_partition",
                 "roots": roots,
+                "runnable_roots": runnable_roots,
+                "excluded_roots": excluded_roots,
                 "mod_ids": sorted(selected),
                 "artifacts": artifact_selection(records, selected),
-                "missing_dependencies": missing,
+                "missing_dependencies": [],
             })
 
     return {
