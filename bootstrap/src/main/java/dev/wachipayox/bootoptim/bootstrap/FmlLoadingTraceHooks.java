@@ -13,7 +13,8 @@ public final class FmlLoadingTraceHooks {
     public static void beginGatherAndInitialize() {
         if (!TRACE.isEnabled() || GATHER_TASK.get() != 0L) return;
         try {
-            long predecessor = DiscoveryProfiler.dependencyTaskId();
+            long predecessor = MinecraftBootstrapTraceHooks.bootstrapTaskId();
+            if (predecessor == 0L) predecessor = DiscoveryProfiler.dependencyTaskId();
             long[] dependencies = predecessor == 0L ? null : new long[] { predecessor };
             long taskId = TRACE.beginTask(
                     "fml_gather_and_initialize_mods", 0L, dependencies, null, null, -1L);
