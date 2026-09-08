@@ -150,6 +150,13 @@ exact-pack-control-jvm-arg: -Dboot_optim.exampleFeature=false
 
 Multiple candidate/control JVM-arg lines are supported. Repetitions are limited to 1-5 per variant. Every matrix entry gets a fresh hosted VM, so candidate/control runs do not share JVM state, Minecraft process state or OS page cache.
 
+Each JVM argument must be on its own directive line. The runner passes the
+directive text through `BOOTOPTIM_PACK_EXTRA_JVM_ARGS` and Gradle splits only
+on newlines; putting two `-D...` options on one space-separated line makes
+them one malformed JVM argument and silently leaves the intended properties
+inactive. Validate activation with a candidate-specific log marker before
+using any timing result.
+
 Same-VM paired diagnostic:
 
 ```text

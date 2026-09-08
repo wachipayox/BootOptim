@@ -127,10 +127,50 @@ itself: the hook adds two injections and an identity-map lookup to every face
 call during startup. A narrower listener-local, lower-overhead design remains
 the only justified reopening before closing the cost entirely.
 
+The follow-up last-shape cache removed the external identity map and was tested
+with the workflow's same-VM paired mode (three alternating pairs). Its
+candidate-minus-control menu deltas were `-1401`, `-5956`, and `+1258` ms;
+the median was `-1401 ms`, but the corresponding
+`reload_to_fancymenu_finish_ms` median was only `-123 ms` (`-123`, `-2516`,
+`+231` ms by pair). Because the sign flips with the alternating order and the
+effect is below the observed runner variance, this is **inconclusive and not a
+promotion**. A per-object field cache is now staged as the next, structurally
+different diagnostic; its property is
+`boot_optim.morecullingShapeFaceObjectCache`.
+
 If the hosted gain is small or the mixin cannot be proven active, keep the
 attribution and close only the scheduling implementation, not the MoreCulling
 cost itself. A physical laptop run is justified only after a coherent hosted
 win because the laptop may amplify CPU/HDD-sensitive work.
+
+The per-object field-cache exact-pack paired run was valid after correcting the
+JVM-argument formatting. Its candidate marker was present and Mixin errors were
+zero, but candidate-minus-control menu deltas were `+5707`, `+1540`, and `+311`
+ms (median **+1540 ms**); reload→FancyMenu deltas were `+2472`, `+981`, and
+`-4` ms (median **+981 ms**). This is a diagnostic rejection on hosted, but the
+project explicitly allows one physical tie-break when a CPU/allocation-sensitive
+effect remains uncertain on the old laptop. The first laptop attempt was invalid
+because the distributable wrapper still embedded an older inner mod without the
+field-cache class; it reached the menu in `366887 ms` but had no candidate marker
+and is excluded. Rebuilding `:bootstrap:jar --rerun-tasks` produced wrapper
+SHA-256 `379BC509EFD43A0D2EDF7CFB6BC1E2F99DD1601B3D8E3AB43B00C70F6DEA4989`;
+the corrected candidate was then run on the physical laptop with the same
+wrapper, JVM and pack. Its canonical startup report reached the menu at
+`398658 ms`; the matching control (same corrected wrapper, property false)
+reached it at `406363 ms`, an apparent total delta of `-7705 ms`. That total
+is not attributable to the probe: the candidate was already `-8402 ms` ahead
+before the `mod_entrypoint` marker (`118639` vs `127041 ms), while the
+post-entrypoint critical path was `280019` vs `279322 ms` (candidate
+`+697 ms`). The candidate also had a roughly `+4.9 s` slower reload-to-
+FancyMenu tail, and FancyMenu selected different initial backgrounds in the
+two runs (`bg_alvarin_house` versus `bg_inv_noche`). The candidate marker was
+active and BootOptim/Mixin errors were zero, so the run is valid as a
+diagnostic, but the apparent menu win is pre-entrypoint/layout variance and
+the measured critical path is slightly worse. **Do not promote** the
+per-object field cache; leave the property disabled and close this particular
+implementation. A future MoreCulling attempt needs a lower-overhead,
+listener-local design and a fixed initial-layout fixture before another
+physical tie-break.
 
 ## Sources
 
