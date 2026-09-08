@@ -1,7 +1,9 @@
 import org.gradle.api.tasks.JavaExec
 
-// Diagnostic/tooling-only source set injected by -I. Nothing here changes the
-// packaged BootOptim runtime or normal Gradle lifecycle.
+// Diagnostic/tooling-only source injection. The replay sources are added to the
+// normal dev main output only for Gradle invocations that explicitly pass this
+// init script, so FML/ModLauncher can discover the GatherDataEvent bridge during
+// runData. Normal builds/package tasks do not see src/modelReplay at all.
 gradle.afterProject { project, state ->
     if (project != gradle.rootProject || state.failure != null) {
         return
@@ -13,6 +15,8 @@ gradle.afterProject { project, state ->
     }
 
     def main = sourceSets.getByName('main')
+    main.java.srcDir(project.file('src/modelReplay/java'))
+
     def replay = sourceSets.create('modelReplay')
     replay.java.srcDir(project.file('src/modelReplay/java'))
     replay.resources.srcDir(project.file('src/modelReplay/resources'))
