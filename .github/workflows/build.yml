@@ -42,11 +42,21 @@ jobs:
           test -n "$packaged"
           echo "Validating $packaged"
           jar tf "$packaged" | grep -qx 'META-INF/services/cpw.mods.modlauncher.api.ITransformationService'
-          jar tf "$packaged" | grep -qx 'dev/wachipayox/bootoptim/trace/StructuredBootTrace.class'
+          test "$(jar tf "$packaged" | grep -cx 'dev/wachipayox/bootoptim/trace/StructuredBootTrace.class')" -eq 1
           unzip -p "$packaged" META-INF/MANIFEST.MF | tr -d '\r' | grep -q '^FMLModType: LIBRARY$'
           jar tf "$packaged" | grep -q '^META-INF/jarjar/.*\.jar$'
           unzip -p "$packaged" META-INF/jarjar/metadata.json | tee bootstrap-jarjar-metadata.json
           grep -q 'boot_optim' bootstrap-jarjar-metadata.json
+
+          inner_path="$(jar tf "$packaged" | grep '^META-INF/jarjar/.*boot_optim.*\.jar$' | head -n 1)"
+          test -n "$inner_path"
+          unzip -p "$packaged" "$inner_path" > regular-mod.jar
+          if jar tf regular-mod.jar | grep -q '^dev/wachipayox/bootoptim/trace/'; then
+            echo 'regular nested mod unexpectedly contains trace-core classes' >&2
+            exit 1
+          fi
+          jar tf regular-mod.jar | grep -qx 'dev/wachipayox/bootoptim/profiling/RegularBootTraceBridge.class'
+
           cp "$packaged" bootoptim-ci.jar
 
       - name: Upload packaged BootOptim
