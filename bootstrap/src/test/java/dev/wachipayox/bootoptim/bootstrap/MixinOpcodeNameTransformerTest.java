@@ -26,25 +26,20 @@ class MixinOpcodeNameTransformerTest {
     @Test
     void directLookupMatchesMixin087ForExhaustiveRelevantDomain() throws Exception {
         Set<Integer> values = new LinkedHashSet<>();
-        for (int opcode = -4096; opcode <= 4096; opcode++) {
-            values.add(opcode);
-        }
+        for (int opcode = -4096; opcode <= 4096; opcode++) values.add(opcode);
         values.add(Integer.MIN_VALUE);
         values.add(Integer.MAX_VALUE);
         for (Field field : Opcodes.class.getDeclaredFields()) {
-            if (field.getType() == Integer.TYPE) {
-                values.add(field.getInt(null));
-            }
+            if (field.getType() == Integer.TYPE) values.add(field.getInt(null));
         }
 
         List<String> mismatches = new ArrayList<>();
         for (int opcode : values) {
             String stock = Bytecode.getOpcodeName(opcode);
             String direct = MixinOpcodeNameTransformer.directOpcodeName(opcode);
-            if (!stock.equals(direct)) {
-                mismatches.add(opcode + ":stock=" + stock + ",direct=" + direct);
-            }
+            if (!stock.equals(direct)) mismatches.add(opcode + ":stock=" + stock + ",direct=" + direct);
         }
+        if (!mismatches.isEmpty()) System.out.println("BOOTOPTIM_OPCODE_EQUIVALENCE_MISMATCHES " + mismatches);
         assertTrue(mismatches.isEmpty(), "opcode mismatches=" + mismatches);
     }
 
@@ -65,8 +60,7 @@ class MixinOpcodeNameTransformerTest {
             MethodNode method = node.methods.stream()
                     .filter(candidate -> "getOpcodeName".equals(candidate.name)
                             && "(I)Ljava/lang/String;".equals(candidate.desc))
-                    .findFirst()
-                    .orElseThrow();
+                    .findFirst().orElseThrow();
             List<String> shape = new ArrayList<>();
             for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
                 if (insn.getOpcode() < 0) continue;
@@ -75,6 +69,9 @@ class MixinOpcodeNameTransformerTest {
                 if (insn instanceof LdcInsnNode ldc) detail += " cst=" + ldc.cst;
                 if (insn instanceof MethodInsnNode call) detail += " call=" + call.owner + "." + call.name + call.desc;
                 shape.add(detail);
+            }
+            if (!MixinOpcodeNameTransformer.matchesMixin087Wrapper(method)) {
+                System.out.println("BOOTOPTIM_OPCODE_WRAPPER_SHAPE " + shape);
             }
             assertTrue(MixinOpcodeNameTransformer.matchesMixin087Wrapper(method), "wrapper shape=" + shape);
 
