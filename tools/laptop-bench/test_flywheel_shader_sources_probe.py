@@ -36,6 +36,8 @@ class FlywheelShaderSourcesProbeContractTest(unittest.TestCase):
         self.assertIn("dev.engine_room.flywheel.backend.compile.FlwProgramsReloader", reloader)
         self.assertIn("@Pseudo", sources)
         self.assertIn("dev.engine_room.flywheel.backend.glsl.ShaderSources", sources)
+        self.assertIn("private static void bootoptim$sourcesStart", sources)
+        self.assertIn("private static void bootoptim$sourcesEnd", sources)
         self.assertIn("FlywheelProgramsReloaderProbeMixin", config)
         self.assertIn("FlywheelShaderSourcesProbeMixin", config)
 
