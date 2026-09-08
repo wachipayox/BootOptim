@@ -144,6 +144,26 @@ class ScalingPlanTest(unittest.TestCase):
             self.assertEqual(by_id["complement-2"]["mod_ids"], ["base", "last"])
             self.assertEqual(by_id["complement-2"]["artifacts"], ["base.jar", "last.jar"])
 
+    def test_custom_complement_removes_named_block_but_keeps_closed_remainder(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw)
+            mods = pack / "mods"
+            mods.mkdir()
+            make_mod(mods / "base.jar", "base")
+            make_mod(mods / "feature.jar", "feature", ["base"])
+            make_mod(mods / "other.jar", "other")
+
+            plan = PLAN.build_plan(
+                pack, [], [], complement_groups=["remove-base=base"],
+            )
+            variant = next(item for item in plan["variants"] if item["id"] == "complement-group-remove-base")
+            self.assertEqual(variant["kind"], "custom_complement")
+            self.assertEqual(variant["mod_ids"], ["other"])
+            self.assertTrue(any(
+                item["id"] == "feature" and item["reason"] == "depends_on_excluded_or_missing"
+                for item in variant["excluded_roots"]
+            ))
+
     def test_balanced_complements_exclude_runtime_families_together(self):
         with tempfile.TemporaryDirectory() as raw:
             pack = Path(raw)

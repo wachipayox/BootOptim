@@ -488,6 +488,7 @@ def build_plan(
     compatibility_groups: list[str] | None = None,
     excluded_roots: list[str] | None = None,
     runtime_symbol_providers: list[str] | None = None,
+    complement_groups: list[str] | None = None,
 ) -> dict:
     if balanced_partitions < 0:
         raise ValueError("balanced_partitions must not be negative")
@@ -542,6 +543,59 @@ def build_plan(
             "mod_ids": sorted(selected),
             "artifacts": artifact_selection(records, selected),
             "missing_dependencies": missing,
+        })
+
+    # A custom complement is the valid-pack form of a bisection experiment:
+    # remove only the named roots (plus declared runtime families), then close
+    # every remaining root. It is intentionally separate from a subset group;
+    # the latter is diagnostic-only for mixed modpacks with undeclared runtime
+    # references.
+    for raw_group in complement_groups or []:
+        name, roots = parse_group(raw_group)
+        assigned = set(roots)
+        unknown = sorted(assigned - set(all_ids))
+        if unknown:
+            raise ValueError(f"complement group {name} references unknown roots: {unknown}")
+        excluded = expand_compatibility_exclusions(
+            assigned | explicitly_excluded,
+            parsed_compatibility_groups,
+        )
+        candidate_roots = [mod_id for mod_id in all_ids if mod_id not in excluded]
+        runnable_roots = []
+        excluded_records = []
+        for root in sorted(assigned | explicitly_excluded):
+            reason = "operator_excluded" if root in explicitly_excluded else "complement_excluded"
+            excluded_records.append({"id": root, "reason": reason, "missing_dependencies": []})
+        for group in parsed_compatibility_groups:
+            if assigned.intersection(group):
+                for root in sorted(set(group) - assigned - explicitly_excluded):
+                    excluded_records.append({
+                        "id": root,
+                        "reason": "compatibility_group_excluded",
+                        "missing_dependencies": [],
+                    })
+        for root in candidate_roots:
+            _, root_missing = required_closure(records, [root], parsed_compatibility_groups, excluded)
+            if root_missing:
+                excluded_records.append({
+                    "id": root,
+                    "reason": "depends_on_excluded_or_missing",
+                    "missing_dependencies": root_missing,
+                })
+            else:
+                runnable_roots.append(root)
+        selected, missing = required_closure(records, runnable_roots, parsed_compatibility_groups, excluded)
+        if missing:
+            raise ValueError(f"custom complement {name} has an unexpected missing dependency closure: {missing}")
+        variants.append({
+            "id": f"complement-group-{name}",
+            "kind": "custom_complement",
+            "roots": sorted(candidate_roots),
+            "runnable_roots": sorted(runnable_roots),
+            "excluded_roots": sorted(excluded_records, key=lambda item: (item["id"], item["reason"])),
+            "mod_ids": sorted(selected),
+            "artifacts": artifact_selection(records, selected),
+            "missing_dependencies": [],
         })
     if balanced_partitions:
         if balanced_partitions > len(all_ids):
@@ -727,6 +781,12 @@ def main() -> None:
         default=[],
         help="MODID=internal/jvm/package/ explicit provider hint for bytecode-discovered runtime closure edges",
     )
+    parser.add_argument(
+        "--complement-group",
+        action="append",
+        default=[],
+        help="NAME=mod1,mod2 roots to remove while retaining a dependency-closed remainder pack",
+    )
     args = parser.parse_args()
     try:
         plan = build_plan(
@@ -737,6 +797,7 @@ def main() -> None:
             args.compatibility_group,
             args.exclude_root,
             args.runtime_symbol_provider,
+            args.complement_group,
         )
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         raise SystemExit(str(error)) from error

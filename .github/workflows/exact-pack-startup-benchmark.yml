@@ -56,6 +56,11 @@ on:
         required: false
         default: ''
         type: string
+      scaling_complement_groups:
+        description: Semicolon-separated NAME=mod1,mod2 root blocks to remove from full pack
+        required: false
+        default: ''
+        type: string
       scaling_compatibility_groups:
         description: Semicolon-separated runtime families that must stay together
         required: false
@@ -102,6 +107,7 @@ jobs:
       mode: ${{ steps.plan.outputs.mode }}
       scaling_baseline: ${{ steps.plan.outputs.scaling_baseline }}
       scaling_groups: ${{ steps.plan.outputs.scaling_groups }}
+      scaling_complement_groups: ${{ steps.plan.outputs.scaling_complement_groups }}
       scaling_compatibility_groups: ${{ steps.plan.outputs.scaling_compatibility_groups }}
       scaling_excluded_roots: ${{ steps.plan.outputs.scaling_excluded_roots }}
       scaling_runtime_symbol_providers: ${{ steps.plan.outputs.scaling_runtime_symbol_providers }}
@@ -116,6 +122,7 @@ jobs:
       DISPATCH_SCALING_VARIANTS: ${{ inputs.scaling_variants || '' }}
       DISPATCH_SCALING_BASELINE: ${{ inputs.scaling_baseline || '' }}
       DISPATCH_SCALING_GROUPS: ${{ inputs.scaling_groups || '' }}
+      DISPATCH_SCALING_COMPLEMENT_GROUPS: ${{ inputs.scaling_complement_groups || '' }}
       DISPATCH_SCALING_COMPATIBILITY_GROUPS: ${{ inputs.scaling_compatibility_groups || '' }}
       DISPATCH_SCALING_EXCLUDED_ROOTS: ${{ inputs.scaling_excluded_roots || '' }}
       DISPATCH_SCALING_RUNTIME_SYMBOL_PROVIDERS: ${{ inputs.scaling_runtime_symbol_providers || '' }}
@@ -145,6 +152,7 @@ jobs:
               scaling_variants_text = os.environ.get('DISPATCH_SCALING_VARIANTS', '').strip()
               scaling_baseline = os.environ.get('DISPATCH_SCALING_BASELINE', '').strip()
               scaling_groups = os.environ.get('DISPATCH_SCALING_GROUPS', '').strip()
+              scaling_complement_groups = os.environ.get('DISPATCH_SCALING_COMPLEMENT_GROUPS', '').strip()
               scaling_compatibility_groups = os.environ.get('DISPATCH_SCALING_COMPATIBILITY_GROUPS', '').strip()
               scaling_excluded_roots = os.environ.get('DISPATCH_SCALING_EXCLUDED_ROOTS', '').strip()
               scaling_runtime_symbol_providers = os.environ.get('DISPATCH_SCALING_RUNTIME_SYMBOL_PROVIDERS', '').strip()
@@ -160,6 +168,7 @@ jobs:
               scaling_variants_text = ','.join(directive('exact-pack-scaling-variant')).strip()
               scaling_baseline = ','.join(directive('exact-pack-scaling-baseline')).strip()
               scaling_groups = ';'.join(directive('exact-pack-scaling-group')).strip()
+              scaling_complement_groups = ';'.join(directive('exact-pack-scaling-complement-group')).strip()
               scaling_compatibility_groups = ';'.join(directive('exact-pack-scaling-compatibility-group')).strip()
               scaling_excluded_roots = ','.join(directive('exact-pack-scaling-exclude-root')).strip()
               scaling_runtime_symbol_providers = ';'.join(directive('exact-pack-scaling-runtime-symbol-provider')).strip()
@@ -220,6 +229,7 @@ jobs:
               output.write(f'mode={mode}\n')
               output.write(f'scaling_baseline={scaling_baseline}\n')
               output.write(f'scaling_groups={scaling_groups}\n')
+              output.write(f'scaling_complement_groups={scaling_complement_groups}\n')
               output.write(f'scaling_compatibility_groups={scaling_compatibility_groups}\n')
               output.write(f'scaling_excluded_roots={scaling_excluded_roots}\n')
               output.write(f'scaling_runtime_symbol_providers={scaling_runtime_symbol_providers}\n')
@@ -330,6 +340,7 @@ jobs:
       BOOTOPTIM_EXACT_MODE: ${{ needs.plan.outputs.mode }}
       BOOTOPTIM_SCALING_BASELINE: ${{ needs.plan.outputs.scaling_baseline }}
       BOOTOPTIM_SCALING_GROUPS: ${{ needs.plan.outputs.scaling_groups }}
+      BOOTOPTIM_SCALING_COMPLEMENT_GROUPS: ${{ needs.plan.outputs.scaling_complement_groups }}
       BOOTOPTIM_SCALING_COMPATIBILITY_GROUPS: ${{ needs.plan.outputs.scaling_compatibility_groups }}
       BOOTOPTIM_SCALING_EXCLUDED_ROOTS: ${{ needs.plan.outputs.scaling_excluded_roots }}
       BOOTOPTIM_SCALING_RUNTIME_SYMBOL_PROVIDERS: ${{ needs.plan.outputs.scaling_runtime_symbol_providers }}
@@ -475,6 +486,12 @@ jobs:
             IFS=';' read -ra groups <<< "$BOOTOPTIM_SCALING_GROUPS"
             for group in "${groups[@]}"; do
               [[ -n "$group" ]] && plan_args+=(--group "$group")
+            done
+          fi
+          if [[ -n "${BOOTOPTIM_SCALING_COMPLEMENT_GROUPS:-}" ]]; then
+            IFS=';' read -ra complement_groups <<< "$BOOTOPTIM_SCALING_COMPLEMENT_GROUPS"
+            for group in "${complement_groups[@]}"; do
+              [[ -n "$group" ]] && plan_args+=(--complement-group "$group")
             done
           fi
           if [[ -n "${BOOTOPTIM_SCALING_COMPATIBILITY_GROUPS:-}" ]]; then

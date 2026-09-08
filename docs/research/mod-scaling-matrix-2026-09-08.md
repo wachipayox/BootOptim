@@ -390,3 +390,11 @@ whereas prior valid full-pack observations were roughly 90 seconds. The next
 step is repeated full/complement control and then narrower, contract-valid
 binary splits inside the block with the largest reproducible critical-path
 contribution.
+
+For that next stage the planner exposes `--complement-group NAME=mod1,mod2`
+and the hosted equivalent `scaling_complement_groups`. Unlike a subset group,
+it removes only the requested block, expands declared runtime families, and
+then dependency-closes the entire remaining pack. Roots whose contracts lead
+back into the omitted block are recorded as excluded rather than silently
+materialized. This makes each bisection candidate an auditable full-pack-like
+workload rather than another invalid partial pack.
