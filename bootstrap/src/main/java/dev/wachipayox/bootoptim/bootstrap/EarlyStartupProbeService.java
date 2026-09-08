@@ -66,7 +66,11 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
-        return List.of();
+        if (!Boolean.getBoolean(MixinOpcodeNameTransformer.ENABLE_PROPERTY)) {
+            StartupDiagnostics.optimization("mixin_opcode_name_direct", false, "disabled_by_system_property");
+            return List.of();
+        }
+        return List.of(new MixinOpcodeNameTransformer());
     }
 
     private static void mark(String phase) {
