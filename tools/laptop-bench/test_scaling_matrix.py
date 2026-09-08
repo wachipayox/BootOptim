@@ -127,6 +127,7 @@ class ScalingPlanTest(unittest.TestCase):
             # complement-2 removes feature/other, while the remaining base and
             # last form a valid pack closure.
             self.assertEqual(by_id["complement-2"]["mod_ids"], ["base", "last"])
+            self.assertEqual(by_id["complement-2"]["artifacts"], ["base.jar", "last.jar"])
 
     def test_balanced_complements_exclude_runtime_families_together(self):
         with tempfile.TemporaryDirectory() as raw:
