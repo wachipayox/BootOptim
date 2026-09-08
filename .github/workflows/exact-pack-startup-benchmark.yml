@@ -439,14 +439,21 @@ jobs:
         if: needs.plan.outputs.mode != 'paired'
         shell: bash
         run: |
-          run_args=(
-            --variant '${{ matrix.variant }}'
-            --iteration '${{ matrix.iteration }}'
-            --timeout 1200
-          )
-          if [[ "$BOOTOPTIM_EXACT_MODE" == 'scaling' ]]; then
-            run_args+=(--allow-resource-mismatch)
-          fi
+        run_timeout=1200
+        if [[ "$BOOTOPTIM_EXACT_MODE" == 'scaling' ]]; then
+          # Reduced diagnostic closures must fail fast when their missing
+          # lifecycle/resource contract prevents title readiness; they are not
+          # allowed to consume the full benchmark timeout.
+          run_timeout=300
+        fi
+        run_args=(
+          --variant '${{ matrix.variant }}'
+          --iteration '${{ matrix.iteration }}'
+          --timeout "$run_timeout"
+        )
+        if [[ "$BOOTOPTIM_EXACT_MODE" == 'scaling' ]]; then
+          run_args+=(--allow-resource-mismatch)
+        fi
           python scripts/exact-pack/run_startup.py "${run_args[@]}"
 
       - name: Launch paired control/candidate runs on this same VM
