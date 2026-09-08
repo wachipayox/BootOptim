@@ -2,7 +2,8 @@
 
 ## Status
 
-**ACTIVE — attribution confirmed; opt-in scheduling probe submitted as PR #192.**
+**ACTIVE — attribution confirmed; first algorithmic candidate measured and
+rejected on hosted exact-pack, with a lower-overhead alternative still open.**
 
 Independent static review in PR #191 confirms the attribution and adds an
 important constraint: neither listener is safe to move into preparation. The
@@ -96,6 +97,35 @@ provisional no-go. The reopen path is an algorithmic optimization that retains
 the exact apply barrier and proves equivalence for every affected state/model;
 the probe is useful only to falsify that path with an exact-pack run or to
 identify a narrowly safe subset.
+
+## Candidate result — startup-scoped face cache (PR #192, 2026-09-08)
+
+The first implementation attempted to redirect MoreCulling's injected
+`BlockStateBase.moreculling$initShapeCache` method. Mixin ordering rejected
+that redirect even at a lower priority because MoreCulling owns and merges the
+method at priority 1000. It was replaced by a diagnostic-only injection on the
+pure `VoxelShape#getFaceShape` operation, enabled before startup and disabled
+at the title screen. The exact-pack A/B then had zero BootOptim/Mixin errors and
+the marker proved activation:
+
+```
+entries=69265 requested_faces=1591926 computed_faces=415590 reuse_hits=1176336
+```
+
+The three-run medians were:
+
+| variant | main menu | reload→FancyMenu | panorama |
+| --- | ---: | ---: | ---: |
+| control | 88,876 ms | 41,115 ms | 4,210.001 ms |
+| candidate | 91,609 ms | 42,881 ms | 4,734.801 ms |
+
+Candidate minus control was **+2,733 ms (+3.08%)** on the critical-path
+median. The single 1,535 ms improvement in candidate iteration 1 was dominated
+by hosted-run variance; iterations 2/3 were slower. The result rejects the
+global startup hook as a production optimization, not the MoreCulling listener
+itself: the hook adds two injections and an identity-map lookup to every face
+call during startup. A narrower listener-local, lower-overhead design remains
+the only justified reopening before closing the cost entirely.
 
 If the hosted gain is small or the mixin cannot be proven active, keep the
 attribution and close only the scheduling implementation, not the MoreCulling
