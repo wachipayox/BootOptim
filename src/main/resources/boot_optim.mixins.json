@@ -12,6 +12,8 @@
     "client.FancyMenuPanoramaPreloadMixin",
     "client.McefFirstConsumerDeferMixin",
     "client.ModelBakeryDagMixin",
+    "client.ModelBakeryAttributionMixin",
+    "client.ModelBakerImplAttributionMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelManagerDagMixin",
     "client.SimpleReloadInstanceDagMixin",
