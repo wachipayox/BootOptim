@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
+import dev.wachipayox.bootoptim.profiling.client.ModelDagDependencies;
 import dev.wachipayox.bootoptim.profiling.client.ResourceReloadDagTrace;
 import net.minecraft.client.resources.model.ModelBakery;
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,8 +26,10 @@ abstract class ModelBakeryDagMixin {
     private void bootoptim$ctorReturn(CallbackInfo ci) {
         Long value = BOOTOPTIM$CTOR_TASK.get();
         BOOTOPTIM$CTOR_TASK.remove();
-        ResourceReloadDagTrace.endLexicalTask(value == null ? 0L : value.longValue(),
+        long taskId = value == null ? 0L : value.longValue();
+        ResourceReloadDagTrace.endLexicalTask(taskId,
                 "model_bakery_prepare", "constructor_return");
+        ModelDagDependencies.rememberBakeryPreparation(taskId);
     }
 
     @Inject(method = "bakeModels", at = @At("HEAD"))
