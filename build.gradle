@@ -129,6 +129,11 @@ neoForge {
             gameDirectory = packBenchmarkDirectory
             systemProperty 'boot_optim.profileStartup', 'true'
             systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
+            // Trace-core is initialized by the early SERVICE layer, before the
+            // regular mod can resolve any game-directory state. Give that
+            // layer the authoritative pack-local destination explicitly so a
+            // profile never writes into Gradle's repository working directory.
+            systemProperty 'boot_optim.bootTrace.path', project.file('run-pack-benchmark/logs/bootoptim-trace.jsonl').absolutePath
             systemProperty 'connector.clean.path', connectorCleanMinecraft.absolutePath
 
             [packBenchmarkBaseJvmArgs, packBenchmarkExtraJvmArgs].each { argsProvider ->
