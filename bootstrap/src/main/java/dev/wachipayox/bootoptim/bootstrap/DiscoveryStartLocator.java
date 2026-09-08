@@ -40,7 +40,16 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
         DiscoveryProfiler.beginRoot();
 
         Path gameDirectory = FMLPaths.GAMEDIR.get();
-        Path wrapper = locateWrapper(gameDirectory).orElse(null);
+        LookupStats lookupStats = new LookupStats();
+        long lookupStartedNanos = System.nanoTime();
+        Path wrapper = locateWrapper(gameDirectory, lookupStats).orElse(null);
+        DiscoveryDetailProfiler.wrapperLookup(
+                lookupStats.codeSourceScheme,
+                lookupStats.mode,
+                lookupStats.candidateJars,
+                lookupStats.jarOpens,
+                lookupStartedNanos,
+                wrapper != null);
         if (wrapper == null || !Files.isRegularFile(wrapper)) {
             // Development runs load the ordinary mod directly and do not necessarily execute from a packaged wrapper.
             return;
@@ -61,20 +70,31 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
         }
     }
 
-    private static Optional<Path> locateWrapper(Path gameDirectory) {
+    private static Optional<Path> locateWrapper(Path gameDirectory, LookupStats stats) {
         try {
             CodeSource source = DiscoveryStartLocator.class.getProtectionDomain().getCodeSource();
             if (source != null && source.getLocation() != null) {
                 URI uri = source.getLocation().toURI();
+                stats.codeSourceScheme = uri.getScheme();
                 if ("file".equalsIgnoreCase(uri.getScheme())) {
                     Path candidate = Path.of(uri).toAbsolutePath().normalize();
-                    if (Files.isRegularFile(candidate) && isBootOptimWrapper(candidate)) {
-                        return Optional.of(candidate);
+                    if (Files.isRegularFile(candidate)) {
+                        stats.candidateJars++;
+                        if (isBootOptimWrapper(candidate, stats)) {
+                            stats.mode = "code_source_file";
+                            return Optional.of(candidate);
+                        }
                     }
+                    stats.mode = "code_source_file_miss_then_mods_scan";
+                } else {
+                    stats.mode = "non_file_code_source_then_mods_scan";
                 }
+            } else {
+                stats.mode = "missing_code_source_then_mods_scan";
             }
         } catch (Exception ignored) {
             // SecureJarHandler may provide a non-file code source. Fall back to the physical mods directory below.
+            stats.mode = "code_source_error_then_mods_scan";
         }
 
         Path modsDirectory = gameDirectory.resolve("mods");
@@ -86,7 +106,8 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
             return files
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
-                    .filter(DiscoveryStartLocator::isBootOptimWrapper)
+                    .peek(path -> stats.candidateJars++)
+                    .filter(path -> isBootOptimWrapper(path, stats))
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .findFirst();
         } catch (IOException ignored) {
@@ -100,6 +121,13 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
      * left to {@link #extractNestedMod(Path, Path)} once the correct wrapper has been selected.
      */
     static boolean isBootOptimWrapper(Path candidate) {
+        return isBootOptimWrapper(candidate, null);
+    }
+
+    private static boolean isBootOptimWrapper(Path candidate, LookupStats stats) {
+        if (stats != null) {
+            stats.jarOpens++;
+        }
         try (var zip = new ZipFile(candidate.toFile())) {
             return zip.getEntry(WRAPPER_MARKER) != null;
         } catch (IOException | RuntimeException ignored) {
@@ -108,6 +136,8 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
     }
 
     private static Path extractNestedMod(Path gameDirectory, Path wrapper) throws IOException {
+        long startedNanos = System.nanoTime();
+        String outcome = "error";
         try (var zip = new ZipFile(wrapper.toFile())) {
             ZipEntry entry = findNestedModEntry(zip);
             if (entry == null) {
@@ -122,6 +152,7 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
                     .resolve(filename);
 
             if (Files.isRegularFile(target) && Files.size(target) == entry.getSize()) {
+                outcome = "cache_hit";
                 return target;
             }
 
@@ -142,7 +173,10 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
             } finally {
                 Files.deleteIfExists(temp);
             }
+            outcome = "copied";
             return target;
+        } finally {
+            DiscoveryDetailProfiler.nestedExtraction(outcome, startedNanos);
         }
     }
 
@@ -168,5 +202,12 @@ public final class DiscoveryStartLocator implements IModFileCandidateLocator {
     @Override
     public String toString() {
         return "BootOptimServiceModLocator";
+    }
+
+    private static final class LookupStats {
+        private String codeSourceScheme = "unknown";
+        private String mode = "mods_scan";
+        private int candidateJars;
+        private int jarOpens;
     }
 }
