@@ -78,6 +78,18 @@ class MinecraftBootstrapTraceTransformerTest {
     }
 
     @Test
+    void acceptedTransformBoundaryPrecedesExistingBytecodeMutation() throws IOException {
+        var transformerClass = readClass(MinecraftBootstrapTraceTransformer.class);
+        var transform = methodNamed(transformerClass, "transform");
+        var calls = methodCalls(transform);
+
+        int accepted = indexOfCall(calls, TRANSITION_HOOKS, "minecraftBootstrapTransformAccepted");
+        int firstMutation = indexOfCall(calls, "org/objectweb/asm/tree/InsnList", "insertBefore");
+        assertTrue(accepted >= 0, "strict Bootstrap acceptance must emit the causal split edge");
+        assertTrue(firstMutation > accepted, "accepted-transform edge must precede diagnostic bytecode mutation");
+    }
+
+    @Test
     void closesTransitionPhaseBeforeOpeningBootstrapTask() throws IOException {
         var hooksClass = readClass(MinecraftBootstrapTraceHooks.class);
         var begin = methodNamed(hooksClass, "beginBootstrap");
