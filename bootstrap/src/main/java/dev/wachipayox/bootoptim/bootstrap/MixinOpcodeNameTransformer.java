@@ -4,7 +4,9 @@ import cpw.mods.modlauncher.api.ITransformer;
 import cpw.mods.modlauncher.api.ITransformerVotingContext;
 import cpw.mods.modlauncher.api.TargetType;
 import cpw.mods.modlauncher.api.TransformerVoteResult;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import org.objectweb.asm.Opcodes;
@@ -14,10 +16,10 @@ import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.LookupSwitchInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
@@ -26,9 +28,10 @@ import org.objectweb.asm.util.Printer;
 /**
  * Experimental, opt-in replacement for the reflective Mixin 0.8.7 opcode-name lookup.
  *
- * <p>The target method is patched only when its bytecode still has the exact 0.8.7 wrapper shape.
- * A mismatch returns the original class unchanged. The replacement reads ASM's existing immutable
- * {@link Printer#OPCODES} table, so it does not introduce a BootOptim cache or cross-loader state.</p>
+ * <p>The target method is patched only when both its bytecode and the runtime ASM opcode-field
+ * semantics match the exact environment this experiment was derived from. Any mismatch returns the
+ * original class unchanged. The replacement reads ASM's existing immutable {@link Printer#OPCODES}
+ * table and introduces no BootOptim opcode cache or cross-loader state.</p>
  */
 final class MixinOpcodeNameTransformer implements ITransformer<ClassNode> {
     static final String ENABLE_PROPERTY = "boot_optim.mixinOpcodeNameDirect";
@@ -36,6 +39,13 @@ final class MixinOpcodeNameTransformer implements ITransformer<ClassNode> {
     private static final String TARGET_METHOD = "getOpcodeName";
     private static final String TARGET_DESC = "(I)Ljava/lang/String;";
     private static final String STOCK_HELPER_DESC = "(ILjava/lang/String;I)Ljava/lang/String;";
+
+    private static final int[] STOCK_DECIMAL_OPCODES = {
+        19, 20,
+        26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
+        59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78,
+        196
+    };
 
     private boolean reported;
 
@@ -53,9 +63,13 @@ final class MixinOpcodeNameTransformer implements ITransformer<ClassNode> {
             report(false, "mixin_0_8_7_method_guard_mismatch");
             return input;
         }
+        if (!matchesRuntimeOpcodesSemantics()) {
+            report(false, "runtime_asm_opcode_guard_mismatch");
+            return input;
+        }
 
         replaceBody(target);
-        report(true, "mixin_0_8_7_wrapper_matched_printer_opcode_table");
+        report(true, "mixin_0_8_7_and_runtime_asm_guards_matched");
         return input;
     }
 
@@ -97,16 +111,47 @@ final class MixinOpcodeNameTransformer implements ITransformer<ClassNode> {
                 && !call.itf;
     }
 
+    /** Reconstructs stock 0.8.7 semantics from the actual Opcodes class and retains no cache. */
+    static boolean matchesRuntimeOpcodesSemantics() {
+        try {
+            String[] reflectiveNames = new String[Printer.OPCODES.length];
+            boolean foundStart = false;
+            for (Field field : Opcodes.class.getDeclaredFields()) {
+                if (!foundStart && !"UNINITIALIZED_THIS".equals(field.getName())) {
+                    continue;
+                }
+                foundStart = true;
+                if (field.getType() != Integer.TYPE) {
+                    continue;
+                }
+                int value = field.getInt(null);
+                if (value >= 1 && value < reflectiveNames.length && reflectiveNames[value] == null) {
+                    reflectiveNames[value] = field.getName();
+                }
+            }
+            if (!foundStart) {
+                return false;
+            }
+            for (int opcode = 0; opcode < reflectiveNames.length; opcode++) {
+                String stock = reflectiveNames[opcode] != null ? reflectiveNames[opcode] : String.valueOf(opcode);
+                if (!stock.equals(directOpcodeName(opcode))) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (ReflectiveOperationException | SecurityException ex) {
+            return false;
+        }
+    }
+
     static String directOpcodeName(int opcode) {
         if (opcode < 0) {
             return "UNKNOWN";
         }
-        // Mixin 0.8.7 starts its reflective scan at this ASM frame constant, so value 6
-        // resolves to this field name before the later ICONST_3 opcode field is examined.
-        if (opcode == Opcodes.UNINITIALIZED_THIS) {
-            return "UNINITIALIZED_THIS";
+        if (opcode == 0 || Arrays.binarySearch(STOCK_DECIMAL_OPCODES, opcode) >= 0) {
+            return String.valueOf(opcode);
         }
-        if (opcode > 0 && opcode < Printer.OPCODES.length) {
+        if (opcode < Printer.OPCODES.length) {
             String name = Printer.OPCODES[opcode];
             if (name != null) {
                 return name;
@@ -120,16 +165,15 @@ final class MixinOpcodeNameTransformer implements ITransformer<ClassNode> {
         LabelNode table = new LabelNode();
         LabelNode decimal = new LabelNode();
         LabelNode unknown = new LabelNode();
+        LabelNode[] decimalTargets = new LabelNode[STOCK_DECIMAL_OPCODES.length];
+        Arrays.fill(decimalTargets, decimal);
 
         instructions.add(new VarInsnNode(Opcodes.ILOAD, 0));
         instructions.add(new JumpInsnNode(Opcodes.IFLT, unknown));
         instructions.add(new VarInsnNode(Opcodes.ILOAD, 0));
         instructions.add(new JumpInsnNode(Opcodes.IFEQ, decimal));
         instructions.add(new VarInsnNode(Opcodes.ILOAD, 0));
-        instructions.add(new IntInsnNode(Opcodes.BIPUSH, Opcodes.UNINITIALIZED_THIS));
-        instructions.add(new JumpInsnNode(Opcodes.IF_ICMPNE, table));
-        instructions.add(new LdcInsnNode("UNINITIALIZED_THIS"));
-        instructions.add(new InsnNode(Opcodes.ARETURN));
+        instructions.add(new LookupSwitchInsnNode(table, STOCK_DECIMAL_OPCODES, decimalTargets));
 
         instructions.add(table);
         instructions.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
