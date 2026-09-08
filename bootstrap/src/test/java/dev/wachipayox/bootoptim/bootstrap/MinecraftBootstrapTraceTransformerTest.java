@@ -36,6 +36,24 @@ class MinecraftBootstrapTraceTransformerTest {
     }
 
     @Test
+    void wrapsExactValidateMethodIndependently() {
+        var input = bootstrapClass();
+        input.methods.getFirst().instructions.add(new InsnNode(Opcodes.RETURN));
+        var validate = new MethodNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "validate", "()V", null, null);
+        var bodyCall = call("net/minecraft/commands/Commands", "validate", "()V");
+        validate.instructions.add(bodyCall);
+        validate.instructions.add(new InsnNode(Opcodes.RETURN));
+        input.methods.add(validate);
+
+        new MinecraftBootstrapTraceTransformer().transform(input, null);
+        List<MethodInsnNode> calls = methodCalls(validate);
+        assertEquals(3, calls.size());
+        assertEquals("beginValidate", calls.get(0).name);
+        assertSame(bodyCall, calls.get(1));
+        assertEquals("endValidate", calls.get(2).name);
+    }
+
+    @Test
     void closesEveryNormalReturn() {
         var input = bootstrapClass();
         var method = input.methods.getFirst();
