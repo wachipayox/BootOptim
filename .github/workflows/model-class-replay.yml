@@ -1,4 +1,4 @@
-name: Model Class Replay Boundary Probe
+name: Real Model Class Replay
 
 on:
   pull_request:
@@ -10,14 +10,30 @@ on:
       - '.github/workflows/model-class-replay.yml'
       - 'docs/research/model-class-replay-2026-09-08.md'
   workflow_dispatch:
+    inputs:
+      full_pack:
+        description: Materialize all discovered winning model resources instead of the bounded representative sample
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: model-class-replay-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+  EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+  EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+  EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd90497a4d-model-class-replay
+
 jobs:
-  boundary:
+  replay:
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -56,19 +72,124 @@ jobs:
           grep -F 'Bootstrap.bootStrap' model-replay-bootstrap-boundary.log
           echo 'MODEL_CLASS_PARENT_BOUNDARY_REPRODUCED FeatureFlagLoader->LoadingModList'
 
-      - name: Summary
+      - name: Restore exact-pack ZIP cache
+        id: pack-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .exact-pack-cache/bootoptim-exact-pack.zip
+          key: ${{ env.EXACT_PACK_CACHE_KEY }}
+
+      - name: Download pinned exact-pack release asset
+        if: steps.pack-cache.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          mkdir -p .exact-pack-cache
+          gh release download "$EXACT_PACK_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$EXACT_PACK_ASSET" \
+            --dir .exact-pack-cache \
+            --clobber
+
+      - name: Verify and extract exact-pack fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(sha256sum .exact-pack-cache/bootoptim-exact-pack.zip | awk '{print $1}')
+          test "$actual" = "$EXACT_PACK_SHA256"
+          python scripts/exact-pack/prepare_fixture.py \
+            --zip .exact-pack-cache/bootoptim-exact-pack.zip \
+            --sha256 "$EXACT_PACK_SHA256" \
+            --extract exact-pack-run
+
+      - name: Build bounded provenance-preserving model fixture
+        shell: bash
+        env:
+          FULL_PACK: ${{ inputs.full_pack || false }}
+        run: |
+          set -euo pipefail
+          if test -d exact-pack-run/mods; then
+            pack_root=exact-pack-run
+          else
+            pack_root=$(find exact-pack-run -mindepth 2 -maxdepth 2 -type d -name mods -print -quit | sed 's#/mods$##')
+          fi
+          test -n "$pack_root"
+          extra=()
+          if [[ "$FULL_PACK" == "true" ]]; then extra+=(--full); fi
+          python tools/model-class-replay/prepare_fixture.py \
+            --pack-root "$pack_root" \
+            --output-dir model-replay-fixture \
+            --limit 24 \
+            "${extra[@]}"
+
+      - name: Replay real classes inside FML data lifecycle - execution 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p model-replay-out/run1
+          BOOTOPTIM_MODEL_REPLAY_MANIFEST="$PWD/model-replay-fixture/manifest.json" \
+          BOOTOPTIM_MODEL_REPLAY_OUTPUT="$PWD/model-replay-out/run1" \
+          ./gradlew -I tools/model-class-replay/model-replay.init.gradle runData --stacktrace
+          test -f model-replay-out/run1/replay.json
+
+      - name: Restore generated-data workspace between replay JVMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- src/generated/resources 2>/dev/null || true
+          git clean -fd src/generated/resources 2>/dev/null || true
+
+      - name: Replay real classes inside FML data lifecycle - execution 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p model-replay-out/run2
+          BOOTOPTIM_MODEL_REPLAY_MANIFEST="$PWD/model-replay-fixture/manifest.json" \
+          BOOTOPTIM_MODEL_REPLAY_OUTPUT="$PWD/model-replay-out/run2" \
+          ./gradlew -I tools/model-class-replay/model-replay.init.gradle runData --stacktrace
+          test -f model-replay-out/run2/replay.json
+
+      - name: Require cross-process reproducible semantic digest
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          one = json.loads(Path('model-replay-out/run1/replay.json').read_text())
+          two = json.loads(Path('model-replay-out/run2/replay.json').read_text())
+          assert one['semantic_sha256'] == two['semantic_sha256'], (one['semantic_sha256'], two['semantic_sha256'])
+          for result in (one, two):
+              assert result['stock_repeat_equal'] is True
+              assert result['identity_candidate_equal'] is True
+              assert result['fault_probe_detected'] is True
+              phases = result['stock_1']['phases']
+              for phase in ('real_blockmodel_parse', 'real_parent_resolution', 'real_texture_chain_material_lookup', 'real_elementsmodel_construction'):
+                  assert phases[phase]['count'] > 0, (phase, phases[phase])
+          print('cross-process semantic digest:', one['semantic_sha256'])
+
+      - name: Publish readable summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f model-replay-out/run1/summary.md ]]; then cat model-replay-out/run1/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          # Model class headless boundary
 
-          The green smoke executes real `BlockModel.fromStream`, `BlockModel#getMaterial`, real element/face objects,
-          and NeoForge `ElementsModel` construction without a graphical client.
-
-          Real `BlockModel.resolveParents` is **not** claimed here. In a clean JavaExec it reaches `ModelBakery`, which
-          requires Minecraft registry bootstrap. NeoForge's `Bootstrap.bootStrap()` then reaches
-          `FeatureFlagLoader.loadModdedFlags`, where `LoadingModList.get()` is null because FML/ModLauncher has not run.
-          The second task passes only when that exact blocker is reproduced. No fake LoadingModList is installed.
-
-          Next frontier: launch the probe inside a real FML/ModLauncher test/data or minimal client-smoke lifecycle,
-          then re-enable exact-pack parent/digest phases. These checks are not TTMM or laptop evidence.
+          This workflow executes the model replay from a real FML/ModLauncher `runData` lifecycle, not a clean JavaExec.
+          Its wall/CPU/allocation numbers remain harness measurements, not TTMM, HDD/page-cache, GPU, or laptop evidence.
+          The digest does not claim current sprites, FaceBakery/BakedQuad vertex ints, render buckets, ModelState-dependent
+          output, callbacks, or GL because those remain beyond this headless boundary.
           EOF
+
+      - name: Upload replay JSON CSV provenance and summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-model-class-replay
+          path: |
+            model-replay-fixture/manifest.json
+            model-replay-out/**
+            model-replay-bootstrap-boundary.log
+          if-no-files-found: warn
+          retention-days: 14
