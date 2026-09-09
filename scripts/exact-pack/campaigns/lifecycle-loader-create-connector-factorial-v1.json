@@ -1,0 +1,93 @@
+{
+  "campaign_id": "lifecycle-loader-create-connector-factorial-v1",
+  "closure_inputs": {
+    "compatibility_groups": [
+      "menu-browser=fancymenu,mcef",
+      "tfmg-bridge=we_companion,tfmg",
+      "observable-runtime=observable,kotlinforforge",
+      "render=iris,sodium",
+      "create-ui=bits_n_bobs,create"
+    ],
+    "excluded_roots": [
+      "analogaudio"
+    ],
+    "runtime_symbol_providers": [
+      "create=com/simibubi/create/"
+    ]
+  },
+  "contract_fingerprint_sha256": "1d528c0ed4c6d585fd4cd023b7b0f1b7f78e5d41ce04d826949d47816edf717d",
+  "families": {
+    "A": {
+      "complement_roots": [
+        "create"
+      ],
+      "name": "create-runtime-closure"
+    },
+    "B": {
+      "complement_roots": [
+        "connector",
+        "forgified_fabric_api"
+      ],
+      "name": "connector-fabric-bridge"
+    }
+  },
+  "fixture": {
+    "asset": "bootoptim-exact-pack.zip",
+    "asset_sha256": "7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639",
+    "release": "exact-pack-2026-09-02-v1",
+    "source_mod_fingerprint": "6e9b250390ee2cbeb5e4f0ad3363d5159a51481dbfe1412f815882fc5d4ab990"
+  },
+  "measurement_contract": {
+    "allowed_metrics": [
+      "mod_entrypoint_ms"
+    ],
+    "endpoint": "main_menu",
+    "minimum_fresh_vm_repetitions": 3,
+    "note": "mod_entrypoint_ms is a coarse pre-reload loader/bootstrap boundary; a positive interaction only selects a family for deeper tracing.",
+    "origin": "hosted_exact_pack_fresh_vm",
+    "start_marker": "process_origin"
+  },
+  "planner_version": {
+    "head_sha": "ee79a4ebdcb4b83ba1635cb85fcd22ef871e1bd4",
+    "schema": 1,
+    "source_pr": 199
+  },
+  "resource_contract": {
+    "control_semantics": "All four cells exclude hosted-incompatible analogaudio; control is therefore a full-like complement, not planner full.",
+    "excluded_causal_domains": [
+      "ModelBakery",
+      "ModelManager/model bake",
+      "post-reload tail"
+    ],
+    "forbid_ttmm_as_causal_metric": true,
+    "preserve_mods_non_jar_entries": true,
+    "preserve_non_jar_pack_state": true,
+    "require_resource_contract_valid": true,
+    "required_native_state": [
+      "mods/mcef-libraries"
+    ]
+  },
+  "schema": 1,
+  "variants": {
+    "full": [
+      "complement-group-control-r1",
+      "complement-group-control-r2",
+      "complement-group-control-r3"
+    ],
+    "remove_a": [
+      "complement-group-create-r1",
+      "complement-group-create-r2",
+      "complement-group-create-r3"
+    ],
+    "remove_ab": [
+      "complement-group-create-connector-fabric-r1",
+      "complement-group-create-connector-fabric-r2",
+      "complement-group-create-connector-fabric-r3"
+    ],
+    "remove_b": [
+      "complement-group-connector-fabric-r1",
+      "complement-group-connector-fabric-r2",
+      "complement-group-connector-fabric-r3"
+    ]
+  }
+}
