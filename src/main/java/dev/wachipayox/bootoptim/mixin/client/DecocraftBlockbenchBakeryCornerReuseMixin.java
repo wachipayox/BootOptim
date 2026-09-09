@@ -13,9 +13,8 @@ import org.spongepowered.asm.mixin.injection.Coerce;
 /**
  * Decocraft 3.0.11-only experiment. The stock bakeVertex has already selected a cuboid corner
  * when it calls applyElementRotation. A corner's element/group rotation is independent of face,
- * sprite, material and ModelState. We therefore execute Decocraft's exact private operation for
- * the first occurrence of each of the at-most eight corners of the current element and reuse only
- * its xyz for later faces. Everything after that call remains byte-for-byte on Decocraft's stock path.
+ * sprite, material and ModelState. Verify mode always executes stock and compares repeated results;
+ * substitution mode reuses only a raw-bit-identical input corner after its first exact stock result.
  */
 @Pseudo
 @Mixin(targets = "com.razz.decocraft.models.bbmodel.BlockbenchBakery", remap = false)
@@ -23,6 +22,7 @@ abstract class DecocraftBlockbenchBakeryCornerReuseMixin {
     @Unique private Object bootoptim$cornerElement;
     @Unique private int bootoptim$cornerMask;
     @Unique private float[] bootoptim$cornerData;
+    @Unique private int[] bootoptim$cornerInputBits;
 
     @WrapOperation(
             method = "bakeVertex([Lcom/razz/decocraft/models/bbmodel/BlockbenchBakery$VertexData;ILcom/razz/decocraft/models/bbmodel/BBModelParts$Locator;Lnet/minecraft/core/Direction;Lcom/razz/decocraft/models/bbmodel/BlockbenchLoader$BlockbenchSetting;Lcom/razz/decocraft/models/bbmodel/BBModelParts$UVCoordinate;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Resolution;FFFFFFLnet/minecraft/client/renderer/texture/TextureAtlasSprite;Lorg/joml/Matrix4f;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Element;)V",
@@ -41,7 +41,7 @@ abstract class DecocraftBlockbenchBakeryCornerReuseMixin {
             @Local(argsOnly = true, ordinal = 3) float toX,
             @Local(argsOnly = true, ordinal = 4) float toY,
             @Local(argsOnly = true, ordinal = 5) float toZ) {
-        if (!DecocraftCornerRotationReuse.enabled() || !(position instanceof DecocraftVector3Accessor vector)) {
+        if (!DecocraftCornerRotationReuse.active() || !(position instanceof DecocraftVector3Accessor vector)) {
             original.call(bakery, position, element);
             return;
         }
@@ -64,10 +64,18 @@ abstract class DecocraftBlockbenchBakeryCornerReuseMixin {
 
         int corner = x | (y << 1) | (z << 2);
         int bit = 1 << corner;
+        int offset = corner * 3;
+        int inputX = Float.floatToRawIntBits(vector.bootoptim$getX());
+        int inputY = Float.floatToRawIntBits(vector.bootoptim$getY());
+        int inputZ = Float.floatToRawIntBits(vector.bootoptim$getZ());
+
         if ((bootoptim$cornerMask & bit) == 0) {
             original.call(bakery, position, element);
             if (bootoptim$cornerData == null) bootoptim$cornerData = new float[24];
-            int offset = corner * 3;
+            if (bootoptim$cornerInputBits == null) bootoptim$cornerInputBits = new int[24];
+            bootoptim$cornerInputBits[offset] = inputX;
+            bootoptim$cornerInputBits[offset + 1] = inputY;
+            bootoptim$cornerInputBits[offset + 2] = inputZ;
             bootoptim$cornerData[offset] = vector.bootoptim$getX();
             bootoptim$cornerData[offset + 1] = vector.bootoptim$getY();
             bootoptim$cornerData[offset + 2] = vector.bootoptim$getZ();
@@ -76,11 +84,45 @@ abstract class DecocraftBlockbenchBakeryCornerReuseMixin {
             return;
         }
 
-        int offset = corner * 3;
-        vector.bootoptim$setX(bootoptim$cornerData[offset]);
-        vector.bootoptim$setY(bootoptim$cornerData[offset + 1]);
-        vector.bootoptim$setZ(bootoptim$cornerData[offset + 2]);
-        DecocraftCornerRotationReuse.reused();
+        DecocraftCornerRotationReuse.reuseCandidate();
+        if (bootoptim$cornerInputBits[offset] != inputX
+                || bootoptim$cornerInputBits[offset + 1] != inputY
+                || bootoptim$cornerInputBits[offset + 2] != inputZ) {
+            DecocraftCornerRotationReuse.inputAliasFallback();
+            original.call(bakery, position, element);
+            return;
+        }
+
+        if (DecocraftCornerRotationReuse.verifying()) {
+            int cachedX = Float.floatToRawIntBits(bootoptim$cornerData[offset]);
+            int cachedY = Float.floatToRawIntBits(bootoptim$cornerData[offset + 1]);
+            int cachedZ = Float.floatToRawIntBits(bootoptim$cornerData[offset + 2]);
+            original.call(bakery, position, element);
+            int stockX = Float.floatToRawIntBits(vector.bootoptim$getX());
+            int stockY = Float.floatToRawIntBits(vector.bootoptim$getY());
+            int stockZ = Float.floatToRawIntBits(vector.bootoptim$getZ());
+            if (cachedX == stockX && cachedY == stockY && cachedZ == stockZ) {
+                DecocraftCornerRotationReuse.verificationMatch();
+            } else {
+                DecocraftCornerRotationReuse.verificationMismatch(
+                        corner,
+                        inputX, inputY, inputZ,
+                        cachedX, cachedY, cachedZ,
+                        stockX, stockY, stockZ);
+            }
+            return;
+        }
+
+        if (DecocraftCornerRotationReuse.substituting()) {
+            vector.bootoptim$setX(bootoptim$cornerData[offset]);
+            vector.bootoptim$setY(bootoptim$cornerData[offset + 1]);
+            vector.bootoptim$setZ(bootoptim$cornerData[offset + 2]);
+            DecocraftCornerRotationReuse.reused();
+            return;
+        }
+
+        // Defensive fail-open for any unexpected gate state change.
+        original.call(bakery, position, element);
     }
 
     @Unique
