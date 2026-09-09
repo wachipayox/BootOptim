@@ -2,7 +2,7 @@
 """Validate and summarize a contract-safe lifecycle/loader complement factorial.
 
 The analyzer intentionally refuses TTMM, reload, ModelBakery/model and post-reload
-metrics.  It is for broad pre-reload loader/lifecycle attribution only.  A positive
+metrics. It is for broad pre-reload loader/lifecycle attribution only. A positive
 interaction term is a reason to trace that family more deeply, never a savings claim.
 """
 
@@ -14,19 +14,22 @@ import statistics
 from pathlib import Path
 
 FORBIDDEN_METRIC_TOKENS = ("main_menu", "startup", "post_", "reload", "model", "bake", "atlas")
+SLOTS = ("full", "remove_a", "remove_b", "remove_ab")
 
 
 def load(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def validate_result(result: dict, spec: dict, slot: str, metric: str) -> float:
+def validate_result(result: dict, spec: dict, slot: str, metric: str) -> tuple[str, float]:
     if any(token in metric.lower() for token in FORBIDDEN_METRIC_TOKENS):
         raise ValueError(f"metric is outside lifecycle/loader scope: {metric}")
     manifest = result.get("scaling_variant_manifest") or {}
-    expected_variant = spec["variants"][slot]
-    if manifest.get("variant_id") != expected_variant:
-        raise ValueError(f"{slot}: expected variant {expected_variant!r}, got {manifest.get('variant_id')!r}")
+    expected = spec["variants"][slot]
+    expected_variants = [expected] if isinstance(expected, str) else list(expected)
+    variant_id = manifest.get("variant_id")
+    if variant_id not in expected_variants:
+        raise ValueError(f"{slot}: unexpected variant {variant_id!r}; expected one of {expected_variants!r}")
     if manifest.get("source_pack_fingerprint") != spec["fixture"]["source_mod_fingerprint"]:
         raise ValueError(f"{slot}: source pack fingerprint mismatch")
     if result.get("resource_contract_valid") is not True:
@@ -42,7 +45,7 @@ def validate_result(result: dict, spec: dict, slot: str, metric: str) -> float:
     value = result.get(metric)
     if not isinstance(value, (int, float)):
         raise ValueError(f"{slot}: metric {metric!r} missing")
-    return float(value)
+    return variant_id, float(value)
 
 
 def summarize(values: list[float]) -> dict:
@@ -59,7 +62,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--spec", type=Path, required=True)
     parser.add_argument("--metric", default="mod_entrypoint_ms")
-    for slot in ("full", "remove_a", "remove_b", "remove_ab"):
+    for slot in SLOTS:
         parser.add_argument(f"--{slot.replace('_', '-')}", type=Path, action="append", required=True)
     args = parser.parse_args()
 
@@ -71,12 +74,18 @@ def main() -> None:
         raise SystemExit(f"metric {metric!r} is not allowed by campaign contract")
 
     slots: dict[str, list[float]] = {}
-    for slot in ("full", "remove_a", "remove_b", "remove_ab"):
+    for slot in SLOTS:
         paths = getattr(args, slot)
-        values = [validate_result(load(path), spec, slot, metric) for path in paths]
+        validated = [validate_result(load(path), spec, slot, metric) for path in paths]
+        ids = [item[0] for item in validated]
+        values = [item[1] for item in validated]
         minimum = int(spec["measurement_contract"].get("minimum_fresh_vm_repetitions", 1))
+        expected = spec["variants"][slot]
+        expected_ids = [expected] if isinstance(expected, str) else list(expected)
         if len(values) < minimum:
             raise SystemExit(f"{slot}: need at least {minimum} fresh-VM repetitions, got {len(values)}")
+        if len(expected_ids) > 1 and sorted(ids) != sorted(expected_ids):
+            raise SystemExit(f"{slot}: alias set mismatch; got {sorted(ids)!r}, expected {sorted(expected_ids)!r}")
         slots[slot] = values
 
     medians = {slot: statistics.median(values) for slot, values in slots.items()}
