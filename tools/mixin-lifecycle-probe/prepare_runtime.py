@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -45,7 +46,7 @@ def main() -> None:
         subprocess.run(["git", "clone", "--filter=blob:none", "--no-checkout", UPSTREAM_REPO, str(checkout)], check=True)
         subprocess.run(["git", "-c", "advice.detachedHead=false", "checkout", "--detach", UPSTREAM_COMMIT], cwd=checkout, check=True)
         subprocess.run([
-            os.fspath(root / "tools/mixin-lifecycle-probe/apply_probe.py"), "--checkout", os.fspath(checkout)
+            sys.executable, os.fspath(root / "tools/mixin-lifecycle-probe/apply_probe.py"), "--checkout", os.fspath(checkout)
         ], cwd=root, check=True)
 
         env = os.environ.copy()
