@@ -3,6 +3,7 @@ package dev.wachipayox.bootoptim.profiling.client;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.neoforged.neoforge.client.event.FlipFrameEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -24,6 +25,7 @@ public final class ClientStartupHooks {
         NeoForge.EVENT_BUS.addListener(ClientStartupHooks::onScreenOpening);
         NeoForge.EVENT_BUS.addListener(ClientStartupHooks::onScreenInitPost);
         NeoForge.EVENT_BUS.addListener(ClientStartupHooks::onRenderFramePost);
+        NeoForge.EVENT_BUS.addListener(ClientStartupHooks::onFlipFrame);
     }
 
     private static void onScreenOpening(ScreenEvent.Opening event) {
@@ -56,5 +58,9 @@ public final class ClientStartupHooks {
         if (Minecraft.getInstance().screen instanceof TitleScreen) {
             PostReloadMenuTrace.markTitleRenderReturn();
         }
+    }
+
+    private static void onFlipFrame(FlipFrameEvent event) {
+        PostReloadMenuTrace.markPresentedAfterFlip();
     }
 }
