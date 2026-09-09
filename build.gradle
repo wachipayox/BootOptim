@@ -50,6 +50,28 @@ repositories {
             }
         }
     }
+
+    // Agent 94 diagnostic-only Mixin replacement. Same principle as the ModLauncher lane:
+    // the exact Fabric Mixin GAV is resolved exclusively from the staged probe repository,
+    // so the diagnostic artifact replaces rather than coexists with the stock module/service JAR.
+    var mixinForkRepo = providers.environmentVariable('BOOTOPTIM_MIXIN_FORK_REPO')
+    if (mixinForkRepo.isPresent()) {
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'bootOptimAgent94MixinFork'
+                    url = uri(mixinForkRepo.get())
+                    metadataSources {
+                        mavenPom()
+                        artifact()
+                    }
+                }
+            }
+            filter {
+                includeModule('net.fabricmc', 'sponge-mixin')
+            }
+        }
+    }
 }
 
 var packBenchmarkDirectory = project.file('run-pack-benchmark')
