@@ -11,6 +11,7 @@
     "client.FancyMenuMcefVideoFirstConsumerMixin",
     "client.FancyMenuPanoramaPreloadMixin",
     "client.McefFirstConsumerDeferMixin",
+    "client.MinecraftPresentTraceMixin",
     "client.ModelBakeryDagMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelManagerDagMixin",
