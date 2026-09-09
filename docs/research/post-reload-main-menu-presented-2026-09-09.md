@@ -1,126 +1,133 @@
 # Resource reload allDone -> actually presented startup UI — 2026-09-09
 
-Status: **ACTIVE DIAGNOSTIC / EXPECTED NO-GO FOR AN UNATTENDED NAVIGABLE TITLE MENU**
+Status: **NO-GO FOR UNATTENDED NAVIGABLE MAIN MENU / COARSE FIRST-VISIBLE-UI PROFILE VALIDATED**
 
 Authority refreshed before work: `agent/integration-current` @ `fa6df8bc8f74aae32338f521bf845a5730ac634b`.
-Diagnostic branch is intentionally stacked on PR #214 (`0448e62bbf08c048249376fcb0d8718ef736501b`), transitively on the structured-trace bridge stack. It is not a production optimization.
+Diagnostic PR: #219, intentionally stacked on #214 (`0448e62bbf08c048249376fcb0d8718ef736501b`) and its structured-trace bridge stack. This is diagnostic only; no production optimization is proposed.
 
-## Scope
+## Scope and decision
 
-This lane covers only the first startup reload's stock `allDone` completion through a screen that has actually completed a normal render frame and the following stock `Window.updateDisplay()` call. It does not cover ModelManager or the ~10.131 s post-ModelManager/pre-`allDone` tail.
+This lane covers only the first startup reload's stock `allDone` completion through a screen that has completed a normal render frame and the following stock `Window.updateDisplay()` call. It does not cover ModelManager or the ~10.131 s post-ModelManager/pre-`allDone` tail.
 
-The requested product endpoint is a visually usable/navigable main menu. The exact hosted pack has an important lifecycle complication: the first `TitleScreen` opening attempt is synchronously replaced during `ScreenEvent.Init.Post` by AnalogAudio's `LavaplayerWelcomeScreen` when AnalogPlayer is missing. That replacement is a blocking setup modal, not the navigable Minecraft title menu. Therefore the diagnostic endpoint used for hosted coverage is explicitly named `startup_ui_presented`; it records the real active screen class and must not be reported as `main_menu_presented` unless the class is actually `TitleScreen`.
+The requested product endpoint was a visually usable/navigable main menu. Under the pinned hosted exact-pack startup state, that endpoint does **not** exist without user interaction: AnalogAudio 0.1.0 synchronously replaces the first `TitleScreen` during `ScreenEvent.Init.Post` with `LavaplayerWelcomeScreen` when AnalogPlayer is missing and its welcome prompt is enabled. The modal disables all three buttons for 40 screen ticks, disables Escape, and then requires an explicit user choice before the saved TitleScreen can be restored.
 
-No timing in this document is an optimization claim.
+Therefore the behavior-preserving hosted endpoint is named `startup_ui_presented`, not `main_menu_presented`. It measures the first actually presented active startup screen and records its concrete class. The final profile proves that class is `com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen`.
 
-## Prior hosted evidence
+**Decision: close `allDone -> navigable main menu` as NO-GO under the current exact-pack state.** Do not auto-decline the modal, disable the prompt, seed/install AnalogPlayer, delay/cancel the replacement, or call the modal a main menu. No laptop run or optimization follows from this lane.
 
-PR #214 exact-pack profile run `34290311738` used measurement origin `hosted_exact_pack` and endpoint `main_menu`. Its structured trace recorded:
+## Prior opening-only evidence
+
+PR #214 exact-pack profile run `34290311738` recorded:
 
 - `resource_reload` stock `allDone`: `mono_ns=78059969616`;
-- legacy `main_menu` (`ScreenEvent.Opening(TitleScreen)`): `mono_ns=79159255459`;
-- opening-only tail: **1099.286 ms**.
+- `ScreenEvent.Opening(TitleScreen)`: `mono_ns=79159255459`;
+- `allDone -> title opening`: **1099.286 ms**.
 
-That run cannot establish a visually usable endpoint because exact-pack benchmark mode stopped from the opening callback.
+That marker was never a usable/presented endpoint. Earlier PR #122 independently found zero TitleScreen-render coverage using both `ScreenEvent.Render.Post` and direct mapped `TitleScreen.render(...) @ RETURN`; PR #128 then identified the AnalogAudio replacement lifecycle and the correct real-screen endpoint.
 
-Earlier PR #122 independently attempted both `ScreenEvent.Render.Post` scoped to TitleScreen and direct mapped `TitleScreen.render(...) @ RETURN`; both had zero title-render coverage despite valid exact-pack launches. PR #128 then source-audited AnalogAudio 0.1.0 and identified the correct behavior-preserving diagnostic boundary as the first actually presented active screen after the TitleScreen opening attempt.
-
-## Current exact-pack observation before the final endpoint smoke
-
-PR #219 run `34294278209` / smoke #751 used the current stacked resource trace plus the first-present diagnostic. A later branch push cancelled the workflow while the client was intentionally still alive, so this run is **not** a completed profile and has no flushed JSONL trace. Its always-uploaded exact-pack artifact is still useful as lifecycle evidence up to cancellation.
-
-The hosted log reached:
-
-```text
-00:20:20.293  FancyMenu: Minecraft resource reload: FINISHED
-00:20:21.361  BOOTOPTIM_STARTUP phase=main_menu uptime_ms=80622
-00:20:21.363  FancyMenu: ScreenCustomizationLayer registered: title_screen
-00:20:21.383  Iris: Creating pipeline for dimension minecraft:overworld
-00:20:22.393  FancyMenu: ScreenCustomizationLayer registered:
-              com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen
-00:20:23.502  ModernFix: Game took 82.763 seconds to start
-```
-
-The same run had `BOOTOPTIM_MCEF_FIRST_CONSUMER status=deferred` and no later first-consumer/CEF initialization marker before the welcome-screen takeover. Therefore MCEF is not the owner of the observed failure to reach a TitleScreen frame in this hosted launch.
-
-The ~1.068 s FancyMenu-FINISHED -> legacy title-opening log interval in this cancelled run is only a coarse log corroboration. The authoritative allDone -> opening measurement remains #214's 1099.286 ms structured interval; FancyMenu's own FINISHED log is not substituted for `SimpleReloadInstance.allDone`.
-
-## Source-level cause: AnalogAudio replaces TitleScreen during Init.Post
-
-Public AnalogAudio 0.1.0 source at commit `22a1d25a05d2ba0147acf5262fb0e4be6e75a1f3` matches the exact runtime class names. Its `AnalogAudioClientEvents.onScreenInit(ScreenEvent.Init.Post)` runs at `EventPriority.LOW` and does:
-
-```text
-if first prompt
-and initialized screen instanceof TitleScreen
-and lavaplayerWelcomeScreen=true
-and LavaplayerLoader.isMissing()
-    -> welcomeScreenShown = true
-    -> Minecraft.setScreen(new LavaplayerWelcomeScreen(current TitleScreen))
-```
-
-The replacement is synchronous on the client/render thread and occurs inside the TitleScreen initialization lifecycle before a normal TitleScreen frame is rendered.
-
-`LavaplayerWelcomeScreen` is intentionally modal:
-
-- it stores the prior TitleScreen and only restores it after user action;
-- all three buttons are disabled for 40 screen ticks;
-- Escape does not close the screen;
-- after the 40-tick delay, the user must choose Install, View on GitHub, or decline/return to the prior screen.
-
-Thus an unattended benchmark cannot reach the underlying navigable TitleScreen without changing observable pack behavior or synthesizing a user choice.
-
-## Final diagnostic design
+## Safe diagnostic boundary
 
 For `-Dboot_optim.bootTrace.endpoint=startup_ui_presented` only:
 
-1. `ScreenEvent.Opening(TitleScreen)` records `title_open` but does not stop the exact-pack benchmark.
-2. Every subsequent screen opening after that attempt records `startup_screen_replacement_open` with replacement ordinal and concrete class.
-3. `ScreenEvent.Init.Post` records TitleScreen init separately and records replacement-screen init with concrete class.
-4. `RenderFrameEvent.Post` records `startup_ui_render_return` for the **currently active screen**, not an assumed TitleScreen, and stores that exact class in a thread-local token.
-5. A GAME-layer Mixin observes the existing `Window.updateDisplay()` invocation immediately after it returns from `Minecraft.runTick(boolean)`. It consumes only a token produced by the same thread and records `startup_ui_presented` with the rendered screen class and replacement count.
-6. Only after this first real presentation does benchmark `exitOnTitle` stop the client.
+1. `ScreenEvent.Opening(TitleScreen)` records `title_open` and defers the benchmark's synthetic stop.
+2. Subsequent screen openings record `startup_screen_replacement_open` with ordinal and concrete class.
+3. `ScreenEvent.Init.Post` records the actual screen identity.
+4. `RenderFrameEvent.Post` records `startup_ui_render_return` for the currently active screen and stores that class in a thread-local token.
+5. A GAME-layer Mixin at the existing `Minecraft.runTick(boolean)` callsite observes immediately after stock `Window.updateDisplay()` returns. It consumes only the token produced on that same thread and records `startup_ui_presented`.
+6. Only after this endpoint does the benchmark-only `exitOnTitle` stop the client.
 
-The hook never targets `Window` itself, calls GLFW/RenderSystem, wraps display/present, touches executors/futures, changes listener order, or moves GL/native work. Mixin remains `required=false` / `defaultRequire=0`.
+The hook does not target `Window` itself, call GLFW/RenderSystem, wrap or replace the present call, touch executors/futures, change listener order, move GL/native work, or alter gameplay. Mixin remains fail-open (`required=false`, `defaultRequire=0`). FancyMenu panorama preload and MCEF first-consumer behavior are untouched.
 
-FancyMenu panorama preload and MCEF first-consumer behavior are untouched. Existing logs are correlation evidence only.
+## Final hosted exact-pack profile
 
-## Interpretation contract
+Validated runtime/doc head: `06a55cba8cddc8091dfa8f28d32caf2a95c609f9`.
+Exact-pack workflow: **34295487796 / run #770**, success. Build `34295472448` and normal Startup Benchmark `34295472436` also succeeded.
 
-The useful hosted serial partitions are:
+Profile contract passed:
 
-- `allDone -> title_open`: stock post-reload path to the initial title-opening attempt;
-- `title_open -> startup_screen_replacement_open`: TitleScreen initialization/listener work until another screen takes ownership;
-- replacement open/init -> `startup_ui_render_return`: construction/initialization and first frame of the real active startup UI;
-- `startup_ui_render_return -> startup_ui_presented`: post-render/display-return bucket.
+- measurement origin `hosted_exact_pack`;
+- endpoint `startup_ui_presented`;
+- exact resource selection valid, one reload;
+- blocks atlas `8192x8192x2`;
+- `bootoptim_mixin_errors=0`;
+- one contiguous JSONL event sequence `0..58`;
+- trace summary: `dropped_events=0`, `flush_failures=0`, `development_sink_failures=0`, `error=0`;
+- all relevant callbacks emitted on `Render thread`, thread id 65.
 
-Do not label any wall interval GPU, native, disk, page-cache, Java CPU, FancyMenu or MCEF by subtraction. Attribution requires an explicit marker/callsite inside that bounded interval.
+Relevant structured events:
 
-If the final hosted `startup_ui_presented` detail names `LavaplayerWelcomeScreen`, the run validates only **first visibly presented startup UI**. It simultaneously establishes a NO-GO for automatically measuring the requested navigable TitleScreen under this exact fixture: reaching that menu requires user interaction or a workload/config/dependency change.
+```text
+resource_reload allDone             92,359,587,277 ns
+TitleScreen opening                 93,483,300,092 ns
+title Init.Post                     93,518,230,042 ns
+LavaplayerWelcomeScreen opening     94,523,365,740 ns
+welcome first frame render return   95,069,897,345 ns
+welcome first display return        95,199,408,838 ns
+```
 
-## Physical limitations
+Serial partitions:
 
-Hosted Linux/Xvfb/llvmpipe can validate Java lifecycle ordering and screen identity, but cannot validate Windows driver latency, a physical GPU/display-present interval, Windows CEF/JCEF startup, OpenAL timing, HDD/page-cache behavior, or visual correctness on the historical laptop.
+- `allDone -> TitleScreen opening`: **1123.713 ms**;
+- `TitleScreen opening -> title Init.Post`: **34.930 ms**;
+- `title Init.Post -> LavaplayerWelcomeScreen opening`: **1005.136 ms**;
+- `welcome opening -> first completed frame`: **546.532 ms**;
+- `first completed frame -> updateDisplay return`: **129.511 ms**;
+- `allDone -> first actually presented startup UI`: **2839.822 ms**;
+- `TitleScreen opening -> first actually presented startup UI`: **1716.109 ms**.
 
-There is an additional state-equivalence gate before any physical comparison: the laptop must document whether AnalogPlayer is present under `.analogaudio/internal`, whether `lavaplayerWelcomeScreen` is enabled, and whether a human has already crossed the modal in that process. If those differ from hosted, then `allDone -> navigable TitleScreen` is not the same workload and timing values are not comparable.
+The `allDone -> opening` result reproduces #214's 1099.286 ms boundary closely (+24.427 ms in this single diagnostic smoke). This is evidence that the original ~1.1 s opening tail was real, while also showing that opening was not the visible endpoint.
 
-No laptop run is requested from this lane. A physical diagnostic becomes meaningful only after the project defines a reproducible startup state in which the requested navigable menu exists without synthetic interaction, and hosted first-present instrumentation passes on that same semantic state.
+## Coarse ownership classification
 
-## Hosted gate
+### `allDone -> TitleScreen opening` — 1123.713 ms
 
-Required profile contract for the coarse screen-identity smoke:
+A stock post-reload/client transition bucket on the Render thread. It is not ModelManager time: ModelManager completed earlier and is outside this lane. No subtraction-based attribution is made.
 
-- exact pinned pack / fresh hosted VM;
-- origin `hosted_exact_pack`, endpoint `startup_ui_presented`;
-- one initial reload, exact resource selection, blocks atlas `8192x8192x2`, zero BootOptim Mixin failures;
-- one contiguous bootstrap-owned JSONL sequence, zero dropped events;
-- monotonic `allDone <= title_open <= replacement/open-or-render <= startup_ui_render_return <= startup_ui_presented`;
-- render and present emitted by the same thread;
-- endpoint detail contains the concrete screen class and replacement count;
-- no MCEF/FancyMenu/presentation ownership claim without an explicit marker inside the corresponding bounded interval.
+### `TitleScreen opening -> title Init.Post` — 34.930 ms
 
-## Decision rule
+TitleScreen/NeoForge/FancyMenu initialization-entry work. The hosted log registers FancyMenu's `title_screen` customization layer immediately after the legacy opening marker.
 
-There is no optimization candidate in this PR.
+### `title Init.Post -> welcome opening` — 1005.136 ms
 
-- If the actual presented class is `TitleScreen`, the requested menu-present boundary exists in hosted and the bounded tail can be investigated further.
-- If the actual presented class is `LavaplayerWelcomeScreen`, close the requested `allDone -> navigable main menu` lane as **NO-GO under the current exact-pack startup state**. Keep only the coarse first-visible-UI profile and the source-level reason; do not auto-decline, seed AnalogPlayer, disable the prompt, or request a laptop performance run.
+A Render-thread screen-init callback tail ending at AnalogAudio's synchronous replacement. Source proves AnalogAudio performs the replacement, but the whole 1.005 s is **not** attributed to AnalogAudio: its missing-AnalogPlayer gate is only filesystem existence/version checks plus welcome-screen construction. The hosted log also places Palladium cache reloads and Iris `Creating pipeline for dimension minecraft:overworld` inside this coarse interval. Without start/return boundaries for those callbacks, ownership cannot be split further safely.
+
+### `welcome opening -> first completed frame` — 546.532 ms
+
+GUI/FancyMenu/Realms/replacement-screen initialization plus first-frame work on the Render thread. The trace contains nested `RealmsNotificationsScreen` and repeated welcome-screen Init.Post observations. This remains an inclusive lifecycle bucket, not exclusive FancyMenu self-time.
+
+### `first completed frame -> updateDisplay return` — 129.511 ms
+
+Post-render/display-return bucket. It is the only bounded interval touching presentation, but hosted Linux/Xvfb/llvmpipe cannot tell whether any part is GPU, driver, native swap/event polling, scheduler delay, or Java work. Do not name it by subtraction.
+
+### MCEF
+
+MCEF is **not** the owner of this hosted tail. The run logs `BOOTOPTIM_MCEF_FIRST_CONSUMER status=deferred` before the reload and no `status=initializing` / successful CEF initialization marker before `startup_ui_presented`. Existing MCEF first-consumer behavior is left unchanged.
+
+## Source-level AnalogAudio endpoint cause
+
+Public AnalogAudio 0.1.0 source at commit `22a1d25a05d2ba0147acf5262fb0e4be6e75a1f3` matches the runtime class names. `AnalogAudioClientEvents.onScreenInit(ScreenEvent.Init.Post)` runs at `EventPriority.LOW` and, when the initialized screen is a TitleScreen, the prompt is enabled, and `LavaplayerLoader.isMissing()` is true, calls:
+
+```text
+Minecraft.setScreen(new LavaplayerWelcomeScreen(current TitleScreen))
+```
+
+`LavaplayerLoader.isInstalled()` checks for `.analogaudio/internal/analogplayer-1.0.2.jar`; the heavier download/classloader/Lavaplayer paths occur only after explicit user action or later use.
+
+`LavaplayerWelcomeScreen` stores the previous TitleScreen, initializes three buttons disabled for 40 ticks, returns `false` from `shouldCloseOnEsc()`, and restores the previous screen only when the user chooses the decline/back path.
+
+Thus there is no behavior-preserving unattended timestamp for the requested navigable TitleScreen in this fixture.
+
+## Physical limitations and reopening gate
+
+Hosted Linux/Xvfb/llvmpipe validates Java lifecycle ordering, exact screen identity, render-thread ownership, and the software-present return boundary. It cannot validate:
+
+- Windows GPU/driver/display-present latency;
+- Microsoft Basic Render Driver behavior;
+- Windows CEF/JCEF/native media timing;
+- OpenAL behavior;
+- HDD/page-cache effects;
+- physical visual correctness or input responsiveness.
+
+A physical comparison additionally requires startup-state equivalence: record whether `.analogaudio/internal/analogplayer-1.0.2.jar` exists, whether `lavaplayerWelcomeScreen` is enabled, and whether the modal has already been crossed in that process. If those differ, `allDone -> navigable TitleScreen` is a different workload.
+
+Reopen this lane only if the exact workload is intentionally defined so a navigable main menu exists without synthetic interaction and the same hosted first-present boundary passes in that state. Until then, no physical profile and no optimization are justified.
