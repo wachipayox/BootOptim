@@ -15,6 +15,7 @@
     "client.ModelBakeryDecocraftReuseMixin",
     "client.ModelManagerDagMixin",
     "client.SimpleReloadInstanceDagMixin",
+    "client.WindowPresentTraceMixin",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
