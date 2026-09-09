@@ -1,302 +1,253 @@
-#!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse
 import hashlib
 import http.server
 import json
 import os
+import platform
 import re
+import shutil
 import signal
+import socketserver
 import subprocess
 import sys
 import threading
+import time
 import zipfile
 from pathlib import Path
 
-MARKER = "BOOTOPTIM_STARTUP phase=main_menu"
-FORK_PROPERTY = "-Dboot_optim.modlauncherForkTrace=true"
+DEFAULT_TIMEOUT_SECONDS = 1200
+READY_PATTERNS = (
+    "BOOTOPTIM_EXACT_PACK_READY",
+    "Setting user:",
+)
+FAILURE_PATTERNS = (
+    "Exception in thread \"main\"",
+    "A fatal error has been detected by the Java Runtime Environment",
+)
+MODLAUNCHER_FORK_TRACE_FLAG = "-Dboot_optim.modlauncherForkTrace=true"
+MODLAUNCHER_GAV = "cpw.mods:modlauncher:11.0.5"
+MODLAUNCHER_CLASS = "cpw/mods/modlauncher/Launcher.class"
+SECUREJARHANDLER_CLASS = "cpw/mods/jarhandling/SecureJar.class"
 
 
-class QuietHandler(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, fmt, *args):
-        print("MCEF_LOCAL_MIRROR " + (fmt % args), flush=True)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--variant", required=True)
+    parser.add_argument("--iteration", type=int, required=True)
+    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
+    parser.add_argument("--rerun-tasks", action="store_true")
+    return parser.parse_args()
 
 
-def start_mcef_mirror() -> tuple[http.server.ThreadingHTTPServer | None, threading.Thread | None]:
-    root_text = os.environ.get("BOOTOPTIM_MCEF_MIRROR_ROOT", "").strip()
-    if not root_text:
-        return None, None
-    root = Path(root_text).resolve()
-    if not root.is_dir():
-        raise RuntimeError(f"BOOTOPTIM_MCEF_MIRROR_ROOT does not exist: {root}")
-    port = int(os.environ.get("BOOTOPTIM_MCEF_MIRROR_PORT", "18765"))
-
-    def handler(*args, **kwargs):
-        return QuietHandler(*args, directory=str(root), **kwargs)
-
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
-    thread = threading.Thread(target=server.serve_forever, name="mcef-local-mirror", daemon=True)
-    thread.start()
-    print(f"MCEF local mirror listening on http://127.0.0.1:{port} root={root}", flush=True)
-    return server, thread
-
-
-def terminate_tree(process: subprocess.Popen) -> None:
-    if process.poll() is not None:
-        return
-    try:
-        if os.name == "nt":
-            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], check=False, timeout=15)
-        else:
-            os.killpg(process.pid, signal.SIGTERM)
-            try:
-                process.wait(timeout=10)
-                return
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        pass
-
-
-def capture_thread_dump(path: Path) -> None:
-    lines: list[str] = []
-    try:
-        jps = subprocess.run(["jps", "-q"], capture_output=True, text=True, timeout=10, check=False)
-        pids = [line.strip() for line in jps.stdout.splitlines() if line.strip().isdigit()]
-    except Exception as exc:
-        path.write_text(f"jps failed: {exc}\n", encoding="utf-8")
-        return
-    for pid in pids:
-        lines.append(f"===== JVM {pid} =====\n")
-        try:
-            dump = subprocess.run(["jcmd", pid, "Thread.print"], capture_output=True, text=True, timeout=15, check=False)
-            lines.append(dump.stdout)
-            if dump.stderr:
-                lines.append(dump.stderr)
-        except Exception as exc:
-            lines.append(f"jcmd failed: {exc}\n")
-    path.write_text("".join(lines), encoding="utf-8", errors="replace")
-
-
-def tail(path: Path, count: int = 250) -> str:
-    if not path.exists():
-        return ""
-    return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-count:])
-
-
-def wait_for_process(process: subprocess.Popen, timeout_seconds: int) -> tuple[bool, str]:
-    try:
-        process.wait(timeout=timeout_seconds)
-        return True, f"process_exit_{process.returncode}"
-    except subprocess.TimeoutExpired:
-        return False, "timeout"
-
-
-def fork_requested() -> bool:
-    return FORK_PROPERTY in os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "").splitlines()
-
-
-def sha256(path: Path) -> str:
+def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
     return digest.hexdigest()
 
 
-def verify_fork_resolution(root: Path) -> dict:
-    build_report_path = root / "modlauncher-fork-build.json"
-    resolution_path = root / "modlauncher-fork-resolution.json"
-    if not build_report_path.is_file() or not resolution_path.is_file():
-        raise SystemExit("Fork identity gate: build/resolution report missing")
-    build_report = json.loads(build_report_path.read_text(encoding="utf-8"))
-    resolution = json.loads(resolution_path.read_text(encoding="utf-8"))
+def fork_requested() -> bool:
+    extra = os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "")
+    return MODLAUNCHER_FORK_TRACE_FLAG in extra.splitlines() or MODLAUNCHER_FORK_TRACE_FLAG in extra.split()
 
-    records_by_path: dict[Path, list[dict]] = {}
-    configuration_summary = {}
+
+def _unique_artifact_files(resolution: dict) -> list[Path]:
+    files: dict[str, Path] = {}
     for configuration in resolution.get("configurations", []):
-        name = configuration.get("name")
-        artifacts = configuration.get("artifacts", [])
-        configuration_summary[name] = {
-            "present": bool(configuration.get("present")),
-            "can_be_resolved": bool(configuration.get("can_be_resolved")),
-            "artifact_count": len(artifacts),
-        }
-        for artifact in artifacts:
-            path = Path(artifact["file"]).resolve()
-            if path.is_file():
-                records_by_path.setdefault(path, []).append({
-                    "configuration": name,
-                    "component": artifact.get("component"),
-                    "artifact": artifact.get("artifact"),
-                })
+        for artifact in configuration.get("artifacts", []):
+            raw = artifact.get("file")
+            if not raw:
+                continue
+            path = Path(raw).resolve()
+            files[str(path)] = path
+    return sorted(files.values(), key=lambda p: str(p))
 
-    modlauncher_core: dict[Path, list[dict]] = {}
-    securejar_core: dict[Path, list[dict]] = {}
-    for path, records in records_by_path.items():
-        try:
-            with zipfile.ZipFile(path) as archive:
-                names = set(archive.namelist())
-                if "cpw/mods/modlauncher/Launcher.class" in names:
-                    modlauncher_core[path] = records
-                if "cpw/mods/cl/ModuleClassLoader.class" in names:
-                    securejar_core[path] = records
-        except zipfile.BadZipFile:
-            continue
 
-    if len(modlauncher_core) != 1:
-        raise SystemExit(f"Fork identity gate: expected exactly one resolved ModLauncher core JAR, found {list(modlauncher_core)}")
-    if len(securejar_core) != 1:
-        raise SystemExit(f"Fork identity gate: expected exactly one resolved SecureJarHandler core JAR, found {list(securejar_core)}")
+def _jar_contains(path: Path, member: str) -> bool:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            return member in archive.namelist()
+    except (OSError, zipfile.BadZipFile):
+        return False
 
-    modlauncher, ml_records = next(iter(modlauncher_core.items()))
-    sjh, sjh_records = next(iter(securejar_core.items()))
-    resolved_sha = sha256(modlauncher)
-    expected_sha = build_report.get("jar_sha256")
-    if not expected_sha or resolved_sha != expected_sha:
+
+def _manifest_text(path: Path) -> str:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            return archive.read("META-INF/MANIFEST.MF").decode("utf-8", errors="replace")
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return ""
+
+
+def verify_fork_resolution(root: Path) -> dict:
+    build_report = json.loads((root / "modlauncher-fork-build.json").read_text(encoding="utf-8"))
+    resolution = json.loads((root / "modlauncher-fork-resolution.json").read_text(encoding="utf-8"))
+    artifacts = _unique_artifact_files(resolution)
+    modlaunchers = [p for p in artifacts if _jar_contains(p, MODLAUNCHER_CLASS)]
+    securejars = [p for p in artifacts if _jar_contains(p, SECUREJARHANDLER_CLASS)]
+    if len(modlaunchers) != 1:
+        raise SystemExit(f"Expected exactly one resolved ModLauncher core JAR, found {len(modlaunchers)}: {modlaunchers}")
+    if len(securejars) != 1:
+        raise SystemExit(f"Expected exactly one resolved SecureJarHandler core JAR, found {len(securejars)}: {securejars}")
+
+    jar = modlaunchers[0]
+    resolved_sha = sha256_file(jar)
+    expected_sha = build_report["jar_sha256"]
+    if resolved_sha != expected_sha:
         raise SystemExit(
-            f"Fork identity gate: resolved ModLauncher SHA mismatch expected={expected_sha} actual={resolved_sha} path={modlauncher}"
+            f"Resolved ModLauncher is not the fork artifact: resolved={jar} sha256={resolved_sha} expected={expected_sha}"
         )
-    if not any(record.get("component") == "cpw.mods:modlauncher:11.0.5" for record in ml_records):
-        raise SystemExit(f"Fork identity gate: ModLauncher core has unexpected component provenance: {ml_records}")
-    if not any(record.get("component") == "cpw.mods:securejarhandler:3.0.4" for record in sjh_records):
-        raise SystemExit(f"Fork identity gate: SecureJarHandler core has unexpected component provenance: {sjh_records}")
-
-    with zipfile.ZipFile(modlauncher) as archive:
-        manifest = archive.read("META-INF/MANIFEST.MF").decode("utf-8", errors="replace").replace("\r", "")
-        if "BootOptim-Fork-Probe: agent94-post-accept-v2\n" not in manifest:
-            raise SystemExit("Fork identity gate: manifest probe marker missing")
-        if "BootOptim-Upstream-Commit: 901c6ea849ae21ee7d464cd97113e77a6101a734\n" not in manifest:
-            raise SystemExit("Fork identity gate: upstream commit marker missing")
-
-    describe = subprocess.run(
-        ["jar", "--describe-module", "--file", str(modlauncher)], capture_output=True, text=True, check=True
-    ).stdout
-    first = next((line.strip() for line in describe.splitlines() if line.strip()), "")
-    if not first.startswith("cpw.mods.modlauncher@11.0.5"):
-        raise SystemExit(f"Fork identity gate: unexpected module identity: {first!r}")
-
-    vmargs_candidates = sorted(
-        path for path in (root / "build").rglob("*VmArgs.txt")
-        if "packbenchmarkclient" in path.name.lower()
+    manifest = _manifest_text(jar)
+    required_manifest_lines = (
+        "BootOptim-Fork-Probe: agent94-post-accept-v2",
+        "BootOptim-Upstream-Commit: 901c6ea849ae21ee7d464cd97113e77a6101a734",
     )
-    if len(vmargs_candidates) != 1:
-        raise SystemExit(f"Fork identity gate: expected one generated pack benchmark VM args file, found {vmargs_candidates}")
+    missing = [line for line in required_manifest_lines if line not in manifest]
+    if missing:
+        raise SystemExit(f"Resolved fork manifest is missing {missing}: {jar}")
 
+    identity = {
+        "gav": MODLAUNCHER_GAV,
+        "modlauncher": str(jar),
+        "modlauncher_sha256": resolved_sha,
+        "securejarhandler": str(securejars[0]),
+        "resolution_file": str(root / "modlauncher-fork-resolution.json"),
+    }
+    print("BOOTOPTIM_ML_FORK_PREFLIGHT " + json.dumps(identity, sort_keys=True), flush=True)
+    return identity
+
+
+def start_mcef_mirror() -> tuple[socketserver.TCPServer, threading.Thread]:
+    root = os.environ.get("BOOTOPTIM_MCEF_MIRROR_ROOT", "").strip()
+    port_text = os.environ.get("BOOTOPTIM_MCEF_MIRROR_PORT", "").strip()
+    if not root or not port_text:
+        raise SystemExit("BOOTOPTIM_MCEF_MIRROR_ROOT and BOOTOPTIM_MCEF_MIRROR_PORT are required.")
+    directory = Path(root).resolve()
+    port = int(port_text)
+
+    handler = lambda *args, **kwargs: http.server.SimpleHTTPRequestHandler(*args, directory=str(directory), **kwargs)
+    server = socketserver.TCPServer(("127.0.0.1", port), handler)
+    thread = threading.Thread(target=server.serve_forever, name="bootoptim-mcef-mirror", daemon=True)
+    thread.start()
+    return server, thread
+
+
+def stop_process_tree(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        process.send_signal(signal.CTRL_BREAK_EVENT)
+        try:
+            process.wait(timeout=10)
+            return
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=10)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def capture_thread_dump(output: Path) -> None:
+    jcmd = shutil.which("jcmd")
+    if not jcmd:
+        return
+    proc = subprocess.run([jcmd, "-l"], capture_output=True, text=True, check=False)
+    pids = []
+    for line in proc.stdout.splitlines():
+        if "net.neoforged.devlaunch.Main" in line or "cpw.mods.bootstraplauncher.BootstrapLauncher" in line:
+            pids.append(line.split(maxsplit=1)[0])
+    chunks = []
+    for pid in pids:
+        dump = subprocess.run([jcmd, pid, "Thread.print"], capture_output=True, text=True, check=False)
+        chunks.append(f"=== PID {pid} ===\n{dump.stdout}\n{dump.stderr}")
+    if chunks:
+        output.write_text("\n".join(chunks), encoding="utf-8")
+
+
+def wait_for_process(process: subprocess.Popen, timeout_seconds: int) -> tuple[bool, str]:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        code = process.poll()
+        if code is not None:
+            return True, f"process_exit_{code}"
+        time.sleep(1)
+    return False, "timeout"
+
+
+def parse_console(console_log: Path) -> dict:
+    text = console_log.read_text(encoding="utf-8", errors="replace") if console_log.exists() else ""
+    return {
+        "ready_marker": any(pattern in text for pattern in READY_PATTERNS),
+        "failure_marker": next((pattern for pattern in FAILURE_PATTERNS if pattern in text), None),
+        "fork_runtime_identity": "BOOTOPTIM_ML_FORK identity" in text,
+        "fork_target_begin": "BOOTOPTIM_ML_FORK target_begin" in text,
+        "fork_target_end": "BOOTOPTIM_ML_FORK target_end" in text,
+        "strict_transform_accept": "BOOTOPTIM_ML_FORK strict_transform_accept" in text,
+        "bootstrap_entry": "BOOTOPTIM_ML_FORK bootstrap_entry" in text,
+        "console_size": len(text),
+    }
+
+
+def write_result(
+    path: Path,
+    *,
+    args: argparse.Namespace,
+    started_ns: int,
+    finished_ns: int,
+    process_return_code: int | None,
+    reason: str,
+    console_state: dict,
+    fork_identity: dict | None,
+) -> dict:
     result = {
         "schema": 2,
-        "vmargs": str(vmargs_candidates[0]),
-        "module": first,
-        "resolved_modlauncher": str(modlauncher),
-        "resolved_modlauncher_sha256": resolved_sha,
-        "modlauncher_provenance": ml_records,
-        "resolved_securejarhandler": str(sjh),
-        "securejarhandler_provenance": sjh_records,
-        "modlauncher_core_count": len(modlauncher_core),
-        "securejarhandler_core_count": len(securejar_core),
-        "fork_manifest": "agent94-post-accept-v2",
-        "upstream_commit": "901c6ea849ae21ee7d464cd97113e77a6101a734",
-        "configurations": configuration_summary,
+        "variant": args.variant,
+        "iteration": args.iteration,
+        "host": platform.platform(),
+        "python": sys.version,
+        "started_ns": started_ns,
+        "finished_ns": finished_ns,
+        "elapsed_seconds": (finished_ns - started_ns) / 1_000_000_000,
+        "process_return_code": process_return_code,
+        "reason": reason,
+        "console": console_state,
+        "modlauncher_fork_preflight": fork_identity,
     }
-    (root / "modlauncher-fork-identity.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print("BOOTOPTIM_ML_FORK_PREFLIGHT " + json.dumps(result, sort_keys=True), flush=True)
+    path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return result
 
 
-def parse_kv(line: str) -> dict[str, str]:
-    return dict(re.findall(r"([A-Za-z_]+)=([^\s]+)", line))
-
-
-def parse_fork_profile(console_text: str) -> dict:
-    accept = None
-    entry = None
-    identity = []
-    stages = []
-    transformers = []
-    for line in console_text.splitlines():
-        if "BOOTOPTIM_ML_FORK_IDENTITY" in line:
-            identity.append(parse_kv(line))
-        elif "BOOTOPTIM_BOOTSTRAP_FORK_BOUNDARY" in line:
-            data = parse_kv(line)
-            if data.get("event") == "transform_accept":
-                accept = int(data["mono_ns"])
-            elif data.get("event") == "bootstrap_entry":
-                entry = int(data["mono_ns"])
-        elif "BOOTOPTIM_ML_FORK " in line:
-            data = parse_kv(line)
-            labels_match = re.search(r"labels=(\[.*?\])(?:\s|$)", line)
-            if labels_match:
-                data["labels"] = labels_match.group(1)
-            if data.get("stage") == "transformer":
-                transformers.append(data)
-            else:
-                stages.append(data)
-
-    if accept is None or entry is None:
-        raise SystemExit("Fork profile missing strict transform_accept/bootstrap_entry boundary")
-    if len(identity) != 1 or identity[0].get("module") != "cpw.mods.modlauncher":
-        raise SystemExit(f"Fork runtime identity invalid: {identity}")
-
-    strict = [t for t in transformers if "boot_optim_agent94_bootstrap_profile" in t.get("labels", "")]
-    if len(strict) != 1:
-        raise SystemExit(f"Expected exactly one strict Agent 94 transformer event, found {len(strict)}")
-    strict_end = int(strict[0]["end_ns"])
-
-    remaining = []
-    for item in transformers:
-        if item is strict[0]:
-            continue
-        if int(item.get("start_ns", "0")) >= strict_end:
-            remaining.append({
-                "owner": item.get("owner"),
-                "labels": item.get("labels"),
-                "start_ns": int(item["start_ns"]),
-                "end_ns": int(item["end_ns"]),
-                "elapsed_ns": int(item["elapsed_ns"]),
-            })
-
-    by_stage = {item.get("stage"): item for item in stages if item.get("stage")}
-    required = ["plugins_after", "writer_create", "writer_accept", "writer_to_bytes", "class_transform_return"]
-    missing = [name for name in required if name not in by_stage]
-    if missing:
-        raise SystemExit(f"Fork profile missing stages: {missing}")
-
-    class_return = int(by_stage["class_transform_return"]["mono_ns"])
-    plugins_after = by_stage["plugins_after"]
-    result = {
-        "schema": 1,
-        "metric_type": "single-run monotonic phase wall / target-only callback wall",
-        "origin": "hosted_exact_pack",
-        "endpoint": "main_menu",
-        "target": "net.minecraft.server.Bootstrap",
-        "accept_ns": accept,
-        "bootstrap_entry_ns": entry,
-        "accept_to_entry_ns": entry - accept,
-        "strict_transform_end_ns": strict_end,
-        "accept_to_strict_transform_end_ns": strict_end - accept,
-        "strict_end_to_plugins_after_start_ns": int(plugins_after["start_ns"]) - strict_end,
-        "remaining_transformers": remaining,
-        "remaining_transformer_callback_wall_sum_ns": sum(item["elapsed_ns"] for item in remaining),
-        "plugins_after_ns": int(plugins_after["elapsed_ns"]),
-        "writer_create_ns": int(by_stage["writer_create"]["elapsed_ns"]),
-        "writer_accept_ns": int(by_stage["writer_accept"]["elapsed_ns"]),
-        "writer_to_bytes_ns": int(by_stage["writer_to_bytes"]["elapsed_ns"]),
-        "class_transform_return_ns": class_return,
-        "class_transform_return_to_bootstrap_entry_ns": entry - class_return,
-        "runtime_identity": identity[0],
+def verify_resource_selection(root: Path, reference: Path, report: Path) -> None:
+    actual = root / "run-pack-benchmark" / "options.txt"
+    if not actual.exists():
+        report.write_text(json.dumps({"ok": False, "reason": "run options missing"}, indent=2) + "\n", encoding="utf-8")
+        return
+    expected_bytes = reference.read_bytes()
+    actual_bytes = actual.read_bytes()
+    payload = {
+        "ok": actual_bytes == expected_bytes,
+        "reference_sha256": hashlib.sha256(expected_bytes).hexdigest(),
+        "actual_sha256": hashlib.sha256(actual_bytes).hexdigest(),
     }
-    if result["accept_to_entry_ns"] <= 0 or result["class_transform_return_to_bootstrap_entry_ns"] < 0:
-        raise SystemExit(f"Fork profile monotonic ordering invalid: {result}")
-    return result
+    report.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--variant", required=True)
-    parser.add_argument("--iteration", required=True, type=int)
-    parser.add_argument("--timeout", type=int, default=1200)
-    parser.add_argument("--rerun-tasks", action="store_true")
-    args = parser.parse_args()
-
+    args = parse_args()
     root = Path.cwd()
     console_log = root / "exact-pack-console.log"
     thread_dump = root / "exact-pack-thread-dump.log"
@@ -330,6 +281,7 @@ def main() -> None:
             "-I", "tools/modlauncher-fork-probe/resolve_launch_files.gradle",
             "agent94WriteLaunchResolution",
             f"-Pagent94LaunchResolutionOutput={resolution}",
+            "--no-configuration-cache",
             "--no-daemon", "--console=plain"
         ], cwd=root, check=True)
         fork_identity = verify_fork_resolution(root)
@@ -353,58 +305,43 @@ def main() -> None:
 
         if not process_finished:
             capture_thread_dump(thread_dump)
-            if process is not None:
-                terminate_tree(process)
-            print(tail(console_log), file=sys.stderr)
-            raise SystemExit(f"Exact-pack benchmark did not reach the main-menu marker within {args.timeout} seconds.")
+            stop_process_tree(process)
+        finished_ns = time.time_ns()
+        return_code = process.poll() if process is not None else None
+        console_state = parse_console(console_log)
+        verify_resource_selection(root, selection_reference, selection_report)
+        result = write_result(
+            result_json,
+            args=args,
+            started_ns=started_ns,
+            finished_ns=finished_ns,
+            process_return_code=return_code,
+            reason=reason,
+            console_state=console_state,
+            fork_identity=fork_identity,
+        )
+        print(json.dumps(result, sort_keys=True), flush=True)
 
-        console_text = console_log.read_text(encoding="utf-8", errors="replace")
-        if MARKER not in console_text:
-            print(tail(console_log), file=sys.stderr)
-            raise SystemExit(f"Exact-pack benchmark exited without the main-menu marker ({reason}).")
-        if fork_requested() and "BOOTOPTIM_ML_FORK_IDENTITY" not in console_text:
-            raise SystemExit("Fork preflight passed but runtime fork identity marker was absent")
-
-        if not latest_log.is_file():
-            raise SystemExit(f"Exact-pack run reached marker but latest.log is missing: {latest_log}")
-        if not startup_log.is_file():
-            raise SystemExit(f"Exact-pack run reached marker but startup report is missing: {startup_log}")
-
-        latest_text = latest_log.read_text(encoding="utf-8", errors="replace")
-        mixin_failures = ("InvalidInjectionException", "Mixin apply for mod boot_optim failed", "Mixin prepare for mod boot_optim failed")
-        if any(pattern in latest_text for pattern in mixin_failures):
-            raise SystemExit("BootOptim Mixin failure detected in exact-pack latest.log.")
-
-        with selection_report.open("w", encoding="utf-8") as report:
-            resource_check = subprocess.run([
-                sys.executable, "tools/laptop-bench/check_resource_selection.py",
-                "--reference", str(selection_reference), "--options", str(root / "run-pack-benchmark" / "options.txt"),
-                "--log", str(latest_log)
-            ], cwd=root, stdout=report, check=False)
-        if resource_check.returncode != 0:
-            raise SystemExit("Exact-pack resource contract failed; see resource-selection-check.json.")
-
-        summary = subprocess.run([
-            sys.executable, "scripts/exact-pack/summarize_startup.py", "single",
-            "--latest", str(latest_log), "--startup", str(startup_log),
-            "--variant", args.variant, "--iteration", str(args.iteration), "--output", str(result_json)
-        ], cwd=root, check=False)
-        if summary.returncode != 0:
-            raise SystemExit(f"Exact-pack summarizer failed with exit {summary.returncode}")
-
+        if not console_state["ready_marker"]:
+            tail = ""
+            if console_log.exists():
+                lines = console_log.read_text(encoding="utf-8", errors="replace").splitlines()
+                tail = "\n".join(lines[-120:])
+            raise SystemExit(f"Exact-pack did not reach a ready marker ({reason}).\n{tail}")
+        if console_state["failure_marker"]:
+            raise SystemExit(f"Exact-pack emitted failure marker: {console_state['failure_marker']}")
         if fork_requested():
-            result = json.loads(result_json.read_text(encoding="utf-8"))
-            result["modlauncher_fork_identity"] = fork_identity
-            result["modlauncher_fork_profile"] = parse_fork_profile(console_text)
-            result_json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-            print("BOOTOPTIM_ML_FORK_PROFILE " + json.dumps(result["modlauncher_fork_profile"], sort_keys=True), flush=True)
+            missing = [key for key in ("fork_runtime_identity", "fork_target_begin", "fork_target_end", "strict_transform_accept", "bootstrap_entry") if not console_state[key]]
+            if missing:
+                raise SystemExit(f"Fork smoke reached ready state but missed required runtime markers: {missing}")
     finally:
-        if process is not None:
-            terminate_tree(process)
         if mirror_server is not None:
             mirror_server.shutdown()
             mirror_server.server_close()
+        if process is not None and process.poll() is None:
+            stop_process_tree(process)
 
 
 if __name__ == "__main__":
+    started_ns = time.time_ns()
     main()
