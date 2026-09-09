@@ -12,6 +12,7 @@
     "client.McefFirstConsumerDeferMixin",
     "client.ModelBakeryDecocraftReuseMixin",
     "client.DecocraftBlockbenchBakeryCornerReuseMixin",
+    "client.DecocraftBlockbenchCornerEquivalenceMixin",
     "client.DecocraftVector3Accessor",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
