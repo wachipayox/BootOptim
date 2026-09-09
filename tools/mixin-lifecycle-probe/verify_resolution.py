@@ -10,6 +10,8 @@ from pathlib import Path
 ML_COMPONENT = "cpw.mods:modlauncher:11.0.5"
 SJH_COMPONENT = "cpw.mods:securejarhandler:3.0.8"
 MIXIN_COMPONENT = "net.fabricmc:sponge-mixin:0.15.2+mixin.0.8.7"
+MIXIN_PROBE = "agent94-mixin-lifecycle-v1"
+MIXIN_UPSTREAM = "023e39334850e839c283be413257bf459f40a5d6"
 
 
 def sha256(path: Path) -> str:
@@ -18,6 +20,22 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def manifest_attributes(raw: bytes) -> dict[str, str]:
+    text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+    unfolded: list[str] = []
+    for line in text.splitlines():
+        if line.startswith(" ") and unfolded:
+            unfolded[-1] += line[1:]
+        else:
+            unfolded.append(line)
+    attrs: dict[str, str] = {}
+    for line in unfolded:
+        if ": " in line:
+            key, value = line.split(": ", 1)
+            attrs[key] = value
+    return attrs
 
 
 def main() -> None:
@@ -81,10 +99,10 @@ def main() -> None:
         if "BootOptim-Fork-Probe: agent94-post-accept-v2\n" not in manifest:
             raise SystemExit("ModLauncher probe manifest marker missing")
     with zipfile.ZipFile(mixin_path) as archive:
-        manifest = archive.read("META-INF/MANIFEST.MF").decode("utf-8", errors="replace").replace("\r", "")
-        if "BootOptim-Mixin-Probe: agent94-mixin-lifecycle-v1\n" not in manifest:
+        attrs = manifest_attributes(archive.read("META-INF/MANIFEST.MF"))
+        if attrs.get("BootOptim-Mixin-Probe") != MIXIN_PROBE:
             raise SystemExit("Mixin probe manifest marker missing")
-        if "BootOptim-Mixin-Upstream-Commit: 023e39334850e839c283be413257bf459f40a5d6\n" not in manifest:
+        if attrs.get("BootOptim-Mixin-Upstream-Commit") != MIXIN_UPSTREAM:
             raise SystemExit("Mixin upstream provenance marker missing")
 
     result = {
