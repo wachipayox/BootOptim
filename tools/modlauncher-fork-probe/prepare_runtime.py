@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -18,6 +19,14 @@ PROBE = "agent94-post-accept-v2"
 
 def run(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
     subprocess.run(args, cwd=cwd, env=env, check=True)
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def main() -> None:
@@ -66,16 +75,19 @@ def main() -> None:
 
         target = output / "cpw/mods/modlauncher" / VERSION
         target.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(jar, target / f"modlauncher-{VERSION}.jar")
+        staged_jar = target / f"modlauncher-{VERSION}.jar"
+        shutil.copy2(jar, staged_jar)
         shutil.copy2(pom, target / f"modlauncher-{VERSION}.pom")
+        staged_sha256 = sha256(staged_jar)
 
     payload = {
-        "schema": 1,
+        "schema": 2,
         "probe": PROBE,
         "upstream_commit": COMMIT,
         "gav": f"cpw.mods:modlauncher:{VERSION}",
         "repository": str(output),
         "jar": str(output / "cpw/mods/modlauncher" / VERSION / f"modlauncher-{VERSION}.jar"),
+        "jar_sha256": staged_sha256,
     }
     report.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(payload, sort_keys=True))
