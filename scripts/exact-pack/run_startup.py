@@ -193,11 +193,11 @@ def parse_console(console_log: Path) -> dict:
     return {
         "ready_marker": any(pattern in text for pattern in READY_PATTERNS),
         "failure_marker": next((pattern for pattern in FAILURE_PATTERNS if pattern in text), None),
-        "fork_runtime_identity": "BOOTOPTIM_ML_FORK identity" in text,
-        "fork_target_begin": "BOOTOPTIM_ML_FORK target_begin" in text,
-        "fork_target_end": "BOOTOPTIM_ML_FORK target_end" in text,
-        "strict_transform_accept": "BOOTOPTIM_ML_FORK strict_transform_accept" in text,
-        "bootstrap_entry": "BOOTOPTIM_ML_FORK bootstrap_entry" in text,
+        "fork_runtime_identity": "BOOTOPTIM_ML_FORK_IDENTITY probe=agent94-post-accept-v2" in text,
+        "fork_target_begin": "BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 class=net.minecraft.server.Bootstrap stage=class_transform_begin" in text,
+        "fork_target_end": "BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 class=net.minecraft.server.Bootstrap stage=class_transform_return" in text,
+        "strict_transform_accept": "BOOTOPTIM_BOOTSTRAP_FORK_BOUNDARY event=transform_accept" in text,
+        "bootstrap_entry": "BOOTOPTIM_BOOTSTRAP_FORK_BOUNDARY event=bootstrap_entry" in text,
         "console_size": len(text),
     }
 
