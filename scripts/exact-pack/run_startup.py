@@ -4,7 +4,6 @@ import hashlib
 import http.server
 import json
 import os
-import re
 import signal
 import subprocess
 import sys
@@ -202,91 +201,16 @@ def verify_fork_resolution(root: Path) -> dict:
     return result
 
 
-def parse_kv(line: str) -> dict[str, str]:
-    return dict(re.findall(r"([A-Za-z_]+)=([^\s]+)", line))
-
-
-def parse_fork_profile(console_text: str) -> dict:
-    accept = None
-    entry = None
-    identity = []
-    stages = []
-    transformers = []
-    for line in console_text.splitlines():
-        if "BOOTOPTIM_ML_FORK_IDENTITY" in line:
-            identity.append(parse_kv(line))
-        elif "BOOTOPTIM_BOOTSTRAP_FORK_BOUNDARY" in line:
-            data = parse_kv(line)
-            if data.get("event") == "transform_accept":
-                accept = int(data["mono_ns"])
-            elif data.get("event") == "bootstrap_entry":
-                entry = int(data["mono_ns"])
-        elif "BOOTOPTIM_ML_FORK " in line:
-            data = parse_kv(line)
-            labels_match = re.search(r"labels=(\[.*?\])(?:\s|$)", line)
-            if labels_match:
-                data["labels"] = labels_match.group(1)
-            if data.get("stage") == "transformer":
-                transformers.append(data)
-            else:
-                stages.append(data)
-
-    if accept is None or entry is None:
-        raise SystemExit("Fork profile missing strict transform_accept/bootstrap_entry boundary")
-    if len(identity) != 1 or identity[0].get("module") != "cpw.mods.modlauncher":
-        raise SystemExit(f"Fork runtime identity invalid: {identity}")
-
-    strict = [t for t in transformers if "boot_optim_agent94_bootstrap_profile" in t.get("labels", "")]
-    if len(strict) != 1:
-        raise SystemExit(f"Expected exactly one strict Agent 94 transformer event, found {len(strict)}")
-    strict_end = int(strict[0]["end_ns"])
-
-    remaining = []
-    for item in transformers:
-        if item is strict[0]:
-            continue
-        if int(item.get("start_ns", "0")) >= strict_end:
-            remaining.append({
-                "owner": item.get("owner"),
-                "labels": item.get("labels"),
-                "start_ns": int(item["start_ns"]),
-                "end_ns": int(item["end_ns"]),
-                "elapsed_ns": int(item["elapsed_ns"]),
-            })
-
-    by_stage = {item.get("stage"): item for item in stages if item.get("stage")}
-    required = ["plugins_after", "writer_create", "writer_accept", "writer_to_bytes", "class_transform_return"]
-    missing = [name for name in required if name not in by_stage]
-    if missing:
-        raise SystemExit(f"Fork profile missing stages: {missing}")
-
-    class_return = int(by_stage["class_transform_return"]["mono_ns"])
-    plugins_after = by_stage["plugins_after"]
-    result = {
-        "schema": 1,
-        "metric_type": "single-run monotonic phase wall / target-only callback wall",
-        "origin": "hosted_exact_pack",
-        "endpoint": "main_menu",
-        "target": "net.minecraft.server.Bootstrap",
-        "accept_ns": accept,
-        "bootstrap_entry_ns": entry,
-        "accept_to_entry_ns": entry - accept,
-        "strict_transform_end_ns": strict_end,
-        "accept_to_strict_transform_end_ns": strict_end - accept,
-        "strict_end_to_plugins_after_start_ns": int(plugins_after["start_ns"]) - strict_end,
-        "remaining_transformers": remaining,
-        "remaining_transformer_callback_wall_sum_ns": sum(item["elapsed_ns"] for item in remaining),
-        "plugins_after_ns": int(plugins_after["elapsed_ns"]),
-        "writer_create_ns": int(by_stage["writer_create"]["elapsed_ns"]),
-        "writer_accept_ns": int(by_stage["writer_accept"]["elapsed_ns"]),
-        "writer_to_bytes_ns": int(by_stage["writer_to_bytes"]["elapsed_ns"]),
-        "class_transform_return_ns": class_return,
-        "class_transform_return_to_bootstrap_entry_ns": entry - class_return,
-        "runtime_identity": identity[0],
-    }
-    if result["accept_to_entry_ns"] <= 0 or result["class_transform_return_to_bootstrap_entry_ns"] < 0:
-        raise SystemExit(f"Fork profile monotonic ordering invalid: {result}")
-    return result
+def parse_fork_profile(root: Path, console_log: Path, output: Path) -> dict:
+    parse = subprocess.run([
+        sys.executable,
+        "tools/modlauncher-fork-probe/parse_profile.py",
+        "--console", str(console_log),
+        "--output", str(output),
+    ], cwd=root, check=False)
+    if parse.returncode != 0:
+        raise SystemExit(f"Fork profile schema-v2 parser failed with exit {parse.returncode}")
+    return json.loads(output.read_text(encoding="utf-8"))
 
 
 def main() -> None:
@@ -305,7 +229,8 @@ def main() -> None:
     startup_log = root / "run-pack-benchmark" / "logs" / "bootoptim-startup.log"
     selection_report = root / "resource-selection-check.json"
     selection_reference = root / "resource-selection-reference.txt"
-    for path in (console_log, thread_dump, result_json, selection_report, selection_reference):
+    fork_profile_report = root / "modlauncher-fork-profile.json"
+    for path in (console_log, thread_dump, result_json, selection_report, selection_reference, fork_profile_report):
         path.unlink(missing_ok=True)
 
     fixture_root = os.environ.get("BOOTOPTIM_PACK_DIR", "").strip()
@@ -375,6 +300,12 @@ def main() -> None:
         mixin_failures = ("InvalidInjectionException", "Mixin apply for mod boot_optim failed", "Mixin prepare for mod boot_optim failed")
         if any(pattern in latest_text for pattern in mixin_failures):
             raise SystemExit("BootOptim Mixin failure detected in exact-pack latest.log.")
+        registry_failures = (
+            "Found unused register callbacks",
+            "Failed to wait for future Registry initialization",
+        )
+        if any(pattern in latest_text for pattern in registry_failures):
+            raise SystemExit("FML registry failure detected in exact-pack latest.log.")
 
         with selection_report.open("w", encoding="utf-8") as report:
             resource_check = subprocess.run([
@@ -396,7 +327,7 @@ def main() -> None:
         if fork_requested():
             result = json.loads(result_json.read_text(encoding="utf-8"))
             result["modlauncher_fork_identity"] = fork_identity
-            result["modlauncher_fork_profile"] = parse_fork_profile(console_text)
+            result["modlauncher_fork_profile"] = parse_fork_profile(root, console_log, fork_profile_report)
             result_json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
             print("BOOTOPTIM_ML_FORK_PROFILE " + json.dumps(result["modlauncher_fork_profile"], sort_keys=True), flush=True)
     finally:
