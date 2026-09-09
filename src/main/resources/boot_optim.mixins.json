@@ -6,6 +6,7 @@
   "client": [
     "client.AtlasSetDagMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.FabricModelLoadingPrepareAttributionMixin",
     "client.FancyMenuBrowserElementFirstConsumerMixin",
     "client.FancyMenuMcefBrowserFirstConsumerMixin",
     "client.FancyMenuMcefVideoFirstConsumerMixin",
