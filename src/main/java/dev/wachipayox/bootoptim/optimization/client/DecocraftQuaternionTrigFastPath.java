@@ -52,17 +52,8 @@ public final class DecocraftQuaternionTrigFastPath {
     public static double sin(double input) {
         if (DIAGNOSTICS) TOTAL_CALLS.increment();
         if (!ENABLED) return Math.sin(input);
-        double result = switch (Double.doubleToRawLongBits(input)) {
-            case K_22_5 -> S_22_5;
-            case K_NEG_22_5 -> S_NEG_22_5;
-            case K_45 -> S_45;
-            case K_NEG_45 -> S_NEG_45;
-            case K_90 -> S_90;
-            case K_NEG_90_OR_270 -> S_NEG_90_OR_270;
-            case K_180 -> S_180;
-            case K_NEG_270 -> S_NEG_270;
-            default -> Double.NaN;
-        };
+        long bits = Double.doubleToRawLongBits(input);
+        double result = knownSin(bits);
         if (!Double.isNaN(result)) {
             if (DIAGNOSTICS) FAST_HITS.increment();
             return result;
@@ -73,22 +64,37 @@ public final class DecocraftQuaternionTrigFastPath {
     public static double cos(double input) {
         if (DIAGNOSTICS) TOTAL_CALLS.increment();
         if (!ENABLED) return Math.cos(input);
-        double result = switch (Double.doubleToRawLongBits(input)) {
-            case K_22_5 -> C_22_5;
-            case K_NEG_22_5 -> C_NEG_22_5;
-            case K_45 -> C_45;
-            case K_NEG_45 -> C_NEG_45;
-            case K_90 -> C_90;
-            case K_NEG_90_OR_270 -> C_NEG_90_OR_270;
-            case K_180 -> C_180;
-            case K_NEG_270 -> C_NEG_270;
-            default -> Double.NaN;
-        };
+        long bits = Double.doubleToRawLongBits(input);
+        double result = knownCos(bits);
         if (!Double.isNaN(result)) {
             if (DIAGNOSTICS) FAST_HITS.increment();
             return result;
         }
         return Math.cos(input);
+    }
+
+    private static double knownSin(long bits) {
+        if (bits == K_22_5) return S_22_5;
+        if (bits == K_NEG_22_5) return S_NEG_22_5;
+        if (bits == K_45) return S_45;
+        if (bits == K_NEG_45) return S_NEG_45;
+        if (bits == K_90) return S_90;
+        if (bits == K_NEG_90_OR_270) return S_NEG_90_OR_270;
+        if (bits == K_180) return S_180;
+        if (bits == K_NEG_270) return S_NEG_270;
+        return Double.NaN;
+    }
+
+    private static double knownCos(long bits) {
+        if (bits == K_22_5) return C_22_5;
+        if (bits == K_NEG_22_5) return C_NEG_22_5;
+        if (bits == K_45) return C_45;
+        if (bits == K_NEG_45) return C_NEG_45;
+        if (bits == K_90) return C_90;
+        if (bits == K_NEG_90_OR_270) return C_NEG_90_OR_270;
+        if (bits == K_180) return C_180;
+        if (bits == K_NEG_270) return C_NEG_270;
+        return Double.NaN;
     }
 
     public static void beginModelBake() {
