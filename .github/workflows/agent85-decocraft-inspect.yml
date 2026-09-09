@@ -25,17 +25,30 @@ jobs:
           sha256sum decocraft.jar | tee decocraft.sha256
       - name: Inspect Blockbench classes
         run: |
-          jar tf decocraft.jar | grep '^com/razz/decocraft/models/bbmodel/' | sort | tee bbmodel-classes.txt
-          javap -classpath decocraft.jar -p -c -s -l 'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader$BBGeometry' > bbgeometry.javap.txt
-          javap -classpath decocraft.jar -p -c -s -l 'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader' > loader.javap.txt
-          javap -classpath decocraft.jar -p -c -s -l 'com.razz.decocraft.models.bbmodel.BlockbenchModel' > blockbench-model.javap.txt
-          cat decocraft.sha256 bbmodel-classes.txt bbgeometry.javap.txt loader.javap.txt blockbench-model.javap.txt
+          jar tf decocraft.jar | grep '^com/razz/decocraft/models/bbmodel/' | sort > bbmodel-classes.txt
+          for c in \
+            'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader$BBGeometry' \
+            'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader' \
+            'com.razz.decocraft.models.bbmodel.BBUnbakedModel' \
+            'com.razz.decocraft.models.bbmodel.BlockbenchModel' \
+            'com.razz.decocraft.models.bbmodel.BlockbenchBakery' \
+            'com.razz.decocraft.models.bbmodel.BlockbenchBakery$VertexData' \
+            'com.razz.decocraft.models.bbmodel.BBModel' \
+            'com.razz.decocraft.models.bbmodel.BBModelParts$Element' \
+            'com.razz.decocraft.models.bbmodel.BBModelParts$Face' \
+            'com.razz.decocraft.models.bbmodel.BBModelParts$UVCoordinate' \
+            'com.razz.decocraft.models.bbmodel.BBModelParts$Resolution' \
+            'com.razz.decocraft.models.bbmodel.BBModelParts$Locator' \
+            'com.razz.decocraft.models.bbmodel.BlockbenchLoader$BlockbenchSetting'
+          do
+            safe="$(printf '%s' "$c" | tr '$.' '__')"
+            javap -classpath decocraft.jar -p -c -s -l "$c" > "$safe.javap.txt"
+          done
+          cat decocraft.sha256 bbmodel-classes.txt *.javap.txt
       - uses: actions/upload-artifact@v4
         with:
           name: agent85-decocraft-bytecode
           path: |
             decocraft.sha256
             bbmodel-classes.txt
-            bbgeometry.javap.txt
-            loader.javap.txt
-            blockbench-model.javap.txt
+            *.javap.txt
