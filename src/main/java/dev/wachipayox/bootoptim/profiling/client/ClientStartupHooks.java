@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.profiling.client;
 
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
@@ -27,14 +28,14 @@ public final class ClientStartupHooks {
     }
 
     private static void onScreenOpening(ScreenEvent.Opening event) {
+        PostReloadMenuTrace.markScreenOpening(event.getNewScreen());
+
         if (!(event.getNewScreen() instanceof TitleScreen)) {
             return;
         }
 
         boolean awaitPresented = PostReloadMenuTrace.awaitPresentedEndpoint();
-        if (awaitPresented) {
-            PostReloadMenuTrace.markTitleOpening();
-        } else {
+        if (!awaitPresented) {
             ResourceReloadDagTrace.markMainMenuEndpoint();
         }
 
@@ -47,14 +48,13 @@ public final class ClientStartupHooks {
     }
 
     private static void onScreenInitPost(ScreenEvent.Init.Post event) {
-        if (event.getScreen() instanceof TitleScreen) {
-            PostReloadMenuTrace.markTitleInitPost();
-        }
+        PostReloadMenuTrace.markScreenInitPost(event.getScreen());
     }
 
     private static void onRenderFramePost(RenderFrameEvent.Post event) {
-        if (Minecraft.getInstance().screen instanceof TitleScreen) {
-            PostReloadMenuTrace.markTitleRenderReturn();
+        Screen screen = Minecraft.getInstance().screen;
+        if (screen != null) {
+            PostReloadMenuTrace.markActiveScreenRenderReturn(screen);
         }
     }
 }
