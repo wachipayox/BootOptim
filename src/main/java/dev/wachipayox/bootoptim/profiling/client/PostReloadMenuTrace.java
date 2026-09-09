@@ -8,9 +8,10 @@ import net.minecraft.client.Minecraft;
 /**
  * Coarse diagnostic boundaries from initial reload completion to the first actually presented title frame.
  *
- * <p>Screen lifecycle events are observed on the client/render thread. The presentation token is thread-local:
- * only the same thread that observed a completed {@code TitleScreen} render can consume it after
- * {@code Window.updateDisplay()} returns. No rendering, GLFW call, future or executor is wrapped or rescheduled.</p>
+ * <p>Screen/render/flip lifecycle events are observed on the client/render thread. The presentation token is
+ * thread-local: only the same thread that observed a completed {@code TitleScreen} frame can consume it at
+ * NeoForge's stock {@code FlipFrameEvent}, which is fired after the frame flip. No rendering, GLFW call, future or
+ * executor is wrapped or rescheduled.</p>
  */
 public final class PostReloadMenuTrace {
     private static final String MODE_PROPERTY = "boot_optim.bootTrace.mode";
@@ -46,12 +47,12 @@ public final class PostReloadMenuTrace {
         if (!awaitPresentedEndpoint()) {
             return;
         }
-        recordOnce(TITLE_RENDER_RECORDED, "title_render_return", "ScreenEvent.Render.Post(TitleScreen)");
+        recordOnce(TITLE_RENDER_RECORDED, "title_render_return", "RenderFrameEvent.Post(TitleScreen active)");
         TITLE_RENDERED_ON_THREAD.set(Boolean.TRUE);
     }
 
-    /** Called only from the RETURN injection of stock Window.updateDisplay(). */
-    public static void onWindowPresentReturn() {
+    /** Called from NeoForge's stock FlipFrameEvent after the frame flip. */
+    public static void markPresentedAfterFlip() {
         if (!awaitPresentedEndpoint() || !Boolean.TRUE.equals(TITLE_RENDERED_ON_THREAD.get())) {
             return;
         }
@@ -62,10 +63,10 @@ public final class PostReloadMenuTrace {
 
         RegularBootTraceBridge.record("mod_callback", 0L, 0L, null,
                 PRESENTED_ENDPOINT, -1L, "boot_optim", null, 1L,
-                "first_updateDisplay_return_after_TitleScreen_Render_Post");
+                "first_FlipFrameEvent_after_TitleScreen_RenderFrameEvent_Post");
 
         // Exact-pack benchmark mode normally exits at ScreenEvent.Opening. For this diagnostic endpoint only,
-        // ClientStartupHooks defers that stop until this first-present boundary has returned on the render thread.
+        // ClientStartupHooks defers that stop until the first stock post-flip event on the render thread.
         if (StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
