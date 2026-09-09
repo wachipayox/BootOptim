@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 public final class DecocraftCornerRotationReuse {
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/DecocraftCornerRotation");
     private static final String SUPPORTED_VERSION = "3.0.11";
-    private static final boolean REQUESTED = Boolean.getBoolean("boot_optim.experimentalDecocraftCornerRotationReuse");
+    private static final boolean REQUESTED_V2 = Boolean.getBoolean("boot_optim.experimentalDecocraftCornerRotationReuseV2");
     private static final boolean VERIFY = Boolean.getBoolean("boot_optim.verifyDecocraftCornerRotationReuse");
     private static final boolean PROFILE = Boolean.getBoolean("boot_optim.profileDecocraftCornerRotationReuse");
     private static final int MAX_MISMATCH_EXAMPLES = 8;
@@ -20,6 +20,7 @@ public final class DecocraftCornerRotationReuse {
     private static final LongAdder PREPARE_CALLS = new LongAdder();
     private static final LongAdder REUSE_CANDIDATES = new LongAdder();
     private static final LongAdder REUSE_CALLS = new LongAdder();
+    private static final LongAdder SKIPPED_ROTATION_STAGES = new LongAdder();
     private static final LongAdder ELEMENT_TRANSITIONS = new LongAdder();
     private static final LongAdder CLASSIFICATION_FALLBACKS = new LongAdder();
     private static final LongAdder INPUT_ALIAS_FALLBACKS = new LongAdder();
@@ -34,7 +35,7 @@ public final class DecocraftCornerRotationReuse {
 
     /** True only when the wrapped callsite should do diagnostic/substitution work. */
     public static boolean active() {
-        return (REQUESTED || VERIFY) && supportedRuntime();
+        return (REQUESTED_V2 || VERIFY) && supportedRuntime();
     }
 
     /** Verify takes precedence over substitution so verify-only can never alter final geometry. */
@@ -42,41 +43,19 @@ public final class DecocraftCornerRotationReuse {
         return VERIFY && supportedRuntime();
     }
 
-    public static boolean substituting() {
-        return REQUESTED && !VERIFY && supportedRuntime();
+    public static boolean substitutingV2() {
+        return REQUESTED_V2 && !VERIFY && supportedRuntime();
     }
 
-    public static void redirect() {
-        if (PROFILE) REDIRECT_CALLS.increment();
-    }
-
-    public static void prepared() {
-        if (PROFILE) PREPARE_CALLS.increment();
-    }
-
-    public static void reuseCandidate() {
-        if (PROFILE) REUSE_CANDIDATES.increment();
-    }
-
-    public static void reused() {
-        if (PROFILE) REUSE_CALLS.increment();
-    }
-
-    public static void elementTransition() {
-        if (PROFILE) ELEMENT_TRANSITIONS.increment();
-    }
-
-    public static void classificationFallback() {
-        if (PROFILE) CLASSIFICATION_FALLBACKS.increment();
-    }
-
-    public static void inputAliasFallback() {
-        if (PROFILE) INPUT_ALIAS_FALLBACKS.increment();
-    }
-
-    public static void verificationMatch() {
-        if (PROFILE) VERIFY_MATCHES.increment();
-    }
+    public static void redirect() { if (PROFILE) REDIRECT_CALLS.increment(); }
+    public static void prepared() { if (PROFILE) PREPARE_CALLS.increment(); }
+    public static void reuseCandidate() { if (PROFILE) REUSE_CANDIDATES.increment(); }
+    public static void reused() { if (PROFILE) REUSE_CALLS.increment(); }
+    public static void skippedRotationStage() { if (PROFILE) SKIPPED_ROTATION_STAGES.increment(); }
+    public static void elementTransition() { if (PROFILE) ELEMENT_TRANSITIONS.increment(); }
+    public static void classificationFallback() { if (PROFILE) CLASSIFICATION_FALLBACKS.increment(); }
+    public static void inputAliasFallback() { if (PROFILE) INPUT_ALIAS_FALLBACKS.increment(); }
+    public static void verificationMatch() { if (PROFILE) VERIFY_MATCHES.increment(); }
 
     public static void verificationMismatch(
             int corner,
@@ -97,11 +76,12 @@ public final class DecocraftCornerRotationReuse {
     }
 
     public static void finishModelBake() {
-        if (!PROFILE && !REQUESTED && !VERIFY) return;
+        if (!PROFILE && !REQUESTED_V2 && !VERIFY) return;
         long redirects = REDIRECT_CALLS.sumThenReset();
         long prepares = PREPARE_CALLS.sumThenReset();
         long candidates = REUSE_CANDIDATES.sumThenReset();
         long reuses = REUSE_CALLS.sumThenReset();
+        long skippedStages = SKIPPED_ROTATION_STAGES.sumThenReset();
         long transitions = ELEMENT_TRANSITIONS.sumThenReset();
         long classificationFallbacks = CLASSIFICATION_FALLBACKS.sumThenReset();
         long inputAliasFallbacks = INPUT_ALIAS_FALLBACKS.sumThenReset();
@@ -110,26 +90,16 @@ public final class DecocraftCornerRotationReuse {
         MISMATCH_EXAMPLES.set(0);
 
         LOGGER.info(
-                "BOOTOPTIM_DECOCRAFT_CORNER_ROTATION mode={} reason={} redirect_calls={} prepare_calls={} commit_calls={} reuse_candidates={} reused_calls={} element_transitions={} classification_fallbacks={} input_alias_fallbacks={} verify_matches={} verify_mismatches={} reuse_pct={}",
-                mode(),
-                supportReason,
-                redirects,
-                prepares,
-                redirects,
-                candidates,
-                reuses,
-                transitions,
-                classificationFallbacks,
-                inputAliasFallbacks,
-                verifyMatches,
-                verifyMismatches,
+                "BOOTOPTIM_DECOCRAFT_CORNER_ROTATION mode={} reason={} redirect_calls={} prepare_calls={} commit_calls={} reuse_candidates={} reused_calls={} skipped_rotation_stages={} element_transitions={} classification_fallbacks={} input_alias_fallbacks={} verify_matches={} verify_mismatches={} reuse_pct={}",
+                mode(), supportReason, redirects, prepares, redirects, candidates, reuses, skippedStages,
+                transitions, classificationFallbacks, inputAliasFallbacks, verifyMatches, verifyMismatches,
                 redirects == 0L ? "0.000" : String.format(Locale.ROOT, "%.3f", candidates * 100.0D / redirects));
     }
 
     private static String mode() {
         if (!supportedRuntime()) return "disabled";
         if (VERIFY) return "verify";
-        if (REQUESTED) return "substitute";
+        if (REQUESTED_V2) return "substitute_v2";
         return "disabled";
     }
 

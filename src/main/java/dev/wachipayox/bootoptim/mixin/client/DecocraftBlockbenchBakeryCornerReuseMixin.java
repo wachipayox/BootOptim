@@ -10,12 +10,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Coerce;
 
-/**
- * Decocraft 3.0.11-only experiment. The stock bakeVertex has already selected a cuboid corner
- * when it calls applyElementRotation. A corner's element/group rotation is independent of face,
- * sprite, material and ModelState. Verify mode always executes stock and compares repeated results;
- * substitution mode reuses only a raw-bit-identical input corner after its first exact stock result.
- */
+/** Decocraft 3.0.11-only corner-rotation experiment, version-gated and default-off. */
 @Pseudo
 @Mixin(targets = "com.razz.decocraft.models.bbmodel.BlockbenchBakery", remap = false)
 abstract class DecocraftBlockbenchBakeryCornerReuseMixin {
@@ -23,6 +18,7 @@ abstract class DecocraftBlockbenchBakeryCornerReuseMixin {
     @Unique private int bootoptim$cornerMask;
     @Unique private float[] bootoptim$cornerData;
     @Unique private int[] bootoptim$cornerInputBits;
+    @Unique private boolean bootoptim$skipInternalRotations;
 
     @WrapOperation(
             method = "bakeVertex([Lcom/razz/decocraft/models/bbmodel/BlockbenchBakery$VertexData;ILcom/razz/decocraft/models/bbmodel/BBModelParts$Locator;Lnet/minecraft/core/Direction;Lcom/razz/decocraft/models/bbmodel/BlockbenchLoader$BlockbenchSetting;Lcom/razz/decocraft/models/bbmodel/BBModelParts$UVCoordinate;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Resolution;FFFFFFLnet/minecraft/client/renderer/texture/TextureAtlasSprite;Lorg/joml/Matrix4f;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Element;)V",
@@ -105,15 +101,21 @@ abstract class DecocraftBlockbenchBakeryCornerReuseMixin {
                 DecocraftCornerRotationReuse.verificationMatch();
             } else {
                 DecocraftCornerRotationReuse.verificationMismatch(
-                        corner,
-                        inputX, inputY, inputZ,
-                        cachedX, cachedY, cachedZ,
-                        stockX, stockY, stockZ);
+                        corner, inputX, inputY, inputZ, cachedX, cachedY, cachedZ, stockX, stockY, stockZ);
             }
             return;
         }
 
-        if (DecocraftCornerRotationReuse.substituting()) {
+        if (DecocraftCornerRotationReuse.substitutingV2()) {
+            // Preserve the whole stock applyElementRotation body so its reusableVector/quaternion/matrix
+            // side effects and third-party injections still execute. Only its exact private rotateVertexBy
+            // calls are suppressed; those mutate only the position through a local temporary in 3.0.11.
+            bootoptim$skipInternalRotations = true;
+            try {
+                original.call(bakery, position, element);
+            } finally {
+                bootoptim$skipInternalRotations = false;
+            }
             vector.bootoptim$setX(bootoptim$cornerData[offset]);
             vector.bootoptim$setY(bootoptim$cornerData[offset + 1]);
             vector.bootoptim$setZ(bootoptim$cornerData[offset + 2]);
@@ -121,8 +123,26 @@ abstract class DecocraftBlockbenchBakeryCornerReuseMixin {
             return;
         }
 
-        // Defensive fail-open for any unexpected gate state change.
         original.call(bakery, position, element);
+    }
+
+    @WrapOperation(
+            method = "applyElementRotation",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/razz/decocraft/models/bbmodel/BlockbenchBakery;rotateVertexBy(Lcom/razz/decocraft/models/libgdx/Vector3;Lcom/razz/decocraft/models/libgdx/Vector3;Lcom/razz/decocraft/models/libgdx/Matrix4;)V"),
+            require = 0)
+    private void bootoptim$skipRepeatedPositionMath(
+            @Coerce Object bakery,
+            @Coerce Object position,
+            @Coerce Object origin,
+            @Coerce Object transform,
+            Operation<Void> original) {
+        if (bootoptim$skipInternalRotations) {
+            DecocraftCornerRotationReuse.skippedRotationStage();
+            return;
+        }
+        original.call(bakery, position, origin, transform);
     }
 
     @Unique
