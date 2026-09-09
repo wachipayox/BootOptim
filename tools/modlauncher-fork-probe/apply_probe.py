@@ -17,6 +17,7 @@ PROBE_ID = "agent94-post-accept-v1"
 HELPER = r'''/* Agent 94 diagnostic-only fork probe. */
 package cpw.mods.modlauncher;
 
+import cpw.mods.modlauncher.api.ITransformer;
 import java.util.Arrays;
 
 final class BootOptimForkTrace {
@@ -136,16 +137,16 @@ def main() -> None:
     helper.write_text(HELPER, encoding="utf-8")
 
     build = root / "build.gradle"
-    build.write_text(
-        build.read_text(encoding="utf-8")
-        + f'''\n\n// Agent 94 diagnostic artifact provenance. Does not alter module/class identities.\n"
-        + "tasks.named('jar', Jar).configure {{\n"
-        + "    manifest.attributes(\n"
-        + f"            'BootOptim-Fork-Probe': '{PROBE_ID}',\n"
-        + f"            'BootOptim-Upstream-Commit': '{UPSTREAM_COMMIT}')\n"
-        + "}}\n",
-        encoding="utf-8",
-    )
+    provenance = f"""
+
+// Agent 94 diagnostic artifact provenance. Does not alter module/class identities.
+tasks.named('jar', Jar).configure {{
+    manifest.attributes(
+            'BootOptim-Fork-Probe': '{PROBE_ID}',
+            'BootOptim-Upstream-Commit': '{UPSTREAM_COMMIT}')
+}}
+"""
+    build.write_text(build.read_text(encoding="utf-8") + provenance, encoding="utf-8")
 
     print(f"patched ModLauncher {UPSTREAM_COMMIT} with {PROBE_ID}")
 
