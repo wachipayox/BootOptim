@@ -20,8 +20,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 abstract class FabricModelLoadingPrepareAttributionMixin {
     @Unique private long bootoptim$pluginInitStarted;
 
-    @Inject(method = "<init>", at = @At("HEAD"), remap = false)
-    private void bootoptim$pluginInitHead(CallbackInfo ci) {
+    @Inject(
+            method = "<init>",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/fabricmc/fabric/impl/client/model/loading/ModelLoadingPluginContextImpl;<init>()V",
+                    shift = At.Shift.AFTER),
+            remap = false)
+    private void bootoptim$pluginInitStartAfterContextCreation(CallbackInfo ci) {
         this.bootoptim$pluginInitStarted = ModelBakeryPrepareAttribution.start();
     }
 
