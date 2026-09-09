@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the Agent 94 diagnostic patch to the exact ModLauncher source tree.
-
-This does not inject or replace ModLauncher in a pack. It creates a uniquely marked,
-version-pinned diagnostic fork artifact for later launch-layer replacement tests.
-"""
+"""Apply the Agent 94 diagnostic patch to exact ModLauncher 11.0.5 source."""
 from __future__ import annotations
 
 import argparse
@@ -12,38 +8,61 @@ from pathlib import Path
 
 UPSTREAM_COMMIT = "901c6ea849ae21ee7d464cd97113e77a6101a734"
 CLASS_TRANSFORMER_BLOB = "a0451dff688b78f075d0e79c3fba540361ba3304"
-PROBE_ID = "agent94-post-accept-v1"
+PROBE_ID = "agent94-post-accept-v2"
 
 HELPER = r'''/* Agent 94 diagnostic-only fork probe. */
 package cpw.mods.modlauncher;
 
 import cpw.mods.modlauncher.api.ITransformer;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 final class BootOptimForkTrace {
     private static final boolean ENABLED = Boolean.getBoolean("boot_optim.modlauncherForkTrace");
     private static final String TARGET = "net.minecraft.server.Bootstrap";
+    private static final AtomicBoolean IDENTITY = new AtomicBoolean();
 
     private BootOptimForkTrace() {}
 
     static long begin(String className) {
-        return ENABLED && TARGET.equals(className) ? System.nanoTime() : 0L;
+        if (!ENABLED || !TARGET.equals(className)) return 0L;
+        identity();
+        return System.nanoTime();
+    }
+
+    static void point(String className, String stage) {
+        if (!ENABLED || !TARGET.equals(className)) return;
+        identity();
+        long now = System.nanoTime();
+        System.err.printf("BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 class=%s stage=%s mono_ns=%d thread=%s%n",
+                className, stage, now, Thread.currentThread().getName());
     }
 
     static void end(String className, String stage, long startNanos) {
         if (startNanos == 0L || !TARGET.equals(className)) return;
-        long elapsed = System.nanoTime() - startNanos;
-        System.err.printf("BOOTOPTIM_ML_FORK probe=%s class=%s stage=%s elapsed_ns=%d thread=%s%n",
-                "agent94-post-accept-v1", className, stage, elapsed, Thread.currentThread().getName());
+        long end = System.nanoTime();
+        System.err.printf("BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 class=%s stage=%s start_ns=%d end_ns=%d elapsed_ns=%d thread=%s%n",
+                className, stage, startNanos, end, end - startNanos, Thread.currentThread().getName());
     }
 
     static void transformer(String className, ITransformer<?> transformer, long startNanos) {
         if (startNanos == 0L || !TARGET.equals(className)) return;
         String owner = transformer instanceof TransformerHolder<?> holder ? holder.owner().name() : "unowned";
-        long elapsed = System.nanoTime() - startNanos;
-        System.err.printf("BOOTOPTIM_ML_FORK probe=%s class=%s stage=transformer owner=%s labels=%s elapsed_ns=%d thread=%s%n",
-                "agent94-post-accept-v1", className, owner, Arrays.toString(transformer.labels()), elapsed,
+        long end = System.nanoTime();
+        System.err.printf("BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 class=%s stage=transformer owner=%s labels=%s start_ns=%d end_ns=%d elapsed_ns=%d thread=%s%n",
+                className, owner, Arrays.toString(transformer.labels()), startNanos, end, end - startNanos,
                 Thread.currentThread().getName());
+    }
+
+    private static void identity() {
+        if (!IDENTITY.compareAndSet(false, true)) return;
+        Module module = BootOptimForkTrace.class.getModule();
+        var source = BootOptimForkTrace.class.getProtectionDomain().getCodeSource();
+        String location = source == null ? "none" : String.valueOf(source.getLocation());
+        System.err.printf("BOOTOPTIM_ML_FORK_IDENTITY probe=agent94-post-accept-v2 module=%s named=%s source=%s implementation=%s loader=%s%n",
+                module.getName(), module.isNamed(), location,
+                BootOptimForkTrace.class.getPackage().getImplementationVersion(),
+                String.valueOf(BootOptimForkTrace.class.getClassLoader()));
     }
 }
 '''
@@ -76,6 +95,13 @@ def main() -> None:
         raise SystemExit(f"ClassTransformer blob drift: {blob}; expected {CLASS_TRANSFORMER_BLOB}")
 
     text = target.read_text(encoding="utf-8")
+    text = replace_once(
+        text,
+        "        final String internalName = className.replace('.', '/');",
+        "        BootOptimForkTrace.point(className, \"class_transform_begin\");\n"
+        "        final String internalName = className.replace('.', '/');",
+        "transform begin",
+    )
     text = replace_once(
         text,
         "        final EnumMap<ILaunchPluginService.Phase, List<ILaunchPluginService>> launchPluginTransformerSet = pluginHandler.computeLaunchPluginTransformerSet(classDesc, inputClass.length == 0, reason, this.auditTrail);",
@@ -117,6 +143,7 @@ def main() -> None:
         "        final long bootOptimToBytes = BootOptimForkTrace.begin(className);\n"
         "        final byte[] bootOptimResult = cw.toByteArray();\n"
         "        BootOptimForkTrace.end(className, \"writer_to_bytes\", bootOptimToBytes);\n"
+        "        BootOptimForkTrace.point(className, \"class_transform_return\");\n"
         "        return bootOptimResult;",
         "final toByteArray",
     )
@@ -147,7 +174,6 @@ tasks.named('jar', Jar).configure {{
 }}
 """
     build.write_text(build.read_text(encoding="utf-8") + provenance, encoding="utf-8")
-
     print(f"patched ModLauncher {UPSTREAM_COMMIT} with {PROBE_ID}")
 
 
