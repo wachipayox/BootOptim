@@ -6,7 +6,7 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
-/** Client-only startup probes, installed only while startup profiling is enabled. */
+/** Client-only startup probes for the legacy profiler and structured startup trace. */
 public final class ClientStartupHooks {
     private static boolean installed;
 
@@ -14,7 +14,7 @@ public final class ClientStartupHooks {
     }
 
     public static void install() {
-        if (!StartupProfiler.isEnabled() || installed) {
+        if ((!StartupProfiler.isEnabled() && !ResourceReloadDagTrace.enabled()) || installed) {
             return;
         }
 
@@ -27,7 +27,10 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        ResourceReloadDagTrace.markMainMenuEndpoint();
+        if (StartupProfiler.isEnabled()
+                && StartupProfiler.markMainMenu()
+                && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
     }

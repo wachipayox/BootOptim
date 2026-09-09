@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim;
 
+import dev.wachipayox.bootoptim.profiling.RegularBootTraceBridge;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
 import net.neoforged.api.distmarker.Dist;
@@ -18,8 +19,9 @@ public final class BootOptim {
     public static final String MOD_ID = "boot_optim";
 
     public BootOptim() {
+        RegularBootTraceBridge.recordProbe("regular_mod_entrypoint");
         StartupProfiler.markModEntrypoint();
-        if (StartupProfiler.isEnabled() && FMLEnvironment.dist == Dist.CLIENT) {
+        if (FMLEnvironment.dist == Dist.CLIENT) {
             ClientStartupHooks.install();
         }
     }
