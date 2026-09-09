@@ -57,7 +57,13 @@ jobs:
             libxfixes3 libx11-xcb1 libxshmfence1 libcups2 \
             libatspi2.0-0 libpango-1.0-0 libpangocairo-1.0-0 fonts-liberation
           Xvfb "$DISPLAY" -screen 0 1280x720x24 -nolisten tcp > xvfb.log 2>&1 &
-          glxinfo -B | tee glxinfo.txt
+          ready=0
+          for _ in $(seq 1 20); do
+            if glxinfo -B > glxinfo.txt 2>&1; then ready=1; break; fi
+            sleep 0.25
+          done
+          test "$ready" = 1
+          cat glxinfo.txt
           grep -qi llvmpipe glxinfo.txt
 
       - name: Setup compile JDK 21
