@@ -113,12 +113,32 @@ jobs:
           actual=$(sha256sum "$path" | awk '{print $1}')
           test "$actual" = "$EXACT_PACK_SHA256"
 
-      - name: Restore pinned Linux JCEF
-        uses: actions/cache/restore@v4
+      - name: Restore pinned Linux JCEF cache
+        id: mcef-cache
+        uses: actions/cache@v4
         with:
           path: .mcef-jcef
           key: ${{ env.MCEF_CACHE_KEY }}
-          fail-on-cache-miss: true
+
+      - name: Download and verify pinned Linux JCEF
+        if: steps.mcef-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .mcef-jcef
+          mkdir -p .mcef-jcef
+          base="https://mcef-download.cinemamod.com/java-cef-builds/$MCEF_JAVA_CEF_COMMIT"
+          checksum=.mcef-jcef/${MCEF_PLATFORM}.tar.gz.sha256
+          archive=.mcef-jcef/${MCEF_PLATFORM}.tar.gz
+          curl --fail --location --retry 5 --retry-all-errors "$base/${MCEF_PLATFORM}.tar.gz.sha256" -o "$checksum"
+          curl --fail --location --retry 5 --retry-all-errors "$base/${MCEF_PLATFORM}.tar.gz" -o "$archive"
+          expected=$(tr -d '\r' < "$checksum" | awk 'NR==1 {print $1}')
+          actual=$(sha256sum "$archive" | awk '{print $1}')
+          test -n "$expected"
+          test "$actual" = "$expected"
+          tar -xzf "$archive" -C .mcef-jcef
+          rm -f "$archive"
+          test -f ".mcef-jcef/$MCEF_PLATFORM/jcef_helper"
 
       - name: Stage JCEF and prepare fixture
         shell: bash
