@@ -1,0 +1,42 @@
+name: Agent92 Decocraft math inspect
+
+on:
+  push:
+    branches:
+      - agent92/decocraft-blockbenchbakery-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify pinned Decocraft math bytecode
+        run: |
+          curl --fail --location --retry 3 \
+            'https://cdn.modrinth.com/data/IZJSgKZe/versions/Z8xm2POI/decocraft-3.0.11-1.21.1-neoforge.jar' \
+            --output decocraft.jar
+          echo 'b0589eb7d03b13bbf3b9c45df7f50db556a721882e9ad2bb6be0ff23e5a64526  decocraft.jar' | sha256sum -c -
+          javap -classpath decocraft.jar -p -c -s 'com.razz.decocraft.models.libgdx.Quaternion' > quaternion.javap
+          javap -classpath decocraft.jar -p -c -s 'com.razz.decocraft.models.libgdx.Matrix4' > matrix4.javap
+          javap -classpath decocraft.jar -p -c -s 'com.razz.decocraft.models.bbmodel.BlockbenchBakery' > bakery.javap
+          grep -Fq 'public com.razz.decocraft.models.libgdx.Quaternion set(com.razz.decocraft.models.libgdx.Vector3, float);' quaternion.javap
+          grep -Fq 'public com.razz.decocraft.models.libgdx.Quaternion setFromAxisRad(float, float, float, float);' quaternion.javap
+          test "$(grep -Fc 'java/lang/Math.sin:(D)D' quaternion.javap)" -ge 1
+          test "$(grep -Fc 'java/lang/Math.cos:(D)D' quaternion.javap)" -ge 1
+          awk '/setFromAxisRad\(float, float, float, float\)/,/^  public /' quaternion.javap | head -n -1
+          echo '--- applyElementRotation ---'
+          awk '/applyElementRotation\(/,/^  private /' bakery.javap | head -n -1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent92-decocraft-math-bytecode
+          path: |
+            quaternion.javap
+            matrix4.javap
+            bakery.javap
