@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "campaign_id": "lifecycle-loader-create-connector-factorial-v1",
+  "status": "factorial_matrix_no_go",
+  "hosted_run": {
+    "run_id": 34293964626,
+    "head_sha": "cf67dbcc86eb9bc9171828b1b004385c4dd9bb28",
+    "origin": "hosted_exact_pack_fresh_vm",
+    "start_marker": "process_origin",
+    "endpoint": "main_menu"
+  },
+  "contract": {
+    "planner_pr": 199,
+    "planner_head_sha": "ee79a4ebdcb4b83ba1635cb85fcd22ef871e1bd4",
+    "planner_schema": 1,
+    "campaign_fingerprint_sha256": "1d528c0ed4c6d585fd4cd023b7b0f1b7f78e5d41ce04d826949d47816edf717d",
+    "fixture_asset_sha256": "7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639",
+    "source_mod_fingerprint": "6e9b250390ee2cbeb5e4f0ad3363d5159a51481dbfe1412f815882fc5d4ab990",
+    "metric": "mod_entrypoint_ms",
+    "ttmm_causal_use": false
+  },
+  "validation": {
+    "cells": 12,
+    "all_reached_main_menu": true,
+    "all_resource_contract_valid": true,
+    "all_diagnostic_only_false": true,
+    "all_bootoptim_mixin_errors_zero": true,
+    "all_missing_dependencies_empty": true,
+    "all_source_fingerprints_match": true,
+    "resource_selection_identical": true,
+    "fresh_vm_alias_selections_identical_within_cell": true
+  },
+  "cells": {
+    "full_like_control": {
+      "selected_artifacts": 155,
+      "selected_mod_ids": 224,
+      "selected_artifacts_sha256": "e5d437e5bdb758d3646cf21f148965a3b89a7dc8ddc36c40b9a0a11b118ba056",
+      "selected_mod_ids_sha256": "6e6bc05df2bab0b9f0bfe402b7d409ca96578ae4a0f21115b854ea12b57c8809",
+      "mod_entrypoint_ms": [31591, 29910, 21005],
+      "median_ms": 29910,
+      "range_ms": 10586
+    },
+    "remove_a_create": {
+      "selected_artifacts": 110,
+      "selected_mod_ids": 171,
+      "selected_artifacts_sha256": "288b55eb29381120e9f42b25647e3759af6fa7b4ac647be506ba0f2955386811",
+      "selected_mod_ids_sha256": "20f2ebab3aeb700e02e0693960b2bf8ac6c3ca7720dd1e9c9c790385090f7680",
+      "mod_entrypoint_ms": [25445, 25393, 26740],
+      "median_ms": 25445,
+      "range_ms": 1347
+    },
+    "remove_b_connector_fabric": {
+      "selected_artifacts": 93,
+      "selected_mod_ids": 100,
+      "selected_artifacts_sha256": "c46cade0ebba4691fff5c1884ad28865126f69676874b968cdc2e5f5d94c55d0",
+      "selected_mod_ids_sha256": "182897535ee1a2cd897b52a7a94654dc134b72c283fe710472bf2bd89f6c5504",
+      "mod_entrypoint_ms": [18468, 18519, 19228],
+      "median_ms": 18519,
+      "range_ms": 760
+    },
+    "remove_ab": {
+      "selected_artifacts": 94,
+      "selected_mod_ids": 101,
+      "selected_artifacts_sha256": "89a92ebf28bbc005ada19d34278141104c4aeb5f204c3aa9f027ce7ac5aa295a",
+      "selected_mod_ids_sha256": "0e8b486a770e9efa388f27506295d5d2f4cef76ab84ece83e04244751382e3d9",
+      "mod_entrypoint_ms": [18974, 18397, 18861],
+      "median_ms": 18861,
+      "range_ms": 577
+    }
+  },
+  "factorial_structure": {
+    "admissible": false,
+    "remove_a_removed_artifacts": 45,
+    "remove_b_removed_artifacts": 62,
+    "remove_a_is_subset_of_remove_b": true,
+    "remove_ab_readds_artifacts": [
+      "CreateFood -20- {v2.5.0} [1.21.1] [SYNC].jar"
+    ],
+    "nominal_interaction_ms": 4807,
+    "nominal_interaction_is_interpretable": false,
+    "control_fresh_vm_range_ms": 10586
+  },
+  "decision": {
+    "pair": "close_create_x_connector_fabric_factorial_no_go",
+    "next_family": "connector_forgified_fabric_dependent_closure_composite",
+    "next_method": "in_situ_full_pack_pre_reload_source_trace",
+    "production_promotion": false,
+    "laptop_gate": false
+  }
+}
