@@ -5,6 +5,7 @@ import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -65,10 +66,14 @@ public final class EarlyStartupProbeService implements ITransformationService {
     @Override
     public List<? extends ITransformer<?>> transformers() {
         // Agent 94 diagnostic only. Off/default remains exactly the integration behavior: no transformers.
+        List<ITransformer<?>> diagnostics = new ArrayList<>(2);
         if (Boolean.getBoolean("boot_optim.modlauncherForkTrace")) {
-            return List.of(new MinecraftBootstrapForkProfileTransformer());
+            diagnostics.add(new MinecraftBootstrapForkProfileTransformer());
         }
-        return List.of();
+        if (Boolean.getBoolean("boot_optim.mixinLifecycleTrace")) {
+            diagnostics.add(new MinecraftMainLifecycleTransformer());
+        }
+        return diagnostics.isEmpty() ? List.of() : List.copyOf(diagnostics);
     }
 
     private static void mark(String phase) {
