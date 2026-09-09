@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.atomic.LongAdder;
 import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,10 +55,14 @@ public final class DecocraftBakedQuadEquivalenceProbe {
                 count++;
                 long quadHash = 0xcbf29ce484222325L;
                 int[] vertices = quad.getVertices();
+                TextureAtlasSprite sprite = quad.getSprite();
                 for (int i = 0; i < vertices.length; i++) {
                     int vertex = vertices[i];
                     int lane = i & 7;
-                    quadHash = mix(quadHash, vertex);
+                    long logicalValue = logicalVertexValue(lane, vertex, sprite);
+                    quadHash = mix(quadHash, logicalValue);
+
+                    // Keep raw atlas-space lanes separately to diagnose per-process atlas placement.
                     laneXor[lane] ^= Integer.toUnsignedLong(vertex);
                     laneSum[lane] += Integer.toUnsignedLong(vertex);
                     if (lane == 0 || lane == 1 || lane == 2 || lane == 4 || lane == 5) {
@@ -69,7 +74,7 @@ public final class DecocraftBakedQuadEquivalenceProbe {
                 metadata = mix(metadata, quad.getTintIndex());
                 metadata = mix(metadata, quad.getDirection().ordinal());
                 metadata = mix(metadata, quad.isShade() ? 1 : 0);
-                metadata = mix(metadata, quad.getSprite().contents().name().hashCode());
+                metadata = mix(metadata, sprite.contents().name().hashCode());
                 quadHash = mix(quadHash, metadata);
                 modelQuadXor ^= quadHash;
                 modelQuadSum += quadHash;
@@ -118,7 +123,7 @@ public final class DecocraftBakedQuadEquivalenceProbe {
         long metaSum = META_SUM.getAndSet(0L);
         if (models == 0L) return;
         LOGGER.info(
-                "BOOTOPTIM_DECOCRAFT_QUAD_EQUIVALENCE models={} quads={} model_xor={} model_sum={} quad_xor={} quad_sum={} meta_xor={} meta_sum={}",
+                "BOOTOPTIM_DECOCRAFT_QUAD_EQUIVALENCE uv_space=sprite_local_q1e6 models={} quads={} model_xor={} model_sum={} quad_xor={} quad_sum={} meta_xor={} meta_sum={}",
                 models, quads,
                 hex(modelXor), hex(modelSum), hex(quadXor), hex(quadSum), hex(metaXor), hex(metaSum));
         for (int lane = 0; lane < 8; lane++) {
@@ -126,9 +131,22 @@ public final class DecocraftBakedQuadEquivalenceProbe {
             long sum = LANE_SUM.getAndSet(lane, 0L);
             long quantized = LANE_QUANTIZED_SUM.getAndSet(lane, 0L);
             LOGGER.info(
-                    "BOOTOPTIM_DECOCRAFT_QUAD_LANE lane={} raw_xor={} raw_sum={} quantized_sum={}",
+                    "BOOTOPTIM_DECOCRAFT_QUAD_LANE lane={} raw_xor={} raw_sum={} raw_quantized_sum={}",
                     lane, hex(xor), hex(sum), quantized);
         }
+    }
+
+    private static long logicalVertexValue(int lane, int raw, TextureAtlasSprite sprite) {
+        if (lane != 4 && lane != 5) return Integer.toUnsignedLong(raw);
+        float atlas = Float.intBitsToFloat(raw);
+        float origin = lane == 4 ? sprite.getU0() : sprite.getV0();
+        float end = lane == 4 ? sprite.getU1() : sprite.getV1();
+        float span = end - origin;
+        if (!Float.isFinite(atlas) || !Float.isFinite(origin) || !Float.isFinite(span) || span == 0.0F) {
+            return Integer.toUnsignedLong(raw);
+        }
+        float local = (atlas - origin) / span;
+        return Math.round(local * 1_000_000.0F);
     }
 
     private static String hex(long value) {
