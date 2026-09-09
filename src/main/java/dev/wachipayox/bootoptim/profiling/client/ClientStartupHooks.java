@@ -14,12 +14,15 @@ public final class ClientStartupHooks {
     }
 
     public static void install() {
-        if ((!StartupProfiler.isEnabled() && !ResourceReloadDagTrace.enabled()) || installed) {
+        if ((!StartupProfiler.isEnabled() && !ResourceReloadDagTrace.enabled()
+                && !PostReloadMenuTrace.awaitPresentedEndpoint()) || installed) {
             return;
         }
 
         installed = true;
         NeoForge.EVENT_BUS.addListener(ClientStartupHooks::onScreenOpening);
+        NeoForge.EVENT_BUS.addListener(ClientStartupHooks::onScreenInitPost);
+        NeoForge.EVENT_BUS.addListener(ClientStartupHooks::onScreenRenderPost);
     }
 
     private static void onScreenOpening(ScreenEvent.Opening event) {
@@ -27,11 +30,30 @@ public final class ClientStartupHooks {
             return;
         }
 
-        ResourceReloadDagTrace.markMainMenuEndpoint();
+        boolean awaitPresented = PostReloadMenuTrace.awaitPresentedEndpoint();
+        if (awaitPresented) {
+            PostReloadMenuTrace.markTitleOpening();
+        } else {
+            ResourceReloadDagTrace.markMainMenuEndpoint();
+        }
+
         if (StartupProfiler.isEnabled()
                 && StartupProfiler.markMainMenu()
-                && StartupProfiler.shouldExitOnTitle()) {
+                && StartupProfiler.shouldExitOnTitle()
+                && !awaitPresented) {
             Minecraft.getInstance().stop();
+        }
+    }
+
+    private static void onScreenInitPost(ScreenEvent.Init.Post event) {
+        if (event.getScreen() instanceof TitleScreen) {
+            PostReloadMenuTrace.markTitleInitPost();
+        }
+    }
+
+    private static void onScreenRenderPost(ScreenEvent.Render.Post event) {
+        if (event.getScreen() instanceof TitleScreen) {
+            PostReloadMenuTrace.markTitleRenderReturn();
         }
     }
 }
