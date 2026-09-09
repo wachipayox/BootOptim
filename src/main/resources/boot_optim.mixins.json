@@ -13,6 +13,7 @@
     "client.ModelBakeryDecocraftReuseMixin",
     "client.DecocraftBBGeometryPreparedMixin",
     "client.DecocraftBlockbenchPreparedMixin",
+    "client.DecocraftBlockbenchEquivalenceMixin",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
