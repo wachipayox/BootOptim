@@ -15,7 +15,7 @@
       "create=com/simibubi/create/"
     ]
   },
-  "contract_fingerprint_sha256": "dc02c082909b34d7be9eea40a42ff30f0d6a9b1b9c86d059610aac6fd009c463",
+  "contract_fingerprint_sha256": "1d528c0ed4c6d585fd4cd023b7b0f1b7f78e5d41ce04d826949d47816edf717d",
   "families": {
     "A": {
       "complement_roots": [
@@ -53,6 +53,7 @@
     "source_pr": 199
   },
   "resource_contract": {
+    "control_semantics": "All four cells exclude hosted-incompatible analogaudio; control is therefore a full-like complement, not planner full.",
     "excluded_causal_domains": [
       "ModelBakery",
       "ModelManager/model bake",
@@ -68,9 +69,25 @@
   },
   "schema": 1,
   "variants": {
-    "full": "full",
-    "remove_a": "complement-group-create",
-    "remove_ab": "complement-group-create-connector-fabric",
-    "remove_b": "complement-group-connector-fabric"
+    "full": [
+      "complement-group-control-r1",
+      "complement-group-control-r2",
+      "complement-group-control-r3"
+    ],
+    "remove_a": [
+      "complement-group-create-r1",
+      "complement-group-create-r2",
+      "complement-group-create-r3"
+    ],
+    "remove_ab": [
+      "complement-group-create-connector-fabric-r1",
+      "complement-group-create-connector-fabric-r2",
+      "complement-group-create-connector-fabric-r3"
+    ],
+    "remove_b": [
+      "complement-group-connector-fabric-r1",
+      "complement-group-connector-fabric-r2",
+      "complement-group-connector-fabric-r3"
+    ]
   }
 }
