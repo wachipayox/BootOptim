@@ -27,6 +27,23 @@ sourceSets.main.resources {
 }
 
 repositories {
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Modrinth'
+                url = 'https://api.modrinth.com/maven'
+            }
+        }
+        filter {
+            includeGroup 'maven.modrinth'
+        }
+    }
+}
+
+dependencies {
+    // Compile-only exact Decocraft ABI for the default-off 3.0.11 experiment. The artifact is never
+    // bundled or made a runtime dependency; optional application remains controlled by @Pseudo mixins.
+    compileOnly 'maven.modrinth:IZJSgKZe:Z8xm2POI'
 }
 
 var packBenchmarkDirectory = project.file('run-pack-benchmark')
@@ -144,7 +161,6 @@ neoForge {
 
         gameTestServer {
             type = 'gameTestServer'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         data {
