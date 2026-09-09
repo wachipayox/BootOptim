@@ -14,6 +14,7 @@
     "client.DecocraftBBGeometryPreparedMixin",
     "client.DecocraftBlockbenchPreparedMixin",
     "client.DecocraftBlockbenchEquivalenceMixin",
+    "client.DecocraftPreparedGeometryBindingsMixin",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
