@@ -101,7 +101,10 @@ def jar_paths_from_vmargs(text: str) -> list[Path]:
 
 
 def verify_fork_module_path(root: Path) -> dict:
-    candidates = sorted((root / "build").rglob("*packBenchmarkClient*runVmArgs.txt"))
+    candidates = sorted(
+        path for path in (root / "build").rglob("*VmArgs.txt")
+        if "packbenchmarkclient" in path.name.lower()
+    )
     if len(candidates) != 1:
         raise SystemExit(f"Expected one packBenchmarkClient VM args file, found {len(candidates)}: {candidates}")
     vmargs = candidates[0]
