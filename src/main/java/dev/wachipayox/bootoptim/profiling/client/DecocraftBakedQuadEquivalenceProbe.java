@@ -41,7 +41,7 @@ public final class DecocraftBakedQuadEquivalenceProbe {
                 hash = mix(hash, quad.getTintIndex());
                 hash = mix(hash, quad.getDirection().ordinal());
                 hash = mix(hash, quad.isShade() ? 1 : 0);
-                hash = mix(hash, String.valueOf(quad.getSprite()).hashCode());
+                hash = mix(hash, quad.getSprite().contents().name().hashCode());
             }
             MODELS.increment();
             QUADS.add(count);
