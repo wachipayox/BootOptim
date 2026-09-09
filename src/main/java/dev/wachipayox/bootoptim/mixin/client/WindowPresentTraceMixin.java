@@ -1,7 +1,7 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import com.mojang.blaze3d.platform.Window;
-import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
+import dev.wachipayox.bootoptim.profiling.client.PostReloadMenuTrace;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -17,6 +17,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class WindowPresentTraceMixin {
     @Inject(method = "updateDisplay", at = @At("RETURN"), require = 0)
     private void bootoptim$afterUpdateDisplay(CallbackInfo ci) {
-        ClientStartupHooks.onWindowPresentReturn();
+        PostReloadMenuTrace.onWindowPresentReturn();
     }
 }
