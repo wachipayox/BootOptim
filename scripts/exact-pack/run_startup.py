@@ -158,7 +158,7 @@ def verify_fork_resolution(root: Path) -> dict:
         )
     if not any(record.get("component") == "cpw.mods:modlauncher:11.0.5" for record in ml_records):
         raise SystemExit(f"Fork identity gate: ModLauncher core has unexpected component provenance: {ml_records}")
-    if not any(record.get("component") == "cpw.mods:securejarhandler:3.0.4" for record in sjh_records):
+    if not any(record.get("component") == "cpw.mods:securejarhandler:3.0.8" for record in sjh_records):
         raise SystemExit(f"Fork identity gate: SecureJarHandler core has unexpected component provenance: {sjh_records}")
 
     with zipfile.ZipFile(modlauncher) as archive:
