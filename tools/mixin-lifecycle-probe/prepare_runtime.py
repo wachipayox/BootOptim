@@ -27,6 +27,22 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def manifest_attributes(raw: bytes) -> dict[str, str]:
+    text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+    unfolded: list[str] = []
+    for line in text.splitlines():
+        if line.startswith(" ") and unfolded:
+            unfolded[-1] += line[1:]
+        else:
+            unfolded.append(line)
+    attrs: dict[str, str] = {}
+    for line in unfolded:
+        if ": " in line:
+            key, value = line.split(": ", 1)
+            attrs[key] = value
+    return attrs
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True, type=Path)
@@ -69,10 +85,10 @@ def main() -> None:
             names = set(archive.namelist())
             if "org/spongepowered/asm/mixin/transformer/MixinProcessor.class" not in names:
                 raise SystemExit("diagnostic Mixin JAR missing MixinProcessor.class")
-            manifest = archive.read("META-INF/MANIFEST.MF").decode("utf-8", errors="replace").replace("\r", "")
-            if f"BootOptim-Mixin-Probe: {PROBE}\n" not in manifest:
+            attrs = manifest_attributes(archive.read("META-INF/MANIFEST.MF"))
+            if attrs.get("BootOptim-Mixin-Probe") != PROBE:
                 raise SystemExit("diagnostic Mixin JAR missing BootOptim-Mixin-Probe manifest marker")
-            if f"BootOptim-Mixin-Upstream-Commit: {UPSTREAM_COMMIT}\n" not in manifest:
+            if attrs.get("BootOptim-Mixin-Upstream-Commit") != UPSTREAM_COMMIT:
                 raise SystemExit("diagnostic Mixin JAR missing upstream commit marker")
 
         target = output / GAV_PATH
