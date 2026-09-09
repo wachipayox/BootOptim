@@ -1,55 +1,53 @@
 import groovy.json.JsonOutput
 
-// Agent 94 diagnostic-only Gradle init script. It does not mutate dependency resolution.
-// Resolve and serialize the launch inputs during configuration, before the registered marker task
-// executes. Resolving them from doLast is invalid with Gradle's configuration cache because runtime
-// dependency realization can create tasks and touch Project state at task execution time.
+// Agent 94 diagnostic-only Gradle init script. It does not mutate dependency resolution;
+// it records the concrete files from the configurations that feed the ModDev launch.
 gradle.projectsEvaluated {
     def root = gradle.rootProject
-    def outputProperty = root.findProperty('agent94LaunchResolutionOutput')
-    if (outputProperty == null || outputProperty.toString().isBlank()) {
-        throw new GradleException('Set -Pagent94LaunchResolutionOutput=/absolute/path.json')
-    }
+    root.tasks.register('agent94WriteLaunchResolution') {
+        doLast {
+            def outputProperty = root.findProperty('agent94LaunchResolutionOutput')
+            if (outputProperty == null || outputProperty.toString().isBlank()) {
+                throw new GradleException('Set -Pagent94LaunchResolutionOutput=/absolute/path.json')
+            }
 
-    def names = [
-            'packBenchmarkClientModulesOnly',
-            'runtimeClasspath',
-            'devLaunchConfig',
-            'packBenchmarkClientLegacyClasspath'
-    ]
-    def configurations = []
-    names.each { name ->
-        def configuration = root.configurations.findByName(name)
-        if (configuration == null) {
-            configurations << [name: name, present: false, can_be_resolved: false, artifacts: []]
-            return
-        }
-        if (!configuration.canBeResolved) {
-            configurations << [name: name, present: true, can_be_resolved: false, artifacts: []]
-            return
-        }
-
-        def artifacts = configuration.incoming.artifacts.artifacts.collect { artifact ->
-            [
-                    component: artifact.id.componentIdentifier.displayName,
-                    file: artifact.file.absolutePath,
-                    artifact: artifact.id.displayName
+            def names = [
+                    'packBenchmarkClientModulesOnly',
+                    'runtimeClasspath',
+                    'devLaunchConfig',
+                    'packBenchmarkClientLegacyClasspath'
             ]
-        }.sort { a, b -> a.file <=> b.file }
-        configurations << [name: name, present: true, can_be_resolved: true, artifacts: artifacts]
+            def configurations = []
+            names.each { name ->
+                def configuration = root.configurations.findByName(name)
+                if (configuration == null) {
+                    configurations << [name: name, present: false, can_be_resolved: false, artifacts: []]
+                    return
+                }
+                if (!configuration.canBeResolved) {
+                    configurations << [name: name, present: true, can_be_resolved: false, artifacts: []]
+                    return
+                }
+
+                def artifacts = configuration.incoming.artifacts.artifacts.collect { artifact ->
+                    [
+                            component: artifact.id.componentIdentifier.displayName,
+                            file: artifact.file.absolutePath,
+                            artifact: artifact.id.displayName
+                    ]
+                }.sort { a, b -> a.file <=> b.file }
+                configurations << [name: name, present: true, can_be_resolved: true, artifacts: artifacts]
+            }
+
+            def payload = [
+                    schema: 1,
+                    project: root.path,
+                    configurations: configurations
+            ]
+            def output = root.file(outputProperty.toString())
+            output.parentFile.mkdirs()
+            output.setText(JsonOutput.prettyPrint(JsonOutput.toJson(payload)) + '\n', 'UTF-8')
+            println('BOOTOPTIM_ML_FORK_RESOLUTION ' + JsonOutput.toJson(payload))
+        }
     }
-
-    def payload = [
-            schema: 1,
-            project: root.path,
-            configurations: configurations
-    ]
-    def output = root.file(outputProperty.toString())
-    output.parentFile.mkdirs()
-    output.setText(JsonOutput.prettyPrint(JsonOutput.toJson(payload)) + '\n', 'UTF-8')
-    println('BOOTOPTIM_ML_FORK_RESOLUTION ' + JsonOutput.toJson(payload))
-
-    // The requested task is intentionally side-effect free; its only purpose is to give the harness
-    // a stable Gradle invocation target after the configuration-phase report has been written.
-    root.tasks.register('agent94WriteLaunchResolution')
 }
