@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.optimization.client.DirectGeneratedItemBaker;
+import dev.wachipayox.bootoptim.profiling.client.ModelBakeryAttributionProfiler;
 import java.util.function.Function;
 import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -41,6 +42,9 @@ abstract class ModelBakerImplGeneratedItemDirectMixin {
                 modelState,
                 false);
         if (result != null) {
+            // This cancellable HEAD path returns before a separate @At("RETURN") observer can fire.
+            // Close only the opt-in attribution frame; the profiler is a no-op when disabled.
+            ModelBakeryAttributionProfiler.endUncached(model);
             cir.setReturnValue(result);
         }
     }
