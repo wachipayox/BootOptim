@@ -8,50 +8,156 @@ from pathlib import Path
 
 UPSTREAM_COMMIT = "901c6ea849ae21ee7d464cd97113e77a6101a734"
 CLASS_TRANSFORMER_BLOB = "a0451dff688b78f075d0e79c3fba540361ba3304"
+TRANSFORMING_CLASSLOADER_BLOB = "89343a57fdc88a4c1cfea7b33e9962d081662257"
 PROBE_ID = "agent94-post-accept-v2"
 
 HELPER = r'''/* Agent 94 diagnostic-only fork probe. */
 package cpw.mods.modlauncher;
 
 import cpw.mods.modlauncher.api.ITransformer;
+import java.security.CodeSource;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 final class BootOptimForkTrace {
     private static final boolean ENABLED = Boolean.getBoolean("boot_optim.modlauncherForkTrace");
     private static final String TARGET = "net.minecraft.server.Bootstrap";
     private static final AtomicBoolean IDENTITY = new AtomicBoolean();
+    private static final AtomicLong REQUEST_IDS = new AtomicLong();
+    private static final ThreadLocal<ArrayDeque<Long>> REQUEST_STACK = ThreadLocal.withInitial(ArrayDeque::new);
+    private static final StackWalker WALKER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 
     private BootOptimForkTrace() {}
 
+    static boolean enabledFor(String className) {
+        return ENABLED && TARGET.equals(className);
+    }
+
+    static long requestBegin(String className, String rawContext, String effectiveReason,
+                             TransformingClassLoader loader, String targetModule) {
+        if (!enabledFor(className)) return 0L;
+        identity();
+        final long id = REQUEST_IDS.incrementAndGet();
+        try {
+            final List<StackWalker.StackFrame> frames = WALKER.walk(stream -> stream.limit(16).toList());
+            String origin = "other";
+            for (var frame : frames) {
+                if (frame.getClassName().equals("cpw.mods.cl.ModuleClassLoader")) {
+                    if (frame.getMethodName().equals("readerToClass")) {
+                        origin = "securejar_reader_to_class";
+                        break;
+                    }
+                    if (frame.getMethodName().equals("getMaybeTransformedClassBytes")) {
+                        origin = "securejar_get_maybe_transformed_bytes";
+                    }
+                }
+            }
+            StackWalker.StackFrame caller = frames.stream()
+                    .filter(frame -> !isInfrastructure(frame.getClassName()))
+                    .findFirst().orElse(null);
+            String callerName = caller == null ? "none" : caller.getClassName() + "#" + caller.getMethodName();
+            String callerModule = caller == null ? "none" : moduleName(caller.getDeclaringClass().getModule());
+            String callerSource = caller == null ? "none" : codeSource(caller.getDeclaringClass());
+            String stack = String.join(">", frames.stream()
+                    .map(frame -> frame.getClassName() + "#" + frame.getMethodName())
+                    .toList());
+            ClassLoader parent = loader.getParent();
+            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+            REQUEST_STACK.get().push(id);
+            System.err.printf(
+                    "BOOTOPTIM_ML_FORK_REQUEST probe=agent94-post-accept-v2 request_id=%d class=%s origin=%s raw_context=%s effective_reason=%s thread=%s loader_class=%s loader_name=%s loader_id=%d loader_module=%s loader_source=%s parent_class=%s parent_name=%s parent_id=%d target_module=%s tccl_class=%s tccl_name=%s tccl_id=%d caller=%s caller_module=%s caller_source=%s stack=%s%n",
+                    id, className, safe(origin), safe(rawContext), safe(effectiveReason), safe(Thread.currentThread().getName()),
+                    safe(loader.getClass().getName()), safe(loader.getName()), System.identityHashCode(loader),
+                    safe(moduleName(loader.getClass().getModule())), safe(codeSource(loader.getClass())),
+                    safe(parent == null ? "none" : parent.getClass().getName()), safe(parent == null ? "none" : parent.getName()),
+                    parent == null ? 0 : System.identityHashCode(parent), safe(targetModule),
+                    safe(tccl == null ? "none" : tccl.getClass().getName()), safe(tccl == null ? "none" : tccl.getName()),
+                    tccl == null ? 0 : System.identityHashCode(tccl), safe(callerName), safe(callerModule), safe(callerSource), safe(stack));
+            return id;
+        } catch (Throwable throwable) {
+            System.err.printf("BOOTOPTIM_ML_FORK_REQUEST_ERROR probe=agent94-post-accept-v2 request_id=%d class=%s error=%s%n",
+                    id, className, safe(throwable.getClass().getName()));
+            return 0L;
+        }
+    }
+
+    static void requestEnd(String className, long requestId) {
+        if (requestId == 0L || !TARGET.equals(className)) return;
+        try {
+            ArrayDeque<Long> stack = REQUEST_STACK.get();
+            long current = stack.isEmpty() ? 0L : stack.pop();
+            System.err.printf("BOOTOPTIM_ML_FORK_REQUEST_END probe=agent94-post-accept-v2 request_id=%d observed_id=%d class=%s mono_ns=%d thread=%s%n",
+                    requestId, current, className, System.nanoTime(), safe(Thread.currentThread().getName()));
+            if (stack.isEmpty()) REQUEST_STACK.remove();
+        } catch (Throwable throwable) {
+            System.err.printf("BOOTOPTIM_ML_FORK_REQUEST_ERROR probe=agent94-post-accept-v2 request_id=%d class=%s error=%s%n",
+                    requestId, className, safe(throwable.getClass().getName()));
+        }
+    }
+
     static long begin(String className) {
-        if (!ENABLED || !TARGET.equals(className)) return 0L;
+        if (!enabledFor(className)) return 0L;
         identity();
         return System.nanoTime();
     }
 
     static void point(String className, String stage) {
-        if (!ENABLED || !TARGET.equals(className)) return;
+        if (!enabledFor(className)) return;
         identity();
         long now = System.nanoTime();
-        System.err.printf("BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 class=%s stage=%s mono_ns=%d thread=%s%n",
-                className, stage, now, Thread.currentThread().getName());
+        System.err.printf("BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 request_id=%d class=%s stage=%s mono_ns=%d thread=%s%n",
+                currentRequestId(), className, stage, now, safe(Thread.currentThread().getName()));
     }
 
     static void end(String className, String stage, long startNanos) {
         if (startNanos == 0L || !TARGET.equals(className)) return;
         long end = System.nanoTime();
-        System.err.printf("BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 class=%s stage=%s start_ns=%d end_ns=%d elapsed_ns=%d thread=%s%n",
-                className, stage, startNanos, end, end - startNanos, Thread.currentThread().getName());
+        System.err.printf("BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 request_id=%d class=%s stage=%s start_ns=%d end_ns=%d elapsed_ns=%d thread=%s%n",
+                currentRequestId(), className, stage, startNanos, end, end - startNanos, safe(Thread.currentThread().getName()));
     }
 
     static void transformer(String className, ITransformer<?> transformer, long startNanos) {
         if (startNanos == 0L || !TARGET.equals(className)) return;
         String owner = transformer instanceof TransformerHolder<?> holder ? holder.owner().name() : "unowned";
         long end = System.nanoTime();
-        System.err.printf("BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 class=%s stage=transformer owner=%s labels=%s start_ns=%d end_ns=%d elapsed_ns=%d thread=%s%n",
-                className, owner, Arrays.toString(transformer.labels()), startNanos, end, end - startNanos,
-                Thread.currentThread().getName());
+        System.err.printf("BOOTOPTIM_ML_FORK probe=agent94-post-accept-v2 request_id=%d class=%s stage=transformer owner=%s labels=%s start_ns=%d end_ns=%d elapsed_ns=%d thread=%s%n",
+                currentRequestId(), className, safe(owner), Arrays.toString(transformer.labels()), startNanos, end, end - startNanos,
+                safe(Thread.currentThread().getName()));
+    }
+
+    private static long currentRequestId() {
+        ArrayDeque<Long> stack = REQUEST_STACK.get();
+        return stack.isEmpty() ? 0L : stack.peek();
+    }
+
+    private static boolean isInfrastructure(String className) {
+        return className.startsWith("cpw.mods.modlauncher.")
+                || className.startsWith("cpw.mods.cl.")
+                || className.startsWith("java.")
+                || className.startsWith("jdk.");
+    }
+
+    private static String moduleName(Module module) {
+        String name = module == null ? null : module.getName();
+        return name == null ? "unnamed" : name;
+    }
+
+    private static String codeSource(Class<?> type) {
+        try {
+            if (type == null || type.getProtectionDomain() == null) return "none";
+            CodeSource source = type.getProtectionDomain().getCodeSource();
+            return source == null || source.getLocation() == null ? "none" : source.getLocation().toString();
+        } catch (Throwable ignored) {
+            return "unavailable";
+        }
+    }
+
+    private static String safe(String value) {
+        if (value == null) return "null";
+        return value.replace(' ', '_').replace('\t', '_').replace('\r', '_').replace('\n', '_');
     }
 
     private static void identity() {
@@ -60,9 +166,9 @@ final class BootOptimForkTrace {
         var source = BootOptimForkTrace.class.getProtectionDomain().getCodeSource();
         String location = source == null ? "none" : String.valueOf(source.getLocation());
         System.err.printf("BOOTOPTIM_ML_FORK_IDENTITY probe=agent94-post-accept-v2 module=%s named=%s source=%s implementation=%s loader=%s%n",
-                module.getName(), module.isNamed(), location,
+                module.getName(), module.isNamed(), safe(location),
                 BootOptimForkTrace.class.getPackage().getImplementationVersion(),
-                String.valueOf(BootOptimForkTrace.class.getClassLoader()));
+                safe(String.valueOf(BootOptimForkTrace.class.getClassLoader())));
     }
 }
 '''
@@ -93,6 +199,11 @@ def main() -> None:
     blob = run(root, "git", "hash-object", str(target))
     if blob != CLASS_TRANSFORMER_BLOB:
         raise SystemExit(f"ClassTransformer blob drift: {blob}; expected {CLASS_TRANSFORMER_BLOB}")
+
+    loader_target = root / "src/main/java/cpw/mods/modlauncher/TransformingClassLoader.java"
+    loader_blob = run(root, "git", "hash-object", str(loader_target))
+    if loader_blob != TRANSFORMING_CLASSLOADER_BLOB:
+        raise SystemExit(f"TransformingClassLoader blob drift: {loader_blob}; expected {TRANSFORMING_CLASSLOADER_BLOB}")
 
     text = target.read_text(encoding="utf-8")
     text = replace_once(
@@ -158,6 +269,26 @@ def main() -> None:
     )
     target.write_text(text, encoding="utf-8")
 
+    loader_text = loader_target.read_text(encoding="utf-8")
+    loader_text = replace_once(
+        loader_text,
+        "    protected byte[] maybeTransformClassBytes(final byte[] bytes, final String name, final String context) {\n        return classTransformer.transform(bytes, name, context != null ? context : ITransformerActivity.CLASSLOADING_REASON);\n    }",
+        "    protected byte[] maybeTransformClassBytes(final byte[] bytes, final String name, final String context) {\n"
+        "        final String reason = context != null ? context : ITransformerActivity.CLASSLOADING_REASON;\n"
+        "        if (!BootOptimForkTrace.enabledFor(name)) {\n"
+        "            return classTransformer.transform(bytes, name, reason);\n"
+        "        }\n"
+        "        final long requestId = BootOptimForkTrace.requestBegin(name, context, reason, this, this.classNameToModuleName(name));\n"
+        "        try {\n"
+        "            return classTransformer.transform(bytes, name, reason);\n"
+        "        } finally {\n"
+        "            BootOptimForkTrace.requestEnd(name, requestId);\n"
+        "        }\n"
+        "    }",
+        "transform request origin",
+    )
+    loader_target.write_text(loader_text, encoding="utf-8")
+
     helper = root / "src/main/java/cpw/mods/modlauncher/BootOptimForkTrace.java"
     if helper.exists():
         raise SystemExit("probe helper already exists")
@@ -174,7 +305,7 @@ tasks.named('jar', Jar).configure {{
 }}
 """
     build.write_text(build.read_text(encoding="utf-8") + provenance, encoding="utf-8")
-    print(f"patched ModLauncher {UPSTREAM_COMMIT} with {PROBE_ID}")
+    print(f"patched ModLauncher {UPSTREAM_COMMIT} with {PROBE_ID} + request-origin trace")
 
 
 if __name__ == "__main__":

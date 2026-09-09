@@ -48,7 +48,7 @@ jobs:
           jar_path="$(find "$RUNNER_TEMP/modlauncher/build/libs" -maxdepth 1 -type f -name 'modlauncher-*.jar' ! -name '*sources*' | head -n 1)"
           test -n "$jar_path"
           unzip -p "$jar_path" META-INF/MANIFEST.MF | tr -d '\r' | tee "$RUNNER_TEMP/modlauncher-fork-manifest.txt"
-          grep -qx 'BootOptim-Fork-Probe: agent94-post-accept-v1' "$RUNNER_TEMP/modlauncher-fork-manifest.txt"
+          grep -qx 'BootOptim-Fork-Probe: agent94-post-accept-v2' "$RUNNER_TEMP/modlauncher-fork-manifest.txt"
           grep -qx 'BootOptim-Upstream-Commit: 901c6ea849ae21ee7d464cd97113e77a6101a734' "$RUNNER_TEMP/modlauncher-fork-manifest.txt"
           jar tf "$jar_path" | grep -qx 'cpw/mods/modlauncher/BootOptimForkTrace.class'
           cp "$jar_path" "$GITHUB_WORKSPACE/modlauncher-agent94-post-accept-probe.jar"
