@@ -34,9 +34,12 @@ public final class FmlLoadingTraceHooks {
             }
 
             STAGE.set(0);
-            long prefixTaskId = TRACE.beginTask(
-                    "fml_gather_pre_construction", gatherTaskId, null, null, null, -1L);
-            CURRENT_PHASE_TASK.set(prefixTaskId);
+            CURRENT_PHASE_TASK.set(0L);
+            if (TRACE.isDetailed()) {
+                long prefixTaskId = TRACE.beginTask(
+                        "fml_gather_pre_construction", gatherTaskId, null, null, null, -1L);
+                CURRENT_PHASE_TASK.set(prefixTaskId);
+            }
         } catch (Throwable ignored) {
             // Diagnostics must never become a startup dependency.
         }
@@ -46,11 +49,11 @@ public final class FmlLoadingTraceHooks {
      * Wraps only FML's existing periodic callback at the transformable GAME-layer callsite.
      *
      * <p>The delegate is invoked exactly once, first, on the original thread. Observation happens only after a
-     * successful callback and never changes executor/future ownership. The wrapper is installed only when structured
-     * tracing is enabled because the transformation service does not install this transformer in off mode.</p>
+     * successful callback and never changes executor/future ownership. Progress snapshots are limited to detailed
+     * profile/development modes so benchmark mode keeps its counter-only per-event contract.</p>
      */
     public static Runnable wrapPeriodicTask(Runnable delegate) {
-        if (!TRACE.isEnabled() || delegate == null) return delegate;
+        if (!TRACE.isDetailed() || delegate == null) return delegate;
         return () -> {
             delegate.run();
             observeProgress();
