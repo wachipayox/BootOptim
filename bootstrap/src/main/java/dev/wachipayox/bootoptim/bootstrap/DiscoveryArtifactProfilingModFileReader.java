@@ -41,10 +41,9 @@ public final class DiscoveryArtifactProfilingModFileReader implements IModFileRe
         long task = TRACE.beginTask("fml_discovery_artifact_metadata", parent, dependencies, null, resource, -1L);
         DiscoveryProfiler.noteArtifactTaskForCurrentThread(task);
 
-        IModFile result = null;
         String detail = "result=exception";
         try {
-            result = delegate.read(jar, attributes);
+            IModFile result = delegate.read(jar, attributes);
             String mod = result == null ? null : safeModId(result);
             detail = describe(primary, attributes, result, mod);
             TRACE.record(
@@ -59,7 +58,7 @@ public final class DiscoveryArtifactProfilingModFileReader implements IModFileRe
                     -1L,
                     detail);
             return result;
-        } catch (Throwable failure) {
+        } catch (RuntimeException | Error failure) {
             TRACE.record(
                     StructuredBootTrace.EventType.ERROR,
                     task,
