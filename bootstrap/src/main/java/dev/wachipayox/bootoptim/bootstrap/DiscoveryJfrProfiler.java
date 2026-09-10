@@ -18,6 +18,7 @@ import net.neoforged.fml.loading.FMLPaths;
 /** Profile-only JFR window covering root through dependency discovery. No event is read while startup is timed. */
 final class DiscoveryJfrProfiler {
     private static Recording recording;
+    private static Path dumpedFile;
     private static boolean hookInstalled;
 
     private DiscoveryJfrProfiler() {}
@@ -51,23 +52,30 @@ final class DiscoveryJfrProfiler {
         try {
             r.stop();
             System.out.println("BOOTOPTIM_DISCOVERY_JFR state=stopped boundary=dependency_end");
+            Path dir = FMLPaths.GAMEDIR.get().resolve(".bootoptim").resolve("profiles");
+            Files.createDirectories(dir);
+            Path file = dir.resolve("discovery-agent106.jfr");
+            r.dump(file);
+            dumpedFile = file;
+            System.out.printf("BOOTOPTIM_DISCOVERY_JFR state=dumped file=%s%n", file.getFileName());
         } catch (Throwable failure) {
-            System.out.printf("BOOTOPTIM_DISCOVERY_JFR state=failed action=stop type=%s%n", failure.getClass().getName());
+            System.out.printf("BOOTOPTIM_DISCOVERY_JFR state=failed action=stop_or_dump type=%s%n", failure.getClass().getName());
         }
     }
 
     private static void summarizeAfterExit() {
         Recording r;
+        Path file;
         synchronized (DiscoveryJfrProfiler.class) {
             r = recording;
+            file = dumpedFile;
         }
         if (r == null) return;
         try {
-            if ("RUNNING".equals(r.getState().name())) r.stop();
-            Path dir = FMLPaths.GAMEDIR.get().resolve(".bootoptim").resolve("profiles");
-            Files.createDirectories(dir);
-            Path file = dir.resolve("discovery-agent106.jfr");
-            r.dump(file);
+            if (file == null) {
+                System.out.println("BOOTOPTIM_DISCOVERY_JFR state=failed action=summarize type=missing_dump");
+                return;
+            }
             summarize(file);
             System.out.printf("BOOTOPTIM_DISCOVERY_JFR state=summarized file=%s%n", file.getFileName());
         } catch (Throwable failure) {
