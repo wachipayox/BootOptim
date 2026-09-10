@@ -15,7 +15,7 @@ import java.util.jar.JarOutputStream;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
 
-/** Diagnostic-only profiler for FML 4.0.43 stock Jar-in-Jar extraction. */
+/** Diagnostic-only profiler for stock FML 4.0.43 Jar-in-Jar discovery. */
 public final class JijProfileAgent {
     private static final String TARGET = "net.neoforged.fml.loading.moddiscovery.locators.JarInJarDependencyLocator";
     private static final String[] BOOTSTRAP_BRIDGE_CLASSES = {
@@ -47,9 +47,7 @@ public final class JijProfileAgent {
                             .visit(Advice.to(ScanAdvice.class)
                                     .on(named("scanMods").and(takesArguments(2))))
                             .visit(Advice.to(LoadAdvice.class)
-                                    .on(named("loadModFileFrom").and(takesArguments(4))))
-                            .visit(Advice.to(ExtractAdvice.class)
-                                    .on(named("extractEmbeddedJarFile").and(takesArguments(3))));
+                                    .on(named("loadModFileFrom").and(takesArguments(3))));
                 })
                 .installOn(instrumentation);
     }
@@ -103,37 +101,13 @@ public final class JijProfileAgent {
         @Advice.OnMethodExit(onThrowable = Throwable.class)
         public static void exit(
                 @Advice.Argument(0) Object parent,
-                @Advice.Argument(1) String relativePath,
+                @Advice.Argument(1) Path relativePath,
                 @Advice.Return Optional<?> result,
                 @Advice.Enter long start,
                 @Advice.Thrown Throwable thrown) {
             try {
-                Recorder.loadEnd(parent, relativePath, result == null ? null : result.orElse(null), start, thrown);
-            } catch (Throwable ignored) {
-            }
-        }
-    }
-
-    public static final class ExtractAdvice {
-        @Advice.OnMethodEnter
-        public static long enter() {
-            try {
-                return Recorder.intervalBegin();
-            } catch (Throwable ignored) {
-                return 0L;
-            }
-        }
-
-        @Advice.OnMethodExit(onThrowable = Throwable.class)
-        public static void exit(
-                @Advice.Argument(0) Object parent,
-                @Advice.Argument(1) String relativePath,
-                @Advice.Argument(2) Path destination,
-                @Advice.Return String checksum,
-                @Advice.Enter long start,
-                @Advice.Thrown Throwable thrown) {
-            try {
-                Recorder.extractEnd(parent, relativePath, destination, checksum, start, thrown);
+                Recorder.loadEnd(parent, relativePath == null ? null : relativePath.toString(),
+                        result == null ? null : result.orElse(null), start, thrown);
             } catch (Throwable ignored) {
             }
         }
