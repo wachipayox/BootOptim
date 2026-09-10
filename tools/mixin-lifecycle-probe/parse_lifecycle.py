@@ -25,6 +25,7 @@ def parse(text: str) -> dict:
     begins: dict[int, dict] = {}
     mixin: list[dict] = []
     main: dict[str, dict] = {}
+    malformed_main_markers: list[str] = []
 
     for line_no, line in enumerate(text.splitlines(), 1):
         if "BOOTOPTIM_ML_FORK_REQUEST_END " in line:
@@ -46,7 +47,12 @@ def parse(text: str) -> dict:
                 mixin.append({**item, "line": line_no, "mono_ns": int(item["mono_ns"]), "elapsed_ns": int(item.get("elapsed_ns", "0"))})
         elif "BOOTOPTIM_MAIN_LIFECYCLE " in line:
             item = fields(line, "BOOTOPTIM_MAIN_LIFECYCLE ")
-            main[item["event"]] = {**item, "line": line_no, "mono_ns": int(item["mono_ns"])}
+            event = item.get("event")
+            mono = item.get("mono_ns", "")
+            if event is None or not mono.isdigit():
+                malformed_main_markers.append(event or "unknown")
+                continue
+            main[event] = {**item, "line": line_no, "mono_ns": int(mono)}
 
     if [r["request_id"] for r in requests] != [1, 2]:
         raise ValueError(f"expected exactly Bootstrap requests [1,2], got {[r['request_id'] for r in requests]}")
@@ -78,9 +84,14 @@ def parse(text: str) -> dict:
         raise ValueError(f"missing Mixin lifecycle markers: {missing}")
     if [by_event[n]["line"] for n in names] != sorted(by_event[n]["line"] for n in names):
         raise ValueError("Mixin lifecycle ordering changed")
-    required_main = ["main_before_run_and_tick", "bootstrap_worker_entry", "bootstrap_worker_return", "main_after_run_and_tick"]
-    if any(name not in main for name in required_main):
-        raise ValueError("missing Main lifecycle markers")
+
+    # Only these stock Main boundaries contextualise the handoff to request 2. The
+    # worker-return marker is emitted concurrently with vanilla logging and can
+    # interleave on stderr, so it is deliberately not a gate for prepareConfigs.
+    required_main = ["main_before_run_and_tick", "bootstrap_worker_entry"]
+    missing_main = [name for name in required_main if name not in main]
+    if missing_main:
+        raise ValueError(f"missing required Main lifecycle markers: {missing_main}")
 
     t = lambda name: by_event[name]["mono_ns"]
     r1_end = ends[1]["mono_ns"]
@@ -152,7 +163,8 @@ def parse(text: str) -> dict:
             "config_commit": "Stock publication addAll/sort/clear; ordered state commit.",
             "future_purity": "Only a narrower immutable preparse could be investigated later, and only after proving independence from class acquisition/transformation, plugin callbacks, global mixin order, ClassInfo caches/target registration, listeners, extensions, validation and publication. Not implemented here.",
         },
-        "marker_counts": {"mixin": len(mixin), "main": len(main)},
+        "marker_counts": {"mixin": len(mixin), "main_valid": len(main), "main_malformed": len(malformed_main_markers)},
+        "malformed_main_marker_events": malformed_main_markers,
     }
 
 
