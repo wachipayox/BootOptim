@@ -65,22 +65,19 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
-        // Agent 94 diagnostic only. Off/default remains exactly the integration behavior: no transformers.
-        List<ITransformer<?>> diagnostics = new ArrayList<>(2);
+        List<ITransformer<?>> diagnostics = new ArrayList<>(3);
         if (Boolean.getBoolean("boot_optim.modlauncherForkTrace")) {
             diagnostics.add(new MinecraftBootstrapForkProfileTransformer());
         }
         if (Boolean.getBoolean("boot_optim.mixinLifecycleTrace")) {
             diagnostics.add(new MinecraftMainLifecycleTransformer());
+            diagnostics.add(new MinecraftDataFixersLifecycleTransformer());
         }
         return diagnostics.isEmpty() ? List.of() : List.copyOf(diagnostics);
     }
 
     private static void mark(String phase) {
-        if (!ENABLED) {
-            return;
-        }
-
+        if (!ENABLED) return;
         Runtime runtime = Runtime.getRuntime();
         long usedBytes = runtime.totalMemory() - runtime.freeMemory();
         long uptimeMs = ManagementFactory.getRuntimeMXBean().getUptime();
