@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim.fmlchain;
 
+import static net.bytebuddy.matcher.ElementMatchers.isPublic;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
@@ -79,7 +80,7 @@ public final class FmlChainAgent {
                 .type(named("com.simibubi.create.infrastructure.config.AllConfigs"))
                 .transform((dynamicBuilder, type, classLoader, module, protectionDomain) ->
                         dynamicBuilder.visit(Advice.to(CreateBoundaryAdvice.class)
-                                .on(named("register").and(takesArguments(2)))))
+                                .on(named("register").and(takesArguments(2)).and(isPublic()))))
                 .type(named("com.simibubi.create.AllSchematicStateFilters"))
                 .transform((dynamicBuilder, type, classLoader, module, protectionDomain) ->
                         dynamicBuilder.visit(Advice.to(CreateBoundaryAdvice.class)
