@@ -15,14 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * JDK-only trace hooks embedded into the exact Connector jar by the hosted diagnostic patcher.
- *
- * <p>The hooks are observational: they never replace a Connector result, cache decision, callback, thread,
- * exception, or publication. Events stay in memory while startup is timed and are serialized only from a JVM
- * shutdown hook. The class is deliberately self-contained because the patched Connector jar may live in a
- * different module from BootOptim's SERVICE module.</p>
- */
+/** JDK-only observational hooks embedded into the exact Connector jar by the hosted diagnostic patcher. */
 public final class ConnectorWarmResidualHooks {
     public static final String ENABLE_PROPERTY = "boot_optim.profileConnectorWarm";
     public static final String PATH_PROPERTY = "boot_optim.connectorTrace.path";
@@ -72,6 +65,10 @@ public final class ConnectorWarmResidualHooks {
         }
     }
 
+    public static void beginScope(String phase, Object resource) {
+        begin(phase, resource);
+    }
+
     public static void end(long id) {
         if (!ENABLED || id == 0L) return;
         try {
@@ -90,6 +87,16 @@ public final class ConnectorWarmResidualHooks {
             }
             EVENTS.add(new Event(start, end));
             LAST_END.set(id);
+        } catch (Throwable ignored) {
+            ERRORS.incrementAndGet();
+        }
+    }
+
+    public static void endScope() {
+        if (!ENABLED) return;
+        try {
+            ArrayDeque<Long> stack = STACK.get();
+            if (!stack.isEmpty()) end(stack.peekLast());
         } catch (Throwable ignored) {
             ERRORS.incrementAndGet();
         }
@@ -162,16 +169,13 @@ public final class ConnectorWarmResidualHooks {
             }
             Files.move(temp, output, StandardCopyOption.REPLACE_EXISTING);
         } catch (Throwable ignored) {
-            // Diagnostic output must never become a startup dependency.
+            // Trace I/O is never a startup dependency.
         }
     }
 
     private static String stringify(Object value) {
-        try {
-            return value == null ? null : String.valueOf(value);
-        } catch (Throwable ignored) {
-            return "<unprintable>";
-        }
+        try { return value == null ? null : String.valueOf(value); }
+        catch (Throwable ignored) { return "<unprintable>"; }
     }
 
     private static String quote(String value) {
