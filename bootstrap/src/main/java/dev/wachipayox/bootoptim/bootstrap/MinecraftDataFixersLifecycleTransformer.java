@@ -15,18 +15,25 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 /**
- * Agent 99 diagnostic-only, version-pinned observation of Minecraft 1.21.1 DataFixers startup.
+ * Agent 102 diagnostic-only, version-pinned observation of Minecraft 1.21.1 DataFixers startup.
  *
- * <p>The matcher fails closed unless the exact create/optimize topology is present. It records
- * boundaries only; it does not initialize DataFixers early, replace/cache the fixer, wrap the
- * returned future, change the executor, move work, or alter exception/thread semantics.</p>
+ * <p>The matcher fails closed unless the exact create/optimize topology and the expected
+ * DataFixerBuilder mutation surface in addFixers are present. It records boundaries only; it does
+ * not initialize DataFixers early, replace/cache the fixer, wrap futures/executors, move work, or
+ * alter exception/thread/publication semantics.</p>
  */
 public final class MinecraftDataFixersLifecycleTransformer implements ITransformer<ClassNode> {
     private static final String TARGET = "net/minecraft/util/datafix/DataFixers";
+    private static final String BUILDER = "com/mojang/datafixers/DataFixerBuilder";
     private static final String RESULT = "com/mojang/datafixers/DataFixerBuilder$Result";
     private static final String EXECUTORS = "java/util/concurrent/Executors";
     private static final String HOOKS = "dev/wachipayox/bootoptim/bootstrap/MinecraftMainLifecycleHooks";
+    private static final String BUILDER_DESC = "Lcom/mojang/datafixers/DataFixerBuilder;";
     private static final String RESULT_DESC = "Lcom/mojang/datafixers/DataFixerBuilder$Result;";
+    private static final String SCHEMA_DESC = "Lcom/mojang/datafixers/schemas/Schema;";
+    private static final String ADD_SCHEMA_DESC = "(ILjava/util/function/BiFunction;)" + SCHEMA_DESC;
+    private static final String ADD_SCHEMA_SUB_DESC = "(IILjava/util/function/BiFunction;)" + SCHEMA_DESC;
+    private static final String ADD_FIXER_DESC = "(Lcom/mojang/datafixers/DataFix;)V";
 
     @Override
     public ClassNode transform(ClassNode input, ITransformerVotingContext context) {
@@ -34,16 +41,42 @@ public final class MinecraftDataFixersLifecycleTransformer implements ITransform
 
         MethodNode clinit = uniqueMethod(input, "<clinit>", "()V");
         MethodNode create = uniqueMethod(input, "createFixerUpper", "()" + RESULT_DESC);
+        MethodNode addFixers = uniqueMethod(input, "addFixers", "(" + BUILDER_DESC + ")V");
         MethodNode optimize = uniqueMethod(input, "optimize", "(Ljava/util/Set;)Ljava/util/concurrent/CompletableFuture;");
-        if (clinit == null || create == null || optimize == null) return input;
+        if (clinit == null || create == null || addFixers == null || optimize == null) return input;
 
         MethodInsnNode createCall = uniqueCall(clinit, Opcodes.INVOKESTATIC, TARGET, "createFixerUpper", "()" + RESULT_DESC);
         FieldInsnNode clinitPut = uniqueField(clinit, Opcodes.PUTSTATIC, TARGET, "DATA_FIXER", RESULT_DESC);
         if (createCall == null || clinitPut == null || indexOf(clinit, createCall) >= indexOf(clinit, clinitPut)) return input;
 
-        MethodInsnNode buildCall = uniqueCall(create, Opcodes.INVOKEVIRTUAL, "com/mojang/datafixers/DataFixerBuilder", "build", "()" + RESULT_DESC);
+        MethodInsnNode builderCtor = uniqueCall(create, Opcodes.INVOKESPECIAL, BUILDER, "<init>", "(I)V");
+        MethodInsnNode addFixersCall = uniqueCall(create, Opcodes.INVOKESTATIC, TARGET, "addFixers", "(" + BUILDER_DESC + ")V");
+        MethodInsnNode buildCall = uniqueCall(create, Opcodes.INVOKEVIRTUAL, BUILDER, "build", "()" + RESULT_DESC);
         List<AbstractInsnNode> createReturns = returns(create, Opcodes.ARETURN);
-        if (buildCall == null || createReturns.size() != 1 || indexOf(create, buildCall) >= indexOf(create, createReturns.get(0))) return input;
+        if (builderCtor == null || addFixersCall == null || buildCall == null || createReturns.size() != 1) return input;
+        int ctorIndex = indexOf(create, builderCtor);
+        int addFixersIndex = indexOf(create, addFixersCall);
+        int buildIndex = indexOf(create, buildCall);
+        int createReturnIndex = indexOf(create, createReturns.get(0));
+        if (!(ctorIndex >= 0 && ctorIndex < addFixersIndex && addFixersIndex < buildIndex && buildIndex < createReturnIndex)) return input;
+
+        List<MethodInsnNode> schemaCalls = new ArrayList<>();
+        List<MethodInsnNode> fixerRegisterCalls = new ArrayList<>();
+        for (AbstractInsnNode instruction : addFixers.instructions.toArray()) {
+            if (!(instruction instanceof MethodInsnNode call) || !BUILDER.equals(call.owner)) continue;
+            boolean schema = call.getOpcode() == Opcodes.INVOKEVIRTUAL
+                    && "addSchema".equals(call.name)
+                    && (ADD_SCHEMA_DESC.equals(call.desc) || ADD_SCHEMA_SUB_DESC.equals(call.desc));
+            boolean fixer = call.getOpcode() == Opcodes.INVOKEVIRTUAL
+                    && "addFixer".equals(call.name)
+                    && ADD_FIXER_DESC.equals(call.desc);
+            if (schema) schemaCalls.add(call);
+            else if (fixer) fixerRegisterCalls.add(call);
+            else return input; // Unknown DataFixerBuilder mutation: fail closed.
+        }
+        // Minecraft 1.21.1 has a large, interleaved schema/fixer table. These lower bounds reject
+        // older/simplified topologies while avoiding a brittle dependency on local-variable layout.
+        if (schemaCalls.size() < 100 || fixerRegisterCalls.size() < 100) return input;
 
         MethodInsnNode executorCreate = uniqueCall(
                 optimize,
@@ -76,8 +109,20 @@ public final class MinecraftDataFixersLifecycleTransformer implements ITransform
         clinit.instructions.insertBefore(clinitReturns.get(0), hook("dataFixersClinitExit"));
 
         create.instructions.insertBefore(createFirst, hook("createFixerUpperEntry"));
+        surround(create, builderCtor, "beforeDataFixerBuilderConstructor", "afterDataFixerBuilderConstructor");
+        surround(create, addFixersCall, "beforeAddFixers", "afterAddFixers");
+        surround(create, buildCall, "beforeDataFixerBuilderBuild", "afterDataFixerBuilderBuild");
         create.instructions.insertBefore(createReturns.get(0), hook("createFixerUpperReturn"));
 
+        for (MethodInsnNode schemaCall : schemaCalls) {
+            surround(addFixers, schemaCall, "beforeSchemaAdd", "afterSchemaAdd");
+        }
+        for (MethodInsnNode fixerCall : fixerRegisterCalls) {
+            surround(addFixers, fixerCall, "beforeFixerRegister", "afterFixerRegister");
+        }
+
+        // Retain Agent 99's outer lifecycle boundaries unchanged so the new inner partition can be
+        // checked against the already-validated class-init/optimize/join DAG.
         optimize.instructions.insertBefore(optimizeFirst, hook("dataFixersOptimizeEntry"));
         surround(optimize, executorCreate, "beforeExecutorCreate", "afterExecutorCreate");
         surround(optimize, resultGet, "beforeResultGet", "afterResultGet");
@@ -174,6 +219,6 @@ public final class MinecraftDataFixersLifecycleTransformer implements ITransform
 
     @Override
     public String[] labels() {
-        return new String[] { "boot_optim_agent99_datafixers_lifecycle_profile" };
+        return new String[] { "boot_optim_agent102_datafixers_create_subphases_profile" };
     }
 }
