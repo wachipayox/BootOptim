@@ -50,6 +50,15 @@ tasks.named('jar', Jar).configure {
     }
 }
 
+// Diagnostic-only offline bytecode patch. It is never wired into normal build/startup/run tasks; the exact-pack
+// warm-profile harness calls it explicitly after preparing the copied pack and before either measured JVM starts.
+tasks.register('patchConnectorWarmResidual', JavaExec) {
+    dependsOn tasks.named('classes')
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'dev.wachipayox.bootoptim.bootstrap.ConnectorWarmResidualPatcher'
+    args rootProject.file('run-pack-benchmark/mods').absolutePath
+}
+
 // The packaged bootstrap is the actual distributable artifact. Make a normal root `build` produce it so
 // developers do not accidentally pick the inner regular-mod jar from build/libs.
 rootProject.tasks.named('build').configure {
