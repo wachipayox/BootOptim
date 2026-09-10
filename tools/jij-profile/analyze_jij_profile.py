@@ -6,6 +6,7 @@ import json
 import re
 import zipfile
 from pathlib import Path
+from urllib.parse import unquote
 
 DEP_RE = re.compile(r"phase=dependency_discovery_end\b.*?elapsed_ms=([0-9]+(?:\.[0-9]+)?)")
 
@@ -42,6 +43,37 @@ def read_entry(parent_payload: bytes, relative_path: str) -> bytes:
         return archive.read(name)
 
 
+def physical_path_from_runtime_path(runtime_path: str):
+    """Resolve only paths that are backed by a physical root JAR.
+
+    FML/SecureJar can expose a root mod through a synthetic `union:union:/...jar%23NNN!/`
+    path. The `%23NNN` suffix is a runtime filesystem instance discriminator, not part of
+    the physical filename. Nested `jij:` paths are deliberately *not* decoded here: those
+    must resolve through a previously captured parent payload so provenance follows the
+    actual embedded-JAR chain.
+    """
+    try:
+        direct = Path(runtime_path)
+    except (TypeError, ValueError):
+        direct = None
+    if direct is not None and direct.is_file():
+        return direct
+
+    if not runtime_path.startswith("union:"):
+        return None
+
+    decoded = unquote(runtime_path)
+    while decoded.startswith("union:"):
+        decoded = decoded[len("union:"):]
+    archive_part = decoded.split("!/", 1)[0]
+    archive_part = re.sub(r"#\d+$", "", archive_part)
+    try:
+        candidate = Path(archive_part)
+    except (TypeError, ValueError):
+        return None
+    return candidate if candidate.is_file() else None
+
+
 def resolve_load_provenance(loads, trace_path: Path):
     payload_by_runtime_path = {}
     physical_payload_cache = {}
@@ -55,21 +87,20 @@ def resolve_load_provenance(loads, trace_path: Path):
 
         parent_payload = None
         parent_source = None
-        try:
-            physical = Path(parent_path)
-        except (TypeError, ValueError):
-            physical = None
-        if physical is not None and physical.is_file():
-            cache_key = str(physical)
-            parent_payload = physical_payload_cache.get(cache_key)
-            if parent_payload is None:
-                parent_payload = physical.read_bytes()
-                physical_payload_cache[cache_key] = parent_payload
-            parent_source = "post_process_physical_file"
-        elif parent_path in payload_by_runtime_path:
+        if parent_path in payload_by_runtime_path:
             parent_payload = payload_by_runtime_path[parent_path]
             parent_source = "post_process_parent_chain"
         else:
+            physical = physical_path_from_runtime_path(parent_path)
+            if physical is not None:
+                cache_key = str(physical)
+                parent_payload = physical_payload_cache.get(cache_key)
+                if parent_payload is None:
+                    parent_payload = physical.read_bytes()
+                    physical_payload_cache[cache_key] = parent_payload
+                parent_source = "post_process_physical_file"
+
+        if parent_payload is None:
             raise SystemExit(f"cannot resolve strong parent identity for {parent_path} in {trace_path}")
 
         try:
@@ -179,6 +210,7 @@ def main():
         "",
         "`jarjar_scan_ms` is inclusive locator wall nested inside dependency discovery; `jij_load_union_ms` is a nested subinterval and is not added to it.",
         "Strong parent SHA-256, embedded byte counts and child SHA-256 are resolved only after the Minecraft process exits from recorded parent path + relative path (recursing through nested JiJ payloads when needed).",
+        "Synthetic root `union:` paths are normalized post-process to the encoded physical JAR only; nested `jij:` parents still resolve through the captured embedded-payload chain.",
         "The timed JVM retains only strings/primitives and never persists or reuses live `JarContents`, `IModFile`, `FileSystem`, readers or callbacks.",
     ]
     args.markdown_output.write_text("\n".join(lines) + "\n", encoding="utf-8")
