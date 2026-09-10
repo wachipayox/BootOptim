@@ -47,7 +47,7 @@ final class DiscoveryJfrProfiler {
 
     static synchronized void end() {
         Recording r = recording;
-        if (r == null || r.getState() != RecordingState.RUNNING) return;
+        if (r == null || !"RUNNING".equals(r.getState().name())) return;
         try {
             r.stop();
             System.out.println("BOOTOPTIM_DISCOVERY_JFR state=stopped boundary=dependency_end");
@@ -62,12 +62,11 @@ final class DiscoveryJfrProfiler {
             r = recording;
         }
         if (r == null) return;
-        Path file = null;
         try {
-            if (r.getState() == RecordingState.RUNNING) r.stop();
+            if ("RUNNING".equals(r.getState().name())) r.stop();
             Path dir = FMLPaths.GAMEDIR.get().resolve(".bootoptim").resolve("profiles");
             Files.createDirectories(dir);
-            file = dir.resolve("discovery-agent106.jfr");
+            Path file = dir.resolve("discovery-agent106.jfr");
             r.dump(file);
             summarize(file);
             System.out.printf("BOOTOPTIM_DISCOVERY_JFR state=summarized file=%s%n", file.getFileName());
@@ -175,9 +174,5 @@ final class DiscoveryJfrProfiler {
         int zipEvents;
         int metadataEvents;
         int dependencyEvents;
-    }
-
-    private enum RecordingState {
-        NEW, DELAYED, RUNNING, STOPPED, CLOSED
     }
 }
