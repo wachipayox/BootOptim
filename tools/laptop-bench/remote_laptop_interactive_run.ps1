@@ -57,6 +57,22 @@ function Stop-PrismOwned([object]$s){
     try{[void]$p.CloseMainWindow();if($p.WaitForExit(15000)){return}}catch{}
     $p=Get-Process -Id ([int]$s.prismPid) -ErrorAction SilentlyContinue;if($p){Stop-Process -Id ([int]$s.prismPid) -Force -ErrorAction Stop}
 }
+function Archive-RunEvidence([object]$s) {
+    # Copy only completed, bounded diagnostic files after Java has exited.  Never inspect logs while a
+    # performance run is alive, and never claim an archive exists unless every copied path is recorded.
+    $evidence=Join-Path (Split-Path -Parent $StateFile) 'evidence'
+    New-Item -ItemType Directory -Force -Path $evidence|Out-Null
+    $logs=Join-Path $s.gameRoot 'logs'
+    $copied=@()
+    foreach($name in @('latest.log','debug.log','bootoptim-startup.log')){
+        $source=Join-Path $logs $name
+        if(-not(Test-Path -LiteralPath $source -PathType Leaf)){continue}
+        $destination=Join-Path $evidence $name
+        Copy-Item -LiteralPath $source -Destination $destination -Force
+        $copied += [pscustomobject]@{name=$name;length=(Get-Item -LiteralPath $destination).Length}
+    }
+    $s.logArchive=@($copied)
+}
 
 $s=Load
 try{Ensure-Native}catch{Fail $s ("native helper setup failed: "+$_.Exception.Message)}
@@ -126,5 +142,10 @@ if(-not$exited){
     try{if(-not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{}
 }else{$s.javaExitedUtc=[DateTime]::UtcNow.ToString('o')}
 try{Stop-PrismOwned $s}catch{$s.valid=$false;$s.reason='prism_close_failed'}
+try{Archive-RunEvidence $s}catch{
+    # Archive failure is not a game failure, but it must be explicit: subsequent performance or diagnostic
+    # analysis has no permission to silently use whatever a later launch writes into the live logs.
+    $s.logArchive=@([pscustomobject]@{error=$_.Exception.GetType().Name})
+}
 try{$javaHandle.Dispose()}catch{}
 $s.phase=$(if($s.valid){'finished'}else{'invalid'});$s.finishedUtc=[DateTime]::UtcNow.ToString('o');Save $s
