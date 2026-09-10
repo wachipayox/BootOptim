@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.fmlchain;
 
 import static net.bytebuddy.matcher.ElementMatchers.isPublic;
+import static net.bytebuddy.matcher.ElementMatchers.isTypeInitializer;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
@@ -94,8 +95,13 @@ public final class FmlChainAgent {
                 .transform((b, t, cl, m, pd) -> b.visit(Advice.to(CreateBoundaryAdvice.class)
                         .on(named("register").and(takesArguments(0)))))
                 .type(named("com.simibubi.create.AllBlockEntityTypes"))
-                .transform((b, t, cl, m, pd) -> b.visit(Advice.to(CreateBoundaryAdvice.class)
-                        .on(named("register").and(takesArguments(0)))))
+                .transform((b, t, cl, m, pd) -> b
+                        .visit(Advice.to(CreateBlockEntityClinitAdvice.class).on(isTypeInitializer()))
+                        .visit(Advice.to(CreateBoundaryAdvice.class)
+                                .on(named("register").and(takesArguments(0)))))
+                .type(named("com.tterrag.registrate.builders.BlockEntityBuilder"))
+                .transform((b, t, cl, m, pd) -> b.visit(Advice.to(CreateBlockEntityRegisterAdvice.class)
+                        .on(named("register").and(takesArguments(0)).and(isPublic()))))
                 .type(named("com.simibubi.create.AllRecipeTypes"))
                 .transform((b, t, cl, m, pd) -> b.visit(Advice.to(CreateBoundaryAdvice.class)
                         .on(named("register").and(takesArguments(1)))))
@@ -190,5 +196,14 @@ public final class FmlChainAgent {
     }
     public static final class CreateBoundaryAdvice {
         @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin("#t.#m") String origin, @Advice.Thrown Throwable thrown) { Recorder.createBoundary(origin, thrown); }
+    }
+    public static final class CreateBlockEntityClinitAdvice {
+        @Advice.OnMethodEnter public static void enter() { Recorder.createBlockEntityClinitBegin(); }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Thrown Throwable thrown) { Recorder.createBlockEntityClinitEnd(thrown); }
+    }
+    public static final class CreateBlockEntityRegisterAdvice {
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.This Object builder, @Advice.Thrown Throwable thrown) {
+            Recorder.createBlockEntityRegisterBoundary(builder, thrown);
+        }
     }
 }
