@@ -172,6 +172,20 @@ public final class ConnectorWarmResidualHooks {
                 writer.newLine();
             }
             Files.move(temp, output, StandardCopyOption.REPLACE_EXISTING);
+
+            // The exact-pack artifact uploader does not retain the dedicated Connector JSONL. Echo only the
+            // second-stage per-resource detail at JVM shutdown, after the main-menu endpoint has already been
+            // reached, so the normal captured console provides the evidence without changing timed startup work.
+            for (Object[] event : events) {
+                String phase = (String) event[3];
+                if (phase.startsWith("connector_split_") || phase.startsWith("connector_locate_")) {
+                    long start = asLong(event[7]);
+                    long end = asLong(event[8]);
+                    System.out.println("BOOTOPTIM_CONNECTOR_DETAIL {\"phase\":" + quote(phase)
+                            + ",\"resource\":" + quote((String) event[4])
+                            + ",\"duration_ns\":" + Math.max(0L, end - start) + "}");
+                }
+            }
         } catch (Throwable ignored) {
             // Trace I/O is never a startup dependency.
         }
