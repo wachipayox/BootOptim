@@ -20,6 +20,8 @@ class Node:
     subscriber_end: int | None = None
     event_begin: int | None = None
     event_end: int | None = None
+    thread_id: int | None = None
+    thread_name: str | None = None
 
     @property
     def start(self) -> int | None:
@@ -45,6 +47,16 @@ class Node:
     @property
     def subscriber_ms(self) -> float | None:
         return self.duration(self.subscriber_begin, self.subscriber_end)
+
+    @property
+    def constructor_exclusive_ms(self) -> float | None:
+        construct = self.construct_ms
+        subscriber = self.subscriber_ms
+        if construct is None:
+            return None
+        if subscriber is None:
+            return construct
+        return max(0.0, construct - subscriber)
 
     @property
     def event_ms(self) -> float | None:
@@ -92,6 +104,7 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         raise SystemExit("missing or invalid construction gate boundaries")
 
     nodes: dict[str, Node] = {}
+    observed_threads: dict[str, set[int]] = {}
     for event in events:
         mod = event.get("mod")
         kind = event["kind"]
@@ -102,53 +115,134 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         if kind == "dependencies":
             detail = event.get("detail") or ""
             node.deps = [value for value in detail.split(",") if value]
-        elif kind == "construct_begin":
-            node.construct_begin = ns
-        elif kind == "construct_end":
-            node.construct_end = ns
-        elif kind == "subscriber_begin":
-            node.subscriber_begin = ns
-        elif kind == "subscriber_end":
-            node.subscriber_end = ns
-        elif kind == "construct_event_begin":
-            node.event_begin = ns
-        elif kind == "construct_event_end":
-            node.event_end = ns
+        elif kind in {
+            "construct_begin", "construct_end", "subscriber_begin", "subscriber_end",
+            "construct_event_begin", "construct_event_end",
+        }:
+            tid = event.get("tid")
+            if not isinstance(tid, int) or tid <= 0:
+                raise SystemExit(f"missing worker thread identity for {kind} mod={mod}")
+            observed_threads.setdefault(mod, set()).add(tid)
+            if node.thread_id is None and kind in {"construct_begin", "construct_event_begin"}:
+                node.thread_id = tid
+                node.thread_name = event.get("thread")
+            if kind == "construct_begin":
+                node.construct_begin = ns
+            elif kind == "construct_end":
+                node.construct_end = ns
+            elif kind == "subscriber_begin":
+                node.subscriber_begin = ns
+            elif kind == "subscriber_end":
+                node.subscriber_end = ns
+            elif kind == "construct_event_begin":
+                node.event_begin = ns
+                if node.thread_id is None:
+                    node.thread_id = tid
+                    node.thread_name = event.get("thread")
+            elif kind == "construct_event_end":
+                node.event_end = ns
+
+    for mod, tids in observed_threads.items():
+        if len(tids) != 1:
+            raise SystemExit(f"construction node crossed threads unexpectedly: mod={mod} tids={sorted(tids)}")
 
     complete = {mod: node for mod, node in nodes.items() if node.start is not None and node.end is not None}
     if not complete:
         raise SystemExit("no complete construction nodes found")
+    missing_thread = sorted(mod for mod, node in complete.items() if node.thread_id is None)
+    if missing_thread:
+        raise SystemExit("complete nodes missing worker identity: " + ", ".join(missing_thread))
+
+    dependency_missing = sorted({dep for node in complete.values() for dep in node.deps if dep not in complete})
+    if dependency_missing:
+        raise SystemExit("dependency timing nodes missing: " + ", ".join(dependency_missing))
+
+    # The executor can delay an otherwise dependency-ready node behind unrelated work. Reconstruct
+    # that observed resource ordering from the immutable thread id rather than the non-unique thread
+    # name (the hosted FML executor names all workers `modloading-worker-0`).
+    by_thread: dict[int, list[Node]] = {}
+    for node in complete.values():
+        by_thread.setdefault(node.thread_id or -1, []).append(node)
+    worker_predecessor: dict[str, str] = {}
+    for tid, thread_nodes in by_thread.items():
+        thread_nodes.sort(key=lambda node: (node.start or 0, node.end or 0, node.mod))
+        previous: Node | None = None
+        for node in thread_nodes:
+            if previous is not None:
+                if (previous.end or 0) > (node.start or 0):
+                    raise SystemExit(
+                        f"overlapping construction nodes on worker tid={tid}: {previous.mod} -> {node.mod}"
+                    )
+                worker_predecessor[node.mod] = previous.mod
+            previous = node
+
+    dependency_predecessor: dict[str, str] = {}
+    causal_predecessor: dict[str, str] = {}
+    causal_kind: dict[str, str] = {}
+    for mod, node in complete.items():
+        dep_pred = max(node.deps, key=lambda dep: complete[dep].end or -1) if node.deps else None
+        if dep_pred is not None:
+            dependency_predecessor[mod] = dep_pred
+        worker_pred = worker_predecessor.get(mod)
+        candidates: list[tuple[int, str, str]] = []
+        if dep_pred is not None:
+            candidates.append((complete[dep_pred].end or -1, "dependency", dep_pred))
+        if worker_pred is not None:
+            candidates.append((complete[worker_pred].end or -1, "worker", worker_pred))
+        if candidates:
+            latest_end = max(value[0] for value in candidates)
+            latest = [value for value in candidates if value[0] == latest_end]
+            chosen = latest[0]
+            causal_predecessor[mod] = chosen[2]
+            kinds = sorted({value[1] for value in latest if value[2] == chosen[2]})
+            causal_kind[mod] = "+".join(kinds)
 
     sink = max(complete.values(), key=lambda node: node.end or -1)
-    chain_reverse: list[Node] = []
-    seen: set[str] = set()
-    cursor = sink
-    while True:
-        if cursor.mod in seen:
-            raise SystemExit(f"dependency cycle while reconstructing observed chain at {cursor.mod}")
-        seen.add(cursor.mod)
-        chain_reverse.append(cursor)
-        predecessors = [complete[dep] for dep in cursor.deps if dep in complete and complete[dep].end is not None]
-        if not predecessors:
-            break
-        cursor = max(predecessors, key=lambda node: node.end or -1)
-    chain = list(reversed(chain_reverse))
 
-    chain_rows = []
-    for node in chain:
-        dep_ends = [complete[dep].end for dep in node.deps if dep in complete and complete[dep].end is not None]
-        ready_ns = max([gate_begin, *dep_ends])
-        start = node.start or ready_ns
-        queue_ms = max(0, start - ready_ns) / 1_000_000.0
-        chain_rows.append(
+    def unwind(predecessors: dict[str, str]) -> list[Node]:
+        reverse: list[Node] = []
+        seen: set[str] = set()
+        cursor = sink.mod
+        while True:
+            if cursor in seen:
+                raise SystemExit(f"cycle while reconstructing observed chain at {cursor}")
+            seen.add(cursor)
+            reverse.append(complete[cursor])
+            predecessor = predecessors.get(cursor)
+            if predecessor is None:
+                break
+            cursor = predecessor
+        return list(reversed(reverse))
+
+    execution_chain = unwind(causal_predecessor)
+    dependency_chain = unwind(dependency_predecessor)
+
+    execution_rows = []
+    for node in execution_chain:
+        dep_ends = [complete[dep].end for dep in node.deps]
+        dependency_ready_ns = max([gate_begin, *dep_ends])
+        worker_pred = worker_predecessor.get(node.mod)
+        worker_ready_ns = max(gate_begin, complete[worker_pred].end or gate_begin) if worker_pred else gate_begin
+        predecessor = causal_predecessor.get(node.mod)
+        causal_ready_ns = max(gate_begin, complete[predecessor].end or gate_begin) if predecessor else gate_begin
+        start = node.start or causal_ready_ns
+        execution_rows.append(
             {
                 "mod": node.mod,
                 "deps": node.deps,
+                "thread_id": node.thread_id,
+                "thread_name": node.thread_name,
+                "causal_predecessor": predecessor,
+                "causal_predecessor_kind": causal_kind.get(node.mod, "gate"),
+                "worker_predecessor": worker_pred,
                 "node_ms": node.node_ms,
                 "construct_ms": node.construct_ms,
+                "constructor_exclusive_ms": node.constructor_exclusive_ms,
                 "subscriber_ms": node.subscriber_ms,
                 "event_ms": node.event_ms,
-                "ready_to_start_ms": queue_ms,
+                "dependency_ready_to_start_ms": max(0, start - dependency_ready_ns) / 1_000_000.0,
+                "worker_ready_to_start_ms": max(0, start - worker_ready_ns) / 1_000_000.0,
+                "causal_dispatch_gap_ms": max(0, start - causal_ready_ns) / 1_000_000.0,
                 "start_ms_from_gate": (start - gate_begin) / 1_000_000.0,
                 "end_ms_from_gate": ((node.end or start) - gate_begin) / 1_000_000.0,
             }
@@ -160,37 +254,39 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         reverse=True,
     )[:20]
 
-    dependency_missing = sorted(
-        {dep for node in complete.values() for dep in node.deps if dep not in complete}
-    )
     gate_ms = (gate_end - gate_begin) / 1_000_000.0
     sink_end = sink.end or gate_end
     observed_chain_span_ms = (sink_end - gate_begin) / 1_000_000.0
     tail_residual_ms = max(0, gate_end - sink_end) / 1_000_000.0
-    chain_mod_set = {node.mod for node in chain}
+    execution_mod_set = {node.mod for node in execution_chain}
+    dependency_mod_set = {node.mod for node in dependency_chain}
+    material = max(execution_chain, key=lambda node: node.node_ms or 0.0)
 
-    material = max(chain, key=lambda node: node.node_ms or 0.0)
     return {
         "profile_header": headers[0].get("detail"),
         "gate_ms": gate_ms,
         "complete_nodes": len(complete),
         "dependency_records": sum(1 for event in events if event["kind"] == "dependencies"),
+        "worker_count": len(by_thread),
         "critical_sink": sink.mod,
-        "observed_dependency_chain_span_ms": observed_chain_span_ms,
+        "observed_execution_chain_span_ms": observed_chain_span_ms,
         "gate_tail_residual_ms": tail_residual_ms,
-        "critical_chain": chain_rows,
-        "critical_chain_mods": [node.mod for node in chain],
+        "observed_execution_critical_chain": execution_rows,
+        "observed_execution_critical_chain_mods": [node.mod for node in execution_chain],
+        "dependency_last_predecessor_chain_mods": [node.mod for node in dependency_chain],
         "material_critical_mod": material.mod,
         "material_critical_mod_node_ms": material.node_ms,
-        "missing_dependency_nodes": dependency_missing,
         "top_nodes": [
             {
                 "mod": node.mod,
+                "thread_id": node.thread_id,
                 "node_ms": node.node_ms,
                 "construct_ms": node.construct_ms,
+                "constructor_exclusive_ms": node.constructor_exclusive_ms,
                 "subscriber_ms": node.subscriber_ms,
                 "event_ms": node.event_ms,
-                "on_critical_chain": node.mod in chain_mod_set,
+                "on_execution_critical_chain": node.mod in execution_mod_set,
+                "on_dependency_chain": node.mod in dependency_mod_set,
             }
             for node in top_nodes
         ],
@@ -199,52 +295,52 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 def markdown(result: dict[str, Any]) -> str:
     lines = [
-        "# FML construction critical-chain profile",
+        "# FML construction observed critical-path profile",
         "",
         f"- version gate: `{result['profile_header']}`",
         f"- construction gate: **{result['gate_ms']:.3f} ms**",
         f"- complete observed nodes: **{result['complete_nodes']}**",
         f"- dependency records: **{result['dependency_records']}**",
+        f"- observed executor workers: **{result['worker_count']}**",
         f"- last-finishing node: **`{result['critical_sink']}`**",
-        f"- gate start -> last node end: **{result['observed_dependency_chain_span_ms']:.3f} ms**",
+        f"- gate start -> last node end: **{result['observed_execution_chain_span_ms']:.3f} ms**",
         f"- post-node gate residual: **{result['gate_tail_residual_ms']:.3f} ms**",
         "",
-        "Durations below are individual node walls. They are intentionally not summed across parallel nodes.",
+        "The primary chain follows whichever actually released each node last: its latest direct dependency or the previous task on the same worker. This captures observed executor serialization without summing overlapping nodes.",
         "",
-        "## Observed last-predecessor chain",
+        "## Observed execution critical chain",
         "",
-        "| mod | node ms | construct ms | subscriber ms | construct-event ms | ready→start ms |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
+        "| mod | blocker | tid | node ms | constructor excl. ms | subscriber ms | construct-event ms | dep-ready→start ms | causal gap ms |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
-    for row in result["critical_chain"]:
+    for row in result["observed_execution_critical_chain"]:
+        blocker = row["causal_predecessor"] or "gate"
+        blocker = f"{row['causal_predecessor_kind']}:{blocker}"
         lines.append(
-            f"| `{row['mod']}` | {fmt(row['node_ms'])} | {fmt(row['construct_ms'])} | "
-            f"{fmt(row['subscriber_ms'])} | {fmt(row['event_ms'])} | {fmt(row['ready_to_start_ms'])} |"
+            f"| `{row['mod']}` | `{blocker}` | {row['thread_id']} | {fmt(row['node_ms'])} | "
+            f"{fmt(row['constructor_exclusive_ms'])} | {fmt(row['subscriber_ms'])} | {fmt(row['event_ms'])} | "
+            f"{fmt(row['dependency_ready_to_start_ms'])} | {fmt(row['causal_dispatch_gap_ms'])} |"
         )
     lines.extend(
         [
             "",
-            f"Largest individual node on that dependency chain: **`{result['material_critical_mod']}`** "
+            "Dependency-only last-predecessor lineage: "
+            + " -> ".join(f"`{mod}`" for mod in result["dependency_last_predecessor_chain_mods"]),
+            "",
+            f"Largest individual node on the observed execution chain: **`{result['material_critical_mod']}`** "
             f"at **{result['material_critical_mod_node_ms']:.3f} ms**. This is an investigation target, not a savings claim.",
             "",
             "## Longest individual construction nodes",
             "",
-            "| mod | node ms | construct ms | subscriber ms | construct-event ms | critical chain |",
-            "| --- | ---: | ---: | ---: | ---: | :---: |",
+            "| mod | tid | node ms | constructor excl. ms | subscriber ms | construct-event ms | execution chain | dependency chain |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | :---: | :---: |",
         ]
     )
     for row in result["top_nodes"]:
         lines.append(
-            f"| `{row['mod']}` | {fmt(row['node_ms'])} | {fmt(row['construct_ms'])} | "
-            f"{fmt(row['subscriber_ms'])} | {fmt(row['event_ms'])} | {'yes' if row['on_critical_chain'] else 'no'} |"
-        )
-    if result["missing_dependency_nodes"]:
-        lines.extend(
-            [
-                "",
-                "Missing predecessor timing nodes: "
-                + ", ".join(f"`{mod}`" for mod in result["missing_dependency_nodes"]),
-            ]
+            f"| `{row['mod']}` | {row['thread_id']} | {fmt(row['node_ms'])} | "
+            f"{fmt(row['constructor_exclusive_ms'])} | {fmt(row['subscriber_ms'])} | {fmt(row['event_ms'])} | "
+            f"{'yes' if row['on_execution_critical_chain'] else 'no'} | {'yes' if row['on_dependency_chain'] else 'no'} |"
         )
     return "\n".join(lines) + "\n"
 
