@@ -8,7 +8,6 @@ on:
       - opened
       - synchronize
       - reopened
-      - edited
 
 permissions:
   contents: read
@@ -29,7 +28,7 @@ env:
   LIBGL_ALWAYS_SOFTWARE: 'true'
   GALLIUM_DRIVER: llvmpipe
   MESA_GL_VERSION_OVERRIDE: '4.6'
-  MESA_GLSL_VERSION_OVERRIDE: '460'
+  MESA_GLSL_VERSION_OVERRIDE: 460
   BOOTOPTIM_MCEF_MIRROR_PORT: '18765'
   BOOTOPTIM_PACK_JAVA_VERSION: '25'
   BOOTOPTIM_PACK_BASE_JVM_ARGS: |-
