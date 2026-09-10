@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** JDK-only observational hooks embedded into the exact Connector jar by the hosted diagnostic patcher. */
+/** JDK-only observational hooks embedded as one class into the exact Connector jar. */
 public final class ConnectorWarmResidualHooks {
     public static final String ENABLE_PROPERTY = "boot_optim.profileConnectorWarm";
     public static final String PATH_PROPERTY = "boot_optim.connectorTrace.path";
@@ -29,9 +29,12 @@ public final class ConnectorWarmResidualHooks {
     private static final long JVM_START_EPOCH_MS = runtimeStartTime();
     private static final long PID = currentPid();
     private static final AtomicLong NEXT_ID = new AtomicLong();
-    private static final ConcurrentHashMap<Long, Start> STARTS = new ConcurrentHashMap<>();
-    private static final ConcurrentLinkedQueue<Event> EVENTS = new ConcurrentLinkedQueue<>();
-    private static final ConcurrentLinkedQueue<CacheEvent> CACHE_EVENTS = new ConcurrentLinkedQueue<>();
+    // Start row: id,parent,predecessor,phase,resource,threadId,threadName,startNano.
+    private static final ConcurrentHashMap<Long, Object[]> STARTS = new ConcurrentHashMap<>();
+    // Event row: id,parent,predecessor,phase,resource,threadId,threadName,startNano,endNano.
+    private static final ConcurrentLinkedQueue<Object[]> EVENTS = new ConcurrentLinkedQueue<>();
+    // Cache row: parent,kind,hit,resource,threadId,threadName,atNano.
+    private static final ConcurrentLinkedQueue<Object[]> CACHE_EVENTS = new ConcurrentLinkedQueue<>();
     private static final ThreadLocal<ArrayDeque<Long>> STACK = ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<Long> LAST_END = ThreadLocal.withInitial(() -> 0L);
     private static final AtomicLong ERRORS = new AtomicLong();
@@ -55,8 +58,8 @@ public final class ConnectorWarmResidualHooks {
             long id = NEXT_ID.incrementAndGet();
             long parent = stack.isEmpty() ? 0L : stack.peekLast();
             long predecessor = LAST_END.get();
-            STARTS.put(id, new Start(id, parent, predecessor, phase, stringify(resource), thread.threadId(),
-                    thread.getName(), System.nanoTime()));
+            STARTS.put(id, new Object[] { id, parent, predecessor, phase, stringify(resource), thread.threadId(),
+                    thread.getName(), System.nanoTime() });
             stack.addLast(id);
             return id;
         } catch (Throwable ignored) {
@@ -73,7 +76,7 @@ public final class ConnectorWarmResidualHooks {
         if (!ENABLED || id == 0L) return;
         try {
             long end = System.nanoTime();
-            Start start = STARTS.remove(id);
+            Object[] start = STARTS.remove(id);
             if (start == null) {
                 ERRORS.incrementAndGet();
                 return;
@@ -85,7 +88,7 @@ public final class ConnectorWarmResidualHooks {
             } else {
                 stack.removeLast();
             }
-            EVENTS.add(new Event(start, end));
+            EVENTS.add(new Object[] { start[0], start[1], start[2], start[3], start[4], start[5], start[6], start[7], end });
             LAST_END.set(id);
         } catch (Throwable ignored) {
             ERRORS.incrementAndGet();
@@ -108,8 +111,8 @@ public final class ConnectorWarmResidualHooks {
             Thread thread = Thread.currentThread();
             ArrayDeque<Long> stack = STACK.get();
             long parent = stack.isEmpty() ? 0L : stack.peekLast();
-            CACHE_EVENTS.add(new CacheEvent(parent, cacheKind, hit, stringify(resource), thread.threadId(),
-                    thread.getName(), System.nanoTime()));
+            CACHE_EVENTS.add(new Object[] { parent, cacheKind, hit, stringify(resource), thread.threadId(),
+                    thread.getName(), System.nanoTime() });
         } catch (Throwable ignored) {
             ERRORS.incrementAndGet();
         }
@@ -123,10 +126,10 @@ public final class ConnectorWarmResidualHooks {
             Path parent = output.getParent();
             if (parent != null) Files.createDirectories(parent);
             Path temp = output.resolveSibling(output.getFileName() + ".tmp-" + PID);
-            List<Event> events = new ArrayList<>(EVENTS);
-            events.sort(Comparator.comparingLong(e -> e.start.startNano));
-            List<CacheEvent> cacheEvents = new ArrayList<>(CACHE_EVENTS);
-            cacheEvents.sort(Comparator.comparingLong(CacheEvent::atNano));
+            List<Object[]> events = new ArrayList<>(EVENTS);
+            events.sort(Comparator.comparingLong(e -> asLong(e[7])));
+            List<Object[]> cacheEvents = new ArrayList<>(CACHE_EVENTS);
+            cacheEvents.sort(Comparator.comparingLong(e -> asLong(e[6])));
             try (BufferedWriter writer = Files.newBufferedWriter(temp, StandardCharsets.UTF_8)) {
                 writer.write("{\"record\":\"connector_trace_header\",\"schema_version\":" + SCHEMA_VERSION
                         + ",\"connector_version\":" + quote(CONNECTOR_VERSION)
@@ -137,28 +140,29 @@ public final class ConnectorWarmResidualHooks {
                         + ",\"trace_origin_mono_ns\":" + ORIGIN_NANO
                         + ",\"clock_source\":\"System.nanoTime\"}");
                 writer.newLine();
-                for (Event event : events) {
-                    Start s = event.start;
-                    writer.write("{\"record\":\"scope\",\"id\":" + s.id
-                            + ",\"parent_id\":" + s.parentId
-                            + ",\"predecessor_id\":" + s.predecessorId
-                            + ",\"phase\":" + quote(s.phase)
-                            + ",\"resource\":" + quote(s.resource)
-                            + ",\"thread_id\":" + s.threadId
-                            + ",\"thread\":" + quote(s.threadName)
-                            + ",\"start_mono_ns\":" + s.startNano
-                            + ",\"end_mono_ns\":" + event.endNano
-                            + ",\"duration_ns\":" + Math.max(0L, event.endNano - s.startNano) + "}");
+                for (Object[] event : events) {
+                    long start = asLong(event[7]);
+                    long end = asLong(event[8]);
+                    writer.write("{\"record\":\"scope\",\"id\":" + event[0]
+                            + ",\"parent_id\":" + event[1]
+                            + ",\"predecessor_id\":" + event[2]
+                            + ",\"phase\":" + quote((String) event[3])
+                            + ",\"resource\":" + quote((String) event[4])
+                            + ",\"thread_id\":" + event[5]
+                            + ",\"thread\":" + quote((String) event[6])
+                            + ",\"start_mono_ns\":" + start
+                            + ",\"end_mono_ns\":" + end
+                            + ",\"duration_ns\":" + Math.max(0L, end - start) + "}");
                     writer.newLine();
                 }
-                for (CacheEvent event : cacheEvents) {
-                    writer.write("{\"record\":\"cache\",\"parent_id\":" + event.parentId
-                            + ",\"kind\":" + quote(event.kind)
-                            + ",\"hit\":" + event.hit
-                            + ",\"resource\":" + quote(event.resource)
-                            + ",\"thread_id\":" + event.threadId
-                            + ",\"thread\":" + quote(event.threadName)
-                            + ",\"at_mono_ns\":" + event.atNano + "}");
+                for (Object[] event : cacheEvents) {
+                    writer.write("{\"record\":\"cache\",\"parent_id\":" + event[0]
+                            + ",\"kind\":" + quote((String) event[1])
+                            + ",\"hit\":" + event[2]
+                            + ",\"resource\":" + quote((String) event[3])
+                            + ",\"thread_id\":" + event[4]
+                            + ",\"thread\":" + quote((String) event[5])
+                            + ",\"at_mono_ns\":" + event[6] + "}");
                     writer.newLine();
                 }
                 writer.write("{\"record\":\"connector_trace_summary\",\"scope_events\":" + events.size()
@@ -171,6 +175,10 @@ public final class ConnectorWarmResidualHooks {
         } catch (Throwable ignored) {
             // Trace I/O is never a startup dependency.
         }
+    }
+
+    private static long asLong(Object value) {
+        return ((Number) value).longValue();
     }
 
     private static String stringify(Object value) {
@@ -207,12 +215,6 @@ public final class ConnectorWarmResidualHooks {
         try { return ManagementFactory.getRuntimeMXBean().getStartTime(); }
         catch (Throwable ignored) { return -1L; }
     }
-
-    private record Start(long id, long parentId, long predecessorId, String phase, String resource,
-                         long threadId, String threadName, long startNano) {}
-    private record Event(Start start, long endNano) {}
-    private record CacheEvent(long parentId, String kind, boolean hit, String resource,
-                              long threadId, String threadName, long atNano) {}
 
     private ConnectorWarmResidualHooks() {}
 }
