@@ -73,6 +73,29 @@ function Archive-RunEvidence([object]$s) {
     }
     $s.logArchive=@($copied)
 }
+function Start-P02HostProbe([object]$s) {
+    if(-not($s.PSObject.Properties['p02HostProbe']) -or -not[bool]$s.p02HostProbe){return}
+    $probe=Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'remote_laptop_p02_probe.ps1'
+    if(-not(Test-Path -LiteralPath $probe -PathType Leaf)){throw 'P0.2 host probe script is missing'}
+    $evidence=Join-Path (Split-Path -Parent $StateFile) 'evidence'
+    New-Item -ItemType Directory -Force -Path $evidence|Out-Null
+    $host=Join-Path $evidence 'p02-host.jsonl'
+    $stdout=Join-Path $evidence 'p02-observer.stdout.txt'
+    $stderr=Join-Path $evidence 'p02-observer.stderr.txt'
+    if(Test-Path -LiteralPath $host){throw 'P0.2 host evidence already exists'}
+    $cold=if($s.PSObject.Properties['p02ColdState']){[string]$s.p02ColdState}else{'unknown'}
+    $invoke="& '$probe' -TargetPid $($s.javaPid) -CreationDate '$($s.javaCreationDate)' -OutputPath '$host' -RunId '$($s.runId)' -Origin physical_laptop -Endpoint main_menu -ColdState $cold -SampleIntervalMs 5000 -TimeoutSeconds $($s.timeoutSeconds)"
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invoke))
+    $ps="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+    $p=Start-Process -FilePath $ps -ArgumentList "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $encoded" -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+    $s.p02ObserverPid=[int]$p.Id
+    $s.p02HostEvidence=$host
+}
+function Wait-P02HostProbe([object]$s) {
+    if(-not($s.PSObject.Properties['p02ObserverPid']) -or [int]$s.p02ObserverPid-le0){return}
+    $p=Get-Process -Id ([int]$s.p02ObserverPid) -ErrorAction SilentlyContinue
+    if($p){[void]$p.WaitForExit(15000)}
+}
 
 $s=Load
 try{Ensure-Native}catch{Fail $s ("native helper setup failed: "+$_.Exception.Message)}
@@ -132,6 +155,7 @@ try{
     foreach($g in @($bootKeys|Group-Object)){if($g.Count-gt1){throw "duplicate BootOptim JVM property key: $($g.Name)"}}
     foreach($family in @('^-Xmx','^-Xms','^-XX:ActiveProcessorCount=')){if(@($argv|Where-Object{([string]$_)-match$family}).Count-gt1){throw "duplicate JVM singleton option family: $family"}}
     $s.effectiveCommandLineSha256=Text-Sha256 $cmd;$s.observedBootOptimPropertyKeys=@($bootKeys|Sort-Object -Unique);$s.validatedRequiredJvmArgs=@($s.requiredJvmArgs);$s.valid=$true;$s.reason=$null;$s.phase='measuring';Save $s
+    try{Start-P02HostProbe $s;Save $s}catch{$s.p02ObserverError=$_.Exception.GetType().Name;Save $s}
 }catch{
     $m=$_.Exception.Message;try{if($javaHandle -and -not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{};try{Stop-PrismOwned $s}catch{};Fail $s $m
 }
@@ -142,6 +166,7 @@ if(-not$exited){
     try{if(-not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{}
 }else{$s.javaExitedUtc=[DateTime]::UtcNow.ToString('o')}
 try{Stop-PrismOwned $s}catch{$s.valid=$false;$s.reason='prism_close_failed'}
+try{Wait-P02HostProbe $s}catch{$s.p02ObserverWaitError=$_.Exception.GetType().Name}
 try{Archive-RunEvidence $s}catch{
     # Archive failure is not a game failure, but it must be explicit: subsequent performance or diagnostic
     # analysis has no permission to silently use whatever a later launch writes into the live logs.

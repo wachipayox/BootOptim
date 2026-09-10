@@ -15,6 +15,9 @@ param(
     [string[]]$RequiredJvmArg = @(),
     [string[]]$ForbiddenJvmArg = @(),
     [string]$ExpectedJavaExe,
+    [switch]$P02HostProbe,
+    [ValidateSet('fresh_boot_no_pack_touch','warm_same_boot','unknown')]
+    [string]$P02ColdState = 'unknown',
     [int]$TimeoutSeconds = 900,
     [string]$StateRoot = (Join-Path $env:LOCALAPPDATA 'BootOptimBench'),
     [switch]$ForceStopOwned
@@ -114,7 +117,7 @@ function Config {
     if($ExpectedJarSha256 -notmatch '^[0-9A-Fa-f]{64}$'){Fail 'ExpectedJarSha256 must be 64 hexadecimal characters'}
     if($TimeoutSeconds-lt600){Fail 'TimeoutSeconds < 600 is unsafe for the observed 350-380 s startup regime'}
     $r=Full $InstanceRoot;$g=Join-Path $r '.minecraft';if(-not(Test-Path -LiteralPath $g -PathType Container)){Fail "missing $g"}
-    [pscustomobject]@{runId=$RunId;instanceRoot=$r;gameRoot=$g;modsDir=Join-Path $g 'mods';instanceCfg=Join-Path $r 'instance.cfg';prismExe=Full $PrismExe;prismRoot=if($PrismRoot){Full $PrismRoot}else{$null};instanceId=$InstanceId;interactiveUser=$InteractiveUser;artifactJar=Full $ArtifactJar;candidateSha=$ExpectedJarSha256.ToUpperInvariant();jvmArgs=$JvmArgs;required=@($RequiredJvmArg);forbidden=@($ForbiddenJvmArg);expectedJava=if($ExpectedJavaExe){Full $ExpectedJavaExe}else{$null};timeout=$TimeoutSeconds}
+    [pscustomobject]@{runId=$RunId;instanceRoot=$r;gameRoot=$g;modsDir=Join-Path $g 'mods';instanceCfg=Join-Path $r 'instance.cfg';prismExe=Full $PrismExe;prismRoot=if($PrismRoot){Full $PrismRoot}else{$null};instanceId=$InstanceId;interactiveUser=$InteractiveUser;artifactJar=Full $ArtifactJar;candidateSha=$ExpectedJarSha256.ToUpperInvariant();jvmArgs=$JvmArgs;required=@($RequiredJvmArg);forbidden=@($ForbiddenJvmArg);expectedJava=if($ExpectedJavaExe){Full $ExpectedJavaExe}else{$null};p02HostProbe=[bool]$P02HostProbe;p02ColdState=$P02ColdState;timeout=$TimeoutSeconds}
 }
 function Pre([object]$c) {
     foreach($p in @($c.instanceRoot,$c.gameRoot,$c.modsDir)){if(-not(Test-Path -LiteralPath $p -PathType Container)){Fail "missing directory $p"}}
@@ -160,7 +163,7 @@ switch($Action){
     $target=Join-Path $c.modsDir ('bootoptim-bench-'+$c.runId+'-'+$c.candidateSha.Substring(0,12)+'.jar');if($target.Equals($p.jar.path,[StringComparison]::OrdinalIgnoreCase)){$target=Join-Path $c.modsDir ('bootoptim-bench-staged-'+$c.candidateSha.Substring(0,12)+'.jar')}
     if(Test-Path -LiteralPath $target){Fail "staged target path already exists: $target"}
     $tmp=$target+'.partial-'+[Guid]::NewGuid().ToString('N');if(Test-Path -LiteralPath $tmp){Fail "staging temporary path already exists: $tmp"}
-    $st=[ordered]@{schema=3;phase='staging';valid=$false;reason=$null;runId=$c.runId;instanceRoot=$c.instanceRoot;gameRoot=$c.gameRoot;modsDir=$c.modsDir;instanceCfg=$c.instanceCfg;prismExe=$c.prismExe;prismRoot=$c.prismRoot;instanceId=$c.instanceId;interactiveUser=$resolvedUser;expectedSessionId=$p.session.sessionId;candidateSha256=$c.candidateSha;requiredJvmArgs=@($c.required);forbiddenJvmArgs=@($c.forbidden);expectedJavaExe=$c.expectedJava;timeoutSeconds=$c.timeout;originalCfgSha256=Sha $c.instanceCfg;cfgBackup=$cfgBak;originalJarPath=$p.jar.path;originalJarSha256=$p.jar.sha256;jarBackup=$jarBak;stagedJar=$target;stagedTemp=$tmp;stagedCfgSha256=$null;runner=$runner;taskName=('BootOptimBench-'+$c.runId+'-'+$taskNonce);prismPid=0;prismCreationDate=$null;javaPid=0;javaCreationDate=$null;effectiveCommandLineSha256=$null;observedBootOptimPropertyKeys=@();validatedRequiredJvmArgs=@();effectiveJavaExe=$null;launchStartedUtc=$null;javaExitedUtc=$null;finishedUtc=$null;restoredUtc=$null;createdUtc=[DateTime]::UtcNow.ToString('o')};Save $st $stateFile
+    $st=[ordered]@{schema=3;phase='staging';valid=$false;reason=$null;runId=$c.runId;instanceRoot=$c.instanceRoot;gameRoot=$c.gameRoot;modsDir=$c.modsDir;instanceCfg=$c.instanceCfg;prismExe=$c.prismExe;prismRoot=$c.prismRoot;instanceId=$c.instanceId;interactiveUser=$resolvedUser;expectedSessionId=$p.session.sessionId;candidateSha256=$c.candidateSha;requiredJvmArgs=@($c.required);forbiddenJvmArgs=@($c.forbidden);expectedJavaExe=$c.expectedJava;p02HostProbe=$c.p02HostProbe;p02ColdState=$c.p02ColdState;p02ObserverPid=0;p02HostEvidence=$null;timeoutSeconds=$c.timeout;originalCfgSha256=Sha $c.instanceCfg;cfgBackup=$cfgBak;originalJarPath=$p.jar.path;originalJarSha256=$p.jar.sha256;jarBackup=$jarBak;stagedJar=$target;stagedTemp=$tmp;stagedCfgSha256=$null;runner=$runner;taskName=('BootOptimBench-'+$c.runId+'-'+$taskNonce);prismPid=0;prismCreationDate=$null;javaPid=0;javaCreationDate=$null;effectiveCommandLineSha256=$null;observedBootOptimPropertyKeys=@();validatedRequiredJvmArgs=@();effectiveJavaExe=$null;launchStartedUtc=$null;javaExitedUtc=$null;finishedUtc=$null;restoredUtc=$null;createdUtc=[DateTime]::UtcNow.ToString('o')};Save $st $stateFile
     Remove-Item -LiteralPath $p.jar.path
     try{Copy-Item -LiteralPath $c.artifactJar -Destination $tmp;if((Sha $tmp)-ne$c.candidateSha){Fail 'candidate copy hash mismatch'};Move-Item -LiteralPath $tmp -Destination $target}catch{throw}finally{if(Test-Path -LiteralPath $tmp){Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue}}
     $live=One-Wrapper $c.modsDir $c.candidateSha
