@@ -20,7 +20,11 @@ SUMMARY = re.compile(r"^SUMMARY .* total_startup_ms=(\d+) status=(\S+)")
 
 
 def epoch_ms(text: str) -> float:
-    return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp() * 1000.0
+    # Windows/.NET emits seven fractional-second digits; older Python versions
+    # accept at most six. Preserve millisecond precision while making completed
+    # laptop evidence portable across the controller's Python installations.
+    normalized = re.sub(r"(\.\d{6})\d+(?=(?:Z|[+-]\d\d:\d\d)$)", r"\1", text)
+    return datetime.fromisoformat(normalized.replace("Z", "+00:00")).timestamp() * 1000.0
 
 
 def num(value):
@@ -81,16 +85,12 @@ def first_last(samples, key):
 
 def aggregate(samples):
     keys = [
-        "processPercentCpu", "processIoReadBytesPerSec", "processIoWriteBytesPerSec",
-        "processPageFaultsPerSec", "memoryPagesInputPerSec", "memoryPageReadsPerSec",
-        "memoryTransitionFaultsPerSec", "diskReadBytesPerSec", "diskWriteBytesPerSec",
-        "diskCurrentQueueLength", "diskAvgQueueLength", "diskAvgSecondsPerRead",
-        "diskPercentTime", "cpuPercent", "processorQueueLength", "sampleCostMs",
+        "sampleCostMs", "processThreadCount",
     ]
     out = {key: mean_max(samples, key) for key in keys}
-    out["memoryAvailableMBytes"] = first_last(samples, "memoryAvailableMBytes")
-    out["memoryCacheBytes"] = first_last(samples, "memoryCacheBytes")
-    out["memoryStandbyCacheNormalPriorityBytes"] = first_last(samples, "memoryStandbyCacheNormalPriorityBytes")
+    out["processCpuMs"] = first_last(samples, "processCpuMs")
+    out["processWorkingSetBytes"] = first_last(samples, "processWorkingSetBytes")
+    out["processPrivateBytes"] = first_last(samples, "processPrivateBytes")
     out["sampleCount"] = len(samples)
     return out
 
@@ -217,7 +217,7 @@ def main():
         "validity": {"issues": issues, "warnings": warnings, "valid": not issues},
         "interpretation_rules": [
             "Do not call wall-minus-process-CPU disk time.",
-            "PageFaults/sec alone does not prove hard faults; require PagesInput/PageReads plus disk evidence.",
+            "The low-intrusion host probe deliberately does not establish disk, global CPU or paging causality.",
             "Compare only runs with matching physical origin, endpoint, pack/JVM contract and coldState class.",
             "A single run can correlate signals but cannot establish a P0.2 root cause.",
         ],
