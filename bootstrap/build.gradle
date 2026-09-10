@@ -55,7 +55,7 @@ tasks.named('jar', Jar).configure {
 tasks.register('patchConnectorWarmResidual', JavaExec) {
     dependsOn tasks.named('classes')
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'dev.wachipayox.bootoptim.bootstrap.ConnectorWarmResidualPatcher'
+    mainClass = 'dev.wachipayox.bootoptim.bootstrap.ConnectorWarmResidualPatcherEntry'
     args rootProject.file('run-pack-benchmark/mods').absolutePath
 }
 
