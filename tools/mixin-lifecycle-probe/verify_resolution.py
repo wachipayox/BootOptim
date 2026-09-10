@@ -10,7 +10,7 @@ from pathlib import Path
 ML_COMPONENT = "cpw.mods:modlauncher:11.0.5"
 SJH_COMPONENT = "cpw.mods:securejarhandler:3.0.8"
 MIXIN_COMPONENT = "net.fabricmc:sponge-mixin:0.15.2+mixin.0.8.7"
-MIXIN_PROBE = "agent96-mixin-main-lifecycle-v1"
+MIXIN_PROBE = "agent96-mixin-prepareconfigs-suffix-v2"
 MIXIN_UPSTREAM = "023e39334850e839c283be413257bf459f40a5d6"
 
 
@@ -113,7 +113,7 @@ def main() -> None:
         "counts": {key: len(value) for key, value in found.items()},
     }
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print("BOOTOPTIM_AGENT96_LIFECYCLE_PREFLIGHT " + json.dumps(result, sort_keys=True), flush=True)
+    print("BOOTOPTIM_AGENT96_PREPARECONFIGS_PREFLIGHT " + json.dumps(result, sort_keys=True), flush=True)
 
 
 if __name__ == "__main__":
