@@ -28,7 +28,7 @@ function Save([object]$value,[string]$path){
     Move-Item -LiteralPath $tmp -Destination $path -Force
 }
 function Load([string]$path){Get-Content -LiteralPath $path -Raw|ConvertFrom-Json}
-function Invoke-Tx([hashtable]$args){& $TransactionScript @args}
+function Invoke-Tx([hashtable]$txArgs){& $TransactionScript @txArgs}
 
 if(-not(Test-Path -LiteralPath $TransactionScript -PathType Leaf)){throw "Missing transaction script: $TransactionScript"}
 $root=Join-Path ([IO.Path]::GetFullPath($BatchRoot)) $BatchId
@@ -36,14 +36,17 @@ if(Test-Path -LiteralPath $root){throw "Batch already exists: $root"}
 $runsRoot=Join-Path $root 'runs'
 New-Item -ItemType Directory -Force -Path $runsRoot|Out-Null
 $statePath=Join-Path $root 'batch-state.json'
-$batch=[ordered]@{schema=1;batchId=$BatchId;phase='running';runs=$Runs;interRunSeconds=$InterRunSeconds;createdUtc=[DateTime]::UtcNow.ToString('o');finishedUtc=$null;results=@()}
+$batch=[ordered]@{schema=1;batchId=$BatchId;phase='running';failure=$null;runs=$Runs;interRunSeconds=$InterRunSeconds;createdUtc=[DateTime]::UtcNow.ToString('o');finishedUtc=$null;results=@()}
 Save $batch $statePath
 
 for($index=1;$index-le$Runs;$index++){
     $runId=('{0}-{1:d2}' -f $BatchId,$index)
     $common=@{RunId=$runId;InstanceRoot=$InstanceRoot;PrismExe=$PrismExe;PrismRoot=$PrismRoot;InstanceId=$InstanceId;InteractiveUser=$InteractiveUser;ArtifactJar=$ArtifactJar;ExpectedJarSha256=$ExpectedJarSha256;ExpectedJavaExe=$ExpectedJavaExe;JvmArgs=$JvmArgs;RequiredJvmArg=$RequiredJvmArg;TimeoutSeconds=$TimeoutSeconds;StateRoot=$runsRoot;P02HostProbe=$true;P02ColdState='warm_same_boot'}
-    $entry=[ordered]@{index=$index;runId=$runId;startedUtc=[DateTime]::UtcNow.ToString('o');endedUtc=$null;phase=$null;valid=$false;reason=$null;postflight=$null}
-    $batch.results+= [pscustomobject]$entry; Save $batch $statePath
+    # Keep the same mutable object in the result array.  Converting an ordered
+    # dictionary at append time snapshots its then-current values, so later
+    # transaction results would otherwise be absent from batch-state.json.
+    $entry=[pscustomobject][ordered]@{index=$index;runId=$runId;startedUtc=[DateTime]::UtcNow.ToString('o');endedUtc=$null;phase=$null;valid=$false;reason=$null;postflight=$null}
+    $batch.results+= $entry; Save $batch $statePath
     try{
         Invoke-Tx ($common + @{Action='Preflight'})|Out-Null
         Invoke-Tx ($common + @{Action='Stage'})|Out-Null
