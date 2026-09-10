@@ -1,4 +1,4 @@
-name: Agent 98 Post-checkSelect Main Prefix Profile
+name: Agent 99 DataFixers Lifecycle Profile
 
 on:
   pull_request:
@@ -14,14 +14,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: agent98-post-checkselect-main-prefix-${{ github.event.pull_request.number }}
+  group: agent99-datafixers-lifecycle-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
   EXACT_PACK_TAG: exact-pack-2026-09-02-v1
   EXACT_PACK_ASSET: bootoptim-exact-pack.zip
   EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
-  EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd90497a4d-linux
+  EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd4-linux
   MCEF_JAVA_CEF_COMMIT: a78e832f9f13c2c688caea3d04d8b84fcd238d94
   MCEF_PLATFORM: linux_amd64
   MCEF_CACHE_KEY: mcef-jcef-a78e832f9f13c2c688caea3d04d8b84fcd238d94-linux-amd64-v1
@@ -47,7 +47,7 @@ env:
 
 jobs:
   profile:
-    if: github.event.pull_request.number == 231
+    if: github.head_ref == 'agent99/datafixers-lifecycle-boundaries-20260910'
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     steps:
@@ -182,10 +182,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/modlauncher-fork-probe/prepare_runtime.py --root "$PWD" --output "$PWD/.agent98-ml-fork-repo" --report "$PWD/modlauncher-fork-build.json"
-          python tools/mixin-lifecycle-probe/prepare_runtime.py --root "$PWD" --output "$PWD/.agent98-mixin-fork-repo" --report "$PWD/mixin-fork-build.json"
-          export BOOTOPTIM_ML_FORK_REPO="$PWD/.agent98-ml-fork-repo"
-          export BOOTOPTIM_MIXIN_FORK_REPO="$PWD/.agent98-mixin-fork-repo"
+          python tools/modlauncher-fork-probe/prepare_runtime.py --root "$PWD" --output "$PWD/.agent99-ml-fork-repo" --report "$PWD/modlauncher-fork-build.json"
+          python tools/mixin-lifecycle-probe/prepare_runtime.py --root "$PWD" --output "$PWD/.agent99-mixin-fork-repo" --report "$PWD/mixin-fork-build.json"
+          export BOOTOPTIM_ML_FORK_REPO="$PWD/.agent99-ml-fork-repo"
+          export BOOTOPTIM_MIXIN_FORK_REPO="$PWD/.agent99-mixin-fork-repo"
           ./gradlew preparePackBenchmarkClientRun --no-daemon --console=plain
           ./gradlew -I tools/modlauncher-fork-probe/resolve_launch_files.gradle \
             agent94WriteLaunchResolution \
@@ -195,7 +195,7 @@ jobs:
             --resolution modlauncher-fork-resolution.json \
             --modlauncher-build modlauncher-fork-build.json \
             --mixin-build mixin-fork-build.json \
-            --output agent98-lifecycle-preflight.json
+            --output agent99-lifecycle-preflight.json
           echo "BOOTOPTIM_ML_FORK_REPO=$BOOTOPTIM_ML_FORK_REPO" >> "$GITHUB_ENV"
           echo "BOOTOPTIM_MIXIN_FORK_REPO=$BOOTOPTIM_MIXIN_FORK_REPO" >> "$GITHUB_ENV"
           echo "JAVA_TOOL_OPTIONS=-Dboot_optim.modlauncherForkTrace=true" >> "$GITHUB_ENV"
@@ -203,41 +203,44 @@ jobs:
       - name: Launch exact pack to main menu and validate resources
         shell: bash
         run: |
-          python scripts/exact-pack/run_startup.py --variant agent98-post-checkselect-main-prefix --iteration 1 --timeout 1200
+          python scripts/exact-pack/run_startup.py --variant agent99-datafixers-lifecycle --iteration 1 --timeout 1200
 
-      - name: Require exact two-request Agent 98 profile
+      - name: Require exact two-request Agent 99 profile
         shell: bash
         run: |
           set -euo pipefail
           python tools/modlauncher-fork-probe/parse_profile.py --console exact-pack-console.log --output modlauncher-fork-profile-v2.json
-          python tools/mixin-lifecycle-probe/parse_lifecycle.py --console exact-pack-console.log --output agent98-main-prefix-profile.json
+          python tools/mixin-lifecycle-probe/parse_lifecycle.py --console exact-pack-console.log --output agent99-main-prefix-profile.json
+          python tools/mixin-lifecycle-probe/parse_datafixers.py --console exact-pack-console.log --output agent99-datafixers-profile.json
           python - <<'PY'
           import json
           from pathlib import Path
           result = json.loads(Path('result.json').read_text())
-          result['agent98_lifecycle_preflight'] = json.loads(Path('agent98-lifecycle-preflight.json').read_text())
+          result['agent99_lifecycle_preflight'] = json.loads(Path('agent99-lifecycle-preflight.json').read_text())
           result['modlauncher_fork_profile_v2'] = json.loads(Path('modlauncher-fork-profile-v2.json').read_text())
-          result['agent98_main_prefix_profile'] = json.loads(Path('agent98-main-prefix-profile.json').read_text())
+          result['agent99_main_prefix_profile'] = json.loads(Path('agent99-main-prefix-profile.json').read_text())
+          result['agent99_datafixers_profile'] = json.loads(Path('agent99-datafixers-profile.json').read_text())
           Path('result.json').write_text(json.dumps(result, indent=2) + '\n')
           PY
 
-      - name: Upload Agent 98 lifecycle evidence
+      - name: Upload Agent 99 lifecycle evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agent98-post-checkselect-main-prefix-${{ github.event.pull_request.head.sha }}
+          name: agent99-datafixers-lifecycle-${{ github.event.pull_request.head.sha }}
           path: |
             result.json
             resource-selection-check.json
             resource-selection-reference.txt
             exact-pack-console.log
             exact-pack-thread-dump.log
-            agent98-lifecycle-preflight.json
+            agent99-lifecycle-preflight.json
             modlauncher-fork-build.json
             mixin-fork-build.json
             modlauncher-fork-resolution.json
             modlauncher-fork-profile-v2.json
-            agent98-main-prefix-profile.json
+            agent99-main-prefix-profile.json
+            agent99-datafixers-profile.json
             glxinfo.txt
             hosted-runner.txt
             run-pack-benchmark/logs/latest.log
