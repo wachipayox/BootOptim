@@ -89,7 +89,7 @@ function Archive-RunEvidence([object]$s) {
 }
 function Start-P02HostProbe([object]$s) {
     if(-not($s.PSObject.Properties['p02HostProbe']) -or -not[bool]$s.p02HostProbe){return}
-    $probe=Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'remote_laptop_p02_probe.ps1'
+    $probe=Join-Path $PSScriptRoot 'remote_laptop_p02_probe.ps1'
     if(-not(Test-Path -LiteralPath $probe -PathType Leaf)){throw 'P0.2 host probe script is missing'}
     $evidence=Join-Path (Split-Path -Parent $StateFile) 'evidence'
     New-Item -ItemType Directory -Force -Path $evidence|Out-Null
