@@ -115,6 +115,21 @@ function Wait-P02HostProbe([object]$s) {
     do{$task=Get-ScheduledTask -TaskName $s.p02ObserverTaskName -ErrorAction SilentlyContinue;if(-not$task -or $task.State.ToString()-ne'Running'){break};Start-Sleep -Milliseconds 250}while([DateTime]::UtcNow-lt$deadline)
     try{Unregister-ScheduledTask -TaskName $s.p02ObserverTaskName -Confirm:$false -ErrorAction SilentlyContinue}catch{}
 }
+function Recorded-JavaAlive([object]$s) {
+    # On this laptop a javaw child can disappear while Process.WaitForExit stays
+    # blocked. Query a fresh process-table entry instead and reject PID reuse.
+    try{$p=Get-Process -Id ([int]$s.javaPid) -ErrorAction Stop}catch{return $false}
+    if($p.ProcessName -notin @('java','javaw')){return $false}
+    try{
+        $expected=([DateTime]$s.javaCreationDate).ToUniversalTime()
+        $actual=$p.StartTime.ToUniversalTime()
+        if([Math]::Abs(($actual-$expected).TotalSeconds)-gt2){throw 'recorded Java PID was reused'}
+    }catch{
+        if($_.Exception.Message-eq'recorded Java PID was reused'){throw}
+        throw 'recorded Java identity could not be revalidated during exit wait'
+    }
+    return $true
+}
 
 $s=Load
 try{Ensure-Native}catch{Fail $s ("native helper setup failed: "+$_.Exception.Message)}
@@ -179,9 +194,18 @@ try{
     $m=$_.Exception.Message;try{if($javaHandle -and -not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{};try{Stop-PrismOwned $s}catch{};Fail $s $m
 }
 
-$exited=$javaHandle.WaitForExit(([int]$s.timeoutSeconds)*1000)
+$deadline=[DateTime]::UtcNow.AddSeconds([int]$s.timeoutSeconds)
+$exited=$false
+try{
+    while([DateTime]::UtcNow-lt$deadline){
+        if(-not(Recorded-JavaAlive $s)){$exited=$true;break}
+        Start-Sleep -Seconds 1
+    }
+}catch{
+    $s.valid=$false;$s.reason=('java_exit_identity_failed: '+$_.Exception.Message);$s.phase='invalid';Save $s
+}
 if(-not$exited){
-    $s.valid=$false;$s.reason='java_timeout';$s.phase='invalid';Save $s
+    if($s.valid){$s.valid=$false;$s.reason='java_timeout';$s.phase='invalid';Save $s}
     try{if(-not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{}
 }else{$s.javaExitedUtc=[DateTime]::UtcNow.ToString('o')}
 try{Stop-PrismOwned $s}catch{$s.valid=$false;$s.reason='prism_close_failed'}

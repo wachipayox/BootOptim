@@ -116,6 +116,9 @@ function Config {
     if($RunId -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$'){Fail 'RunId must be 1-64 path-safe characters: letters, digits, dot, underscore, hyphen'}
     if($ExpectedJarSha256 -notmatch '^[0-9A-Fa-f]{64}$'){Fail 'ExpectedJarSha256 must be 64 hexadecimal characters'}
     if($TimeoutSeconds-lt600){Fail 'TimeoutSeconds < 600 is unsafe for the observed 350-380 s startup regime'}
+    # Prism owns -Xms/-Xmx through OverrideMemory/MinMemAlloc/MaxMemAlloc. Passing
+    # either here produces its warning dialog and can change the launch contract.
+    if($JvmArgs -match '(^|\s)-Xm[ms]\S*'){Fail 'JvmArgs must not contain -Xms/-Xmx; use Prism memory fields'}
     $r=Full $InstanceRoot;$g=Join-Path $r '.minecraft';if(-not(Test-Path -LiteralPath $g -PathType Container)){Fail "missing $g"}
     [pscustomobject]@{runId=$RunId;instanceRoot=$r;gameRoot=$g;modsDir=Join-Path $g 'mods';instanceCfg=Join-Path $r 'instance.cfg';prismExe=Full $PrismExe;prismRoot=if($PrismRoot){Full $PrismRoot}else{$null};instanceId=$InstanceId;interactiveUser=$InteractiveUser;artifactJar=Full $ArtifactJar;candidateSha=$ExpectedJarSha256.ToUpperInvariant();jvmArgs=$JvmArgs;required=@($RequiredJvmArg);forbidden=@($ForbiddenJvmArg);expectedJava=if($ExpectedJavaExe){Full $ExpectedJavaExe}else{$null};p02HostProbe=[bool]$P02HostProbe;p02ColdState=$P02ColdState;timeout=$TimeoutSeconds}
 }
@@ -138,7 +141,11 @@ function Stop-Owned([int]$id,[string]$created,[string]$kind,[object]$st,[switch]
     $gp=Get-Process -Id $id -ErrorAction SilentlyContinue;if(-not$gp){return};if($kind-eq'Prism'){try{[void]$gp.CloseMainWindow();if($gp.WaitForExit(10000)){return}}catch{}};Stop-Process -Id $id -Force
 }
 function Register-BenchTask([object]$st,[string]$stateFile) {
-    $invoke="& '"+$st.runner.Replace("'","''")+"' -StateFile '"+$stateFile.Replace("'","''")+"'";$b64=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invoke));$ps="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+    # A task exit code alone is not diagnostic. Capture controller streams outside
+    # Minecraft's logs; they are examined only after the Java process has ended.
+    $runnerOut=Join-Path (Split-Path -Parent $stateFile) 'runner-output.txt'
+    $invoke="& '"+$st.runner.Replace("'","''")+"' -StateFile '"+$stateFile.Replace("'","''")+"' *>&1 | Out-File -LiteralPath '"+$runnerOut.Replace("'","''")+"' -Encoding utf8"
+    $b64=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invoke));$ps="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
     $a=New-ScheduledTaskAction -Execute $ps -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $b64";$pr=New-ScheduledTaskPrincipal -UserId $st.interactiveUser -LogonType Interactive -RunLevel Limited;$set=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Seconds ([int]$st.timeoutSeconds+180))
     Register-ScheduledTask -TaskName $st.taskName -Action $a -Principal $pr -Settings $set -Force|Out-Null
 }
