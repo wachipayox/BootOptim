@@ -124,37 +124,26 @@ def parse(text: str) -> dict:
     if ordered != sorted(ordered):
         raise ValueError(f"causal marker ordering changed: {ordered}")
 
-    apply_stacks: dict[str, list[dict]] = {}
+    # applyMixins is re-entrant on a thread. Each exit marker carries elapsed_ns
+    # measured from that exact Java invocation, so reconstruct spans directly
+    # instead of pairing enter/exit events by stack/name.
     apply_spans: list[dict] = []
     for event in mixin_events:
-        kind = event.get("event")
-        thread = event.get("thread", "unknown")
-        if kind == "apply_mixins_enter":
-            apply_stacks.setdefault(thread, []).append(event)
-        elif kind == "apply_mixins_exit":
-            stack = apply_stacks.setdefault(thread, [])
-            if not stack:
-                raise ValueError(f"apply_mixins_exit without enter on {thread} at line {event['line']}")
-            start = stack.pop()
-            if start.get("detail") != event.get("detail"):
-                raise ValueError(f"applyMixins target changed on {thread}: {start.get('detail')} -> {event.get('detail')}")
-            start_ns = int(start["mono_ns"])
-            end_ns = int(event["mono_ns"])
-            if end_ns < start_ns:
-                raise ValueError("applyMixins monotonic ordering changed")
-            apply_spans.append({
-                "thread": thread,
-                "target": start.get("detail"),
-                "start_ns": start_ns,
-                "end_ns": end_ns,
-                "wall_ns": end_ns - start_ns,
-                "start_line": start["line"],
-                "end_line": event["line"],
-            })
-    for thread, stack in apply_stacks.items():
-        for start in stack:
-            if int(start["mono_ns"]) < main_before_ns:
-                raise ValueError(f"unclosed applyMixins before Main submission on {thread}: {start.get('detail')}")
+        if event.get("event") != "apply_mixins_exit":
+            continue
+        end_ns = int(event["mono_ns"])
+        wall_ns = int(event.get("elapsed_ns", "0"))
+        if wall_ns < 0:
+            raise ValueError("negative applyMixins elapsed wall")
+        start_ns = end_ns - wall_ns
+        apply_spans.append({
+            "thread": event.get("thread", "unknown"),
+            "target": event.get("detail"),
+            "start_ns": start_ns,
+            "end_ns": end_ns,
+            "wall_ns": wall_ns,
+            "end_line": event["line"],
+        })
 
     clipped_apply = []
     for span in apply_spans:
