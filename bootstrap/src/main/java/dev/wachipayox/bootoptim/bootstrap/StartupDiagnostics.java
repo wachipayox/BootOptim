@@ -20,6 +20,16 @@ public final class StartupDiagnostics {
         return BootstrapStartupConfig.state().logEnabled();
     }
 
+    /**
+     * Whether the authoritative game-directory report is ready to receive events.
+     *
+     * <p>Unlike {@link #isEnabled()}, this never initializes the configuration through a speculative
+     * {@code user.dir} fallback. It is therefore safe for the transformation-service constructor.
+     */
+    public static boolean isInitialized() {
+        return initialized;
+    }
+
     public static void initialize() {
         if (!isEnabled() || initialized) {
             return;

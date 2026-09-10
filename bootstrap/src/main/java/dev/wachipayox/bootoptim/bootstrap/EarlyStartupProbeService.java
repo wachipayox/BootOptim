@@ -6,6 +6,7 @@ import cpw.mods.modlauncher.api.ITransformer;
 import java.lang.management.ManagementFactory;
 import java.time.Duration;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -22,6 +23,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
     private static final boolean ENABLED = Boolean.getBoolean(PROFILE_PROPERTY)
             || Boolean.getBoolean(BENCHMARK_PROPERTY);
     private static final boolean P02_JVM_PROBE_ENABLED = Boolean.getBoolean(P02_JVM_PROBE_PROPERTY);
+    private static final List<String> P02_PENDING = new ArrayList<>();
 
     public EarlyStartupProbeService() {
         // ModLauncher's GAMEDIR is not populated yet while SERVICE implementations are constructed.
@@ -43,6 +45,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
         var config = BootstrapStartupConfig.initialize(gameDirectory);
         StartupDiagnostics.initialize();
+        flushPendingP02();
         StartupDiagnostics.event(
                 "STARTUP_PATH",
                 "game_dir=" + config.gameDirectory() + " source=" + (authoritative ? "modlauncher" : "user_dir_fallback"));
@@ -95,6 +98,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
      * property are diagnostic evidence only and must never be used as clean TTMM benchmark samples.
      */
     private static void p02Snapshot(String phase) {
+        String line;
         try {
             var runtimeBean = ManagementFactory.getRuntimeMXBean();
             var classBean = ManagementFactory.getClassLoadingMXBean();
@@ -112,10 +116,10 @@ public final class EarlyStartupProbeService implements ITransformationService {
                     .map(Duration::toMillis)
                     .orElse(-1L);
             var heap = memoryBean.getHeapMemoryUsage();
-            System.out.printf(
-                    "BOOTOPTIM_P02_JVM phase=%s uptime_ms=%d jvm_start_epoch_ms=%d process_cpu_ms=%d "
+            line = String.format(
+                    "phase=%s uptime_ms=%d jvm_start_epoch_ms=%d process_cpu_ms=%d "
                             + "loaded_classes=%d total_loaded_classes=%d unloaded_classes=%d gc_count=%d gc_time_ms=%d "
-                            + "heap_used_mib=%d heap_committed_mib=%d threads=%d%n",
+                            + "heap_used_mib=%d heap_committed_mib=%d threads=%d",
                     phase,
                     runtimeBean.getUptime(),
                     runtimeBean.getStartTime(),
@@ -131,7 +135,32 @@ public final class EarlyStartupProbeService implements ITransformationService {
         } catch (Throwable error) {
             // A diagnostic must never become a startup dependency. Do not log exception messages because they can
             // contain machine-local paths; the class name is enough to invalidate the diagnostic offline.
-            System.out.printf("BOOTOPTIM_P02_JVM phase=%s error=%s%n", phase, error.getClass().getName());
+            line = "phase=" + phase + " error=" + error.getClass().getName();
+        }
+        publishP02(line);
+    }
+
+    private static void publishP02(String line) {
+        synchronized (P02_PENDING) {
+            if (!StartupDiagnostics.isInitialized()) {
+                P02_PENDING.add(line);
+                return;
+            }
+        }
+        StartupDiagnostics.event("BOOTOPTIM_P02_JVM", line);
+    }
+
+    private static void flushPendingP02() {
+        List<String> pending;
+        synchronized (P02_PENDING) {
+            if (P02_PENDING.isEmpty()) {
+                return;
+            }
+            pending = new ArrayList<>(P02_PENDING);
+            P02_PENDING.clear();
+        }
+        for (String line : pending) {
+            StartupDiagnostics.event("BOOTOPTIM_P02_JVM", line);
         }
     }
 }

@@ -84,6 +84,7 @@ public final class StartupProfiler {
 
     /** Default-off P0.2 observer. Runs with this enabled are diagnostic, never clean TTMM samples. */
     private static void p02Snapshot(String phase) {
+        String line;
         try {
             var runtimeBean = ManagementFactory.getRuntimeMXBean();
             var classBean = ManagementFactory.getClassLoadingMXBean();
@@ -101,10 +102,10 @@ public final class StartupProfiler {
                     .map(Duration::toMillis)
                     .orElse(-1L);
             var heap = memoryBean.getHeapMemoryUsage();
-            System.out.printf(
+            line = String.format(
                     "BOOTOPTIM_P02_JVM phase=%s uptime_ms=%d jvm_start_epoch_ms=%d process_cpu_ms=%d "
                             + "loaded_classes=%d total_loaded_classes=%d unloaded_classes=%d gc_count=%d gc_time_ms=%d "
-                            + "heap_used_mib=%d heap_committed_mib=%d threads=%d%n",
+                            + "heap_used_mib=%d heap_committed_mib=%d threads=%d",
                     phase,
                     runtimeBean.getUptime(),
                     runtimeBean.getStartTime(),
@@ -118,8 +119,11 @@ public final class StartupProfiler {
                     heap.getCommitted() / (1024L * 1024L),
                     threadBean.getThreadCount());
         } catch (Throwable error) {
-            System.out.printf("BOOTOPTIM_P02_JVM phase=%s error=%s%n", phase, error.getClass().getName());
+            line = "BOOTOPTIM_P02_JVM phase=" + phase + " error=" + error.getClass().getName();
         }
+        // javaw/Prism do not reliably preserve stdout; the BootOptim report is our durable output contract.
+        StartupReport.diagnostic(line);
+        logger().info(line);
     }
 
     private static long uptimeMs() {

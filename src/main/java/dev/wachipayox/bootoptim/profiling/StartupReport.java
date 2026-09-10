@@ -35,6 +35,11 @@ public final class StartupReport {
                 + " reason=" + sanitize(reason));
     }
 
+    /** Writes a bounded diagnostic row to the same report as the timing phases. */
+    public static void diagnostic(String line) {
+        append(sanitize(line));
+    }
+
     public static void failure(String component, Throwable failure) {
         append("FAILURE component=" + sanitize(component)
                 + " detail=" + sanitize(failure.getClass().getName() + ": " + failure.getMessage()));
