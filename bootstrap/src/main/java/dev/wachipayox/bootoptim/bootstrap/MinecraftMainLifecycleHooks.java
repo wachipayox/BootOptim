@@ -56,6 +56,7 @@ public final class MinecraftMainLifecycleHooks {
 
     public static void beforeSchemaAdd() {
         if (!ENABLED) return;
+        if (schemaCalls == 1) mark("create_before_second_schema_add");
         schemaStartNs = System.nanoTime();
     }
 
@@ -67,6 +68,7 @@ public final class MinecraftMainLifecycleHooks {
         if (schemaCalls == 1) schemaFirstNs = elapsed;
         else if (schemaCalls == 2) schemaSecondNs = elapsed;
         else schemaRestNs += elapsed;
+        if (schemaCalls == 2) mark("create_after_second_schema_add");
     }
 
     public static void beforeFixerRegister() {
