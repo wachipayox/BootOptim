@@ -21,6 +21,18 @@ def config_key(detail: str) -> str:
     return detail.split("#", 1)[0]
 
 
+def merge_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    merged: list[list[int]] = []
+    for start, end in sorted(intervals):
+        if end <= start:
+            continue
+        if not merged or start > merged[-1][1]:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    return [(start, end) for start, end in merged]
+
+
 def parse(text: str) -> dict:
     lines = text.splitlines()
     requests: list[dict] = []
@@ -112,16 +124,89 @@ def parse(text: str) -> dict:
     if ordered != sorted(ordered):
         raise ValueError(f"causal marker ordering changed: {ordered}")
 
+    apply_stacks: dict[str, list[dict]] = {}
+    apply_spans: list[dict] = []
+    for event in mixin_events:
+        kind = event.get("event")
+        thread = event.get("thread", "unknown")
+        if kind == "apply_mixins_enter":
+            apply_stacks.setdefault(thread, []).append(event)
+        elif kind == "apply_mixins_exit":
+            stack = apply_stacks.setdefault(thread, [])
+            if not stack:
+                raise ValueError(f"apply_mixins_exit without enter on {thread} at line {event['line']}")
+            start = stack.pop()
+            if start.get("detail") != event.get("detail"):
+                raise ValueError(f"applyMixins target changed on {thread}: {start.get('detail')} -> {event.get('detail')}")
+            start_ns = int(start["mono_ns"])
+            end_ns = int(event["mono_ns"])
+            if end_ns < start_ns:
+                raise ValueError("applyMixins monotonic ordering changed")
+            apply_spans.append({
+                "thread": thread,
+                "target": start.get("detail"),
+                "start_ns": start_ns,
+                "end_ns": end_ns,
+                "wall_ns": end_ns - start_ns,
+                "start_line": start["line"],
+                "end_line": event["line"],
+            })
+    for thread, stack in apply_stacks.items():
+        for start in stack:
+            if int(start["mono_ns"]) < main_before_ns:
+                raise ValueError(f"unclosed applyMixins before Main submission on {thread}: {start.get('detail')}")
+
+    clipped_apply = []
+    for span in apply_spans:
+        if span["thread"] != "main":
+            continue
+        start = max(r1_end, span["start_ns"])
+        end = min(main_before_ns, span["end_ns"])
+        if end > start:
+            clipped_apply.append((start, end))
+    merged_apply = merge_intervals(clipped_apply)
+    mixin_apply_wall = sum(end - start for start, end in merged_apply)
+    pre_submission_wall = main_before_ns - r1_end
+    outside_apply_wall = pre_submission_wall - mixin_apply_wall
+    if outside_apply_wall < 0:
+        raise ValueError("merged Mixin apply wall exceeds causal pre-submission wall")
+
     later_configs = [
         item for item in mixin_events
-        if item.get("event") == "config_prepare_exit" and r1_line < item["line"] <= prepare_exit["line"]
+        if item.get("event") == "config_prepare_exit" and config_exit["line"] < item["line"] < prepare_exit["line"]
     ]
-    plugins = [item for item in mixin_events if item.get("event") == "plugin_accept_targets_exit" and item["line"] <= prepare_exit["line"]]
-    posts = [item for item in mixin_events if item.get("event") == "config_post_initialise_exit" and item["line"] <= prepare_exit["line"]]
+    plugins = [
+        item for item in mixin_events
+        if item.get("event") == "plugin_accept_targets_exit" and config_exit["line"] < item["line"] < prepare_exit["line"]
+    ]
+    posts = [
+        item for item in mixin_events
+        if item.get("event") == "config_post_initialise_exit" and config_exit["line"] < item["line"] < prepare_exit["line"]
+    ]
+    callback_sums = {
+        "config_prepare_after_enclosing_config": sum(int(item.get("elapsed_ns", "0")) for item in later_configs),
+        "plugin_accept_targets_after_enclosing_config": sum(int(item.get("elapsed_ns", "0")) for item in plugins),
+        "config_post_initialise_after_enclosing_config": sum(int(item.get("elapsed_ns", "0")) for item in posts),
+    }
+    prepare_remainder_wall = prepare_exit_ns - config_exit_ns
+    callback_sums["prepare_configs_wall_not_in_these_callbacks"] = prepare_remainder_wall - sum(callback_sums.values())
+    top_configs = sorted(
+        ({"config": config_key(item.get("detail", "")), "wall_ns": int(item.get("elapsed_ns", "0"))} for item in later_configs),
+        key=lambda item: item["wall_ns"], reverse=True,
+    )[:10]
+
+    partition = {
+        "mixin_processor_apply_wall_request1_end_to_main_submission": mixin_apply_wall,
+        "outside_mixin_processor_apply_wall_request1_end_to_main_submission": outside_apply_wall,
+        "main_submission_to_worker_entry": worker_entry_ns - main_before_ns,
+        "worker_entry_to_request2_transform_begin": r2_begin - worker_entry_ns,
+    }
+    if sum(partition.values()) != r2_begin - r1_end:
+        raise ValueError("inter-request partition does not sum to total causal wall")
 
     return {
-        "schema": 1,
-        "metric_type": "single-run monotonic causal wall; nested callback wall sums explicitly labeled; not A/B",
+        "schema": 2,
+        "metric_type": "single-run monotonic causal wall; applyMixins union is merged/non-overlapping; nested callback wall sums explicitly labeled; not A/B",
         "origin": "hosted_exact_pack",
         "endpoint": "main_menu",
         "request_contract": requests,
@@ -138,11 +223,13 @@ def parse(text: str) -> dict:
             "bootstrap_worker_entry_to_return": worker_return_ns - worker_entry_ns,
             "main_run_and_tick_call_wall": main_after_ns - main_before_ns,
         },
-        "nested_callback_wall_sums_ns": {
-            "config_prepare_exits_through_prepare_configs": sum(int(item.get("elapsed_ns", "0")) for item in later_configs),
-            "plugin_accept_targets": sum(int(item.get("elapsed_ns", "0")) for item in plugins),
-            "config_post_initialise": sum(int(item.get("elapsed_ns", "0")) for item in posts),
-        },
+        "inter_request_partition_ns": partition,
+        "nested_callback_wall_sums_ns": callback_sums,
+        "top_config_prepare_after_enclosing_config": top_configs,
+        "mixin_apply_spans_in_gap": [
+            {"start_ns": start, "end_ns": end, "wall_ns": end - start}
+            for start, end in merged_apply
+        ],
         "mixin_events": mixin_events,
         "main_events": main_events,
     }
