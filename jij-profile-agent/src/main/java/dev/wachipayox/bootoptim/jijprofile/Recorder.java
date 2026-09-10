@@ -1,17 +1,14 @@
 package dev.wachipayox.bootoptim.jijprofile;
 
 import java.io.BufferedWriter;
-import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
-import java.util.HexFormat;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -53,11 +50,11 @@ public final class Recorder {
         }
         boolean accepted = "fml_loader".equals(moduleName) && EXPECTED_FML.equals(moduleVersion);
         long now = System.nanoTime() - ORIGIN_NS;
-        record(new Event(next(), "profile_header", now, now, null, null, null, null, -1L, null, null,
+        record(new Event(next(), "profile_header", now, now, null, null, null, -1L, null, null,
                 "expected_fml=" + EXPECTED_FML + ";module_name=" + moduleName + ";module_fml=" + moduleVersion
                         + ";package_fml=" + packageVersion + ";target=JarInJarDependencyLocator"));
         if (!accepted) {
-            record(new Event(next(), "profile_disabled", now, now, null, null, null, null, -1L, null, null,
+            record(new Event(next(), "profile_disabled", now, now, null, null, null, -1L, null, null,
                     "reason=fml_version_mismatch"));
             active = false;
             return 0L;
@@ -114,7 +111,7 @@ public final class Recorder {
     private static Event interval(String kind, long startAbsolute, long endAbsolute, String relativePath,
             String parentPath, String childDigest, long bytes, Boolean preexisting, Boolean resultPresent, String detail) {
         return new Event(next(), kind, startAbsolute - ORIGIN_NS, endAbsolute - ORIGIN_NS, relativePath, parentPath,
-                childDigest, null, bytes, preexisting, resultPresent, detail);
+                childDigest, bytes, preexisting, resultPresent, detail);
     }
 
     private static long next() {
@@ -176,28 +173,6 @@ public final class Recorder {
         }
     }
 
-    private static void resolvePhysicalParentDigests(ArrayList<Event> snapshot) {
-        Set<String> paths = new LinkedHashSet<>();
-        for (Event event : snapshot) {
-            if (event.parentPath != null && !PATH_DIGESTS.containsKey(event.parentPath)) paths.add(event.parentPath);
-        }
-        for (String pathText : paths) {
-            try {
-                Path path = Path.of(pathText);
-                if (!Files.isRegularFile(path)) continue;
-                MessageDigest digest = MessageDigest.getInstance("SHA-256");
-                try (InputStream input = Files.newInputStream(path)) {
-                    byte[] buffer = new byte[1024 * 1024];
-                    for (int read; (read = input.read(buffer)) >= 0;) {
-                        if (read > 0) digest.update(buffer, 0, read);
-                    }
-                }
-                PATH_DIGESTS.put(pathText, HexFormat.of().formatHex(digest.digest()));
-            } catch (Throwable ignored) {
-            }
-        }
-    }
-
     private static void record(Event event) {
         EVENTS.add(event);
     }
@@ -206,7 +181,6 @@ public final class Recorder {
         if (!FLUSHED.compareAndSet(false, true)) return;
         ArrayList<Event> snapshot = new ArrayList<>(EVENTS);
         snapshot.sort(Comparator.comparingLong((Event e) -> e.startNs).thenComparingLong(e -> e.sequence));
-        resolvePhysicalParentDigests(snapshot);
         try {
             Path parent = OUTPUT.toAbsolutePath().getParent();
             if (parent != null) Files.createDirectories(parent);
@@ -230,7 +204,6 @@ public final class Recorder {
         final String relativePath;
         final String parentPath;
         final String childDigest;
-        final String fixedParentDigest;
         final long bytes;
         final Boolean preexisting;
         final Boolean resultPresent;
@@ -239,8 +212,7 @@ public final class Recorder {
         final long threadId;
 
         Event(long sequence, String kind, long startNs, long endNs, String relativePath, String parentPath,
-                String childDigest, String fixedParentDigest, long bytes, Boolean preexisting, Boolean resultPresent,
-                String detail) {
+                String childDigest, long bytes, Boolean preexisting, Boolean resultPresent, String detail) {
             Thread current = Thread.currentThread();
             this.sequence = sequence;
             this.kind = kind;
@@ -249,7 +221,6 @@ public final class Recorder {
             this.relativePath = relativePath;
             this.parentPath = parentPath;
             this.childDigest = childDigest;
-            this.fixedParentDigest = fixedParentDigest;
             this.bytes = bytes;
             this.preexisting = preexisting;
             this.resultPresent = resultPresent;
@@ -259,7 +230,7 @@ public final class Recorder {
         }
 
         String toJson() {
-            String parentDigest = fixedParentDigest != null ? fixedParentDigest : PATH_DIGESTS.get(parentPath);
+            String parentDigest = PATH_DIGESTS.get(parentPath);
             return "{\"seq\":" + sequence
                     + ",\"kind\":" + quote(kind)
                     + ",\"start_ns\":" + startNs
