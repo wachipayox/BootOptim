@@ -54,6 +54,11 @@ function Launched-Java([object]$s){
         ([IO.Path]::GetFullPath([string]$_.ExecutablePath)).Equals([string]$s.expectedJavaExe,[StringComparison]::OrdinalIgnoreCase)
     })
 }
+function Owned-JavaAlive([object]$s) {
+    $p=Get-CimInstance Win32_Process -Filter "ProcessId=$($s.javaPid)" -ErrorAction SilentlyContinue
+    if(-not$p){return $false}
+    try{return ([DateTime]$p.CreationDate).ToString('o')-eq[string]$s.javaCreationDate}catch{return $false}
+}
 function Prism-Procs([string]$exe){$n=@('prismlauncher.exe','PrismLauncher.exe',[IO.Path]::GetFileName($exe))|Select-Object -Unique;@(Get-CimInstance Win32_Process|Where-Object{$n -contains $_.Name})}
 function Quote-Arg([string]$v){
     if($null-eq$v -or $v.Length-eq0){return '""'}
@@ -203,12 +208,13 @@ try{
     $m=$_.Exception.Message;try{if($javaHandle -and -not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{};try{Stop-PrismOwned $s}catch{};Fail $s $m
 }
 
-$deadline=[DateTime]::UtcNow.AddSeconds([int]$s.timeoutSeconds)
-while(-not$javaHandle.HasExited -and [DateTime]::UtcNow-lt$deadline){
+$deadline=[DateTime]::UtcNow.AddSeconds([int]$s.timeoutSeconds);$missingJavaSamples=0
+while([DateTime]::UtcNow-lt$deadline){
+    if(Owned-JavaAlive $s){$missingJavaSamples=0}else{$missingJavaSamples++;if($missingJavaSamples-ge2){break}}
     try{Sample-IntegratedP02HostProbe $integratedP02 $s}catch{if(-not$s.p02ObserverError){$s.p02ObserverError=$_.Exception.GetType().Name;Save $s}}
     [void]$javaHandle.WaitForExit(250)
 }
-$exited=$javaHandle.HasExited
+$exited=($missingJavaSamples-ge2) -or $javaHandle.HasExited
 if(-not$exited){
     $s.valid=$false;$s.reason='java_timeout';$s.phase='invalid';Save $s
     try{if(-not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{}
