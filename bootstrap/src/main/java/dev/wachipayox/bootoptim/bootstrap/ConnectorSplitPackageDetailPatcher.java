@@ -58,19 +58,16 @@ public final class ConnectorSplitPackageDetailPatcher {
         ClassNode node = readNode(input);
         MethodNode merge = uniqueMethod(node, "mergeSplitPackages");
 
-        // Fabric transformed output: one live SecureJar construction followed by descriptor package enumeration.
         instrumentChain(merge,
                 "cpw/mods/jarhandling/SecureJar", "from",
                 "java/lang/module/ModuleDescriptor", "packages",
                 "connector_split_fabric_jar_packages");
 
-        // Already-discovered FML file: get its live SecureJar and enumerate the same descriptor package view.
         instrumentChain(merge,
                 "net/neoforged/neoforgespi/locating/IModFile", "getSecureJar",
                 "java/lang/module/ModuleDescriptor", "packages",
                 "connector_split_existing_mod_packages");
 
-        // BOOT/SERVICE module package sets are obtained in a javac-generated stream lambda. Tag the Module itself.
         int moduleCalls = 0;
         for (MethodNode method : node.methods) {
             for (MethodInsnNode call : matchingCalls(method, "java/lang/Module", "getPackages")) {
@@ -82,7 +79,6 @@ public final class ConnectorSplitPackageDetailPatcher {
             throw new IllegalStateException("Connector " + VERSION + " split-package shape drift: Module.getPackages=" + moduleCalls);
         }
 
-        // Includes per-package JarContentsBuilder/filter/SecureJar work for each actual split package.
         instrumentMethod(uniqueMethod(node, "analyzeJar"), "connector_split_analyze_package", 3);
         return writeNode(node);
     }
@@ -94,16 +90,9 @@ public final class ConnectorSplitPackageDetailPatcher {
         instrumentMethod(uniqueMethod(node, "handleDuplicateMods"), "connector_locate_duplicate_handling", 0);
         instrumentMethod(uniqueMethod(node, "discoverNestedJarsRecursive"), "connector_locate_nested_discovery", 2);
         instrumentMethod(uniqueMethod(node, "prepareNestedJar"), "connector_locate_nested_prepare", 3);
-
-        MethodNode locate = uniqueMethod(node, "locateFabricMods");
-        instrumentCallNoResource(locate, "org/sinytra/connector/locator/transform/ConnectorTransformerEnvironment", "<init>",
-                "connector_locate_environment_create");
-        instrumentCallNoResource(locate, "org/sinytra/connector/transformer/jar/JarTransformer", "<init>",
-                "connector_locate_transformer_create");
         return writeNode(node);
     }
 
-    /** Begin immediately before a call while preserving the receiver/argument already on top of the operand stack. */
     private static InsnList beginWithTopResource(String phase) {
         InsnList list = new InsnList();
         list.add(new InsnNode(Opcodes.DUP));
@@ -142,23 +131,6 @@ public final class ConnectorSplitPackageDetailPatcher {
 
     private static void instrumentSingleCallWithReceiver(MethodNode method, MethodInsnNode call, String phase) {
         method.instructions.insertBefore(call, beginWithTopResource(phase));
-        InsnList finish = new InsnList();
-        finish.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOK, "endScope", "()V", false));
-        method.instructions.insert(call, finish);
-    }
-
-    private static void instrumentCallNoResource(MethodNode method, String owner, String name, String phase) {
-        List<MethodInsnNode> calls = matchingCalls(method, owner, name);
-        if (calls.size() != 1) {
-            throw new IllegalStateException("Connector " + VERSION + " expected one " + owner + "." + name
-                    + " in " + method.name + ", got " + calls.size());
-        }
-        MethodInsnNode call = calls.getFirst();
-        InsnList begin = new InsnList();
-        begin.add(new LdcInsnNode(phase));
-        begin.add(new InsnNode(Opcodes.ACONST_NULL));
-        begin.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOK, "beginScope", "(Ljava/lang/String;Ljava/lang/Object;)V", false));
-        method.instructions.insertBefore(call, begin);
         InsnList finish = new InsnList();
         finish.add(new MethodInsnNode(Opcodes.INVOKESTATIC, HOOK, "endScope", "()V", false));
         method.instructions.insert(call, finish);
