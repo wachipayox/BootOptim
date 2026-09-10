@@ -1,11 +1,39 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 DEP_RE = re.compile(r"phase=dependency_discovery_end\b.*?elapsed_ms=([0-9]+(?:\.[0-9]+)?)")
+
+
+def sha256_file(path: Path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def enrich_parent_digest(row, trace_path: Path):
+    current = row.get("parent_sha256")
+    if SHA256.fullmatch(current or ""):
+        return current
+    parent_text = row.get("parent_path")
+    if not parent_text:
+        raise SystemExit(f"missing parent path/strong identity in {trace_path}: {row}")
+    try:
+        parent = Path(parent_text)
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"invalid physical parent path in {trace_path}: {parent_text}: {exc}")
+    if not parent.is_file():
+        raise SystemExit(f"cannot resolve physical parent strong identity after process exit in {trace_path}: {parent}")
+    current = sha256_file(parent)
+    row["parent_sha256"] = current
+    row["parent_sha256_source"] = "post_process_physical_file"
+    return current
 
 
 def load_trace(path: Path):
@@ -25,6 +53,7 @@ def load_trace(path: Path):
     for row in extracts:
         if row.get("detail"):
             raise SystemExit(f"extract failure in {path}: {row}")
+        enrich_parent_digest(row, path)
         if not SHA256.fullmatch(row.get("parent_sha256") or ""):
             raise SystemExit(f"missing strong parent provenance in {path}: {row}")
         if not SHA256.fullmatch(row.get("child_sha256") or ""):
@@ -35,6 +64,8 @@ def load_trace(path: Path):
 
 
 def union_ns(rows):
+    if not rows:
+        return 0
     intervals = sorted((int(r["start_ns"]), int(r["end_ns"])) for r in rows)
     total = 0
     start, end = intervals[0]
@@ -65,6 +96,7 @@ def summarize(label, trace_path, startup_path):
     existing = [r for r in extracts if r["output_preexisting"] is True]
     cold = [r for r in extracts if r["output_preexisting"] is False]
     unique_provenance = {(r["parent_sha256"], r["relative_path"], r["child_sha256"]) for r in extracts}
+    post_process_parent_hashes = sum(1 for r in extracts if r.get("parent_sha256_source") == "post_process_physical_file")
     return {
         "label": label,
         "dependency_discovery_ms": dep_ms,
@@ -74,14 +106,17 @@ def summarize(label, trace_path, startup_path):
         "load_union_ms": load_ns / 1e6,
         "extract_count": len(extracts),
         "extract_union_ms": extract_ns / 1e6,
+        "extract_share_of_dependency_pct": (extract_ns / 1e6) / dep_ms * 100.0,
+        "extract_share_of_jarjar_pct": (extract_ns / scan_ns * 100.0) if scan_ns else 0.0,
         "extract_bytes": total_bytes,
         "existing_count": len(existing),
         "existing_bytes": sum(int(r["bytes"]) for r in existing),
-        "existing_extract_ms": union_ns(existing) / 1e6 if existing else 0.0,
+        "existing_extract_ms": union_ns(existing) / 1e6,
         "cold_count": len(cold),
         "cold_bytes": sum(int(r["bytes"]) for r in cold),
-        "cold_extract_ms": union_ns(cold) / 1e6 if cold else 0.0,
+        "cold_extract_ms": union_ns(cold) / 1e6,
         "provenance_keys": len(unique_provenance),
+        "post_process_parent_hashes": post_process_parent_hashes,
         "provenance": [list(v) for v in sorted(unique_provenance)],
         "top_extracts": sorted(
             ({
@@ -119,20 +154,21 @@ def main():
     if cold["extract_count"] != warm["extract_count"]:
         raise SystemExit("cold/warm extraction count differs")
 
-    result = {"schema": 1, "cold": cold, "warm": warm}
+    result = {"schema": 2, "cold": cold, "warm": warm}
     args.json_output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     lines = [
         "# JarInJar copy+SHA diagnostic",
         "",
-        "| profile | dependency wall ms | JarJar scan ms | scan share | extract count | extract MiB | copy+SHA ms | existing/cold |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| profile | dependency wall ms | JarJar scan ms | scan share | extract count | extract MiB | copy+SHA ms | copy share dep/JarJar | existing/cold |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     for row in (cold, warm):
         lines.append(
             f"| {row['label']} | {row['dependency_discovery_ms']:.3f} | {row['jarjar_scan_ms']:.3f} | "
             f"{row['jarjar_share_of_dependency_pct']:.2f}% | {row['extract_count']} | {fmt_mib(row['extract_bytes']):.2f} | "
-            f"{row['extract_union_ms']:.3f} | {row['existing_count']}/{row['cold_count']} |"
+            f"{row['extract_union_ms']:.3f} | {row['extract_share_of_dependency_pct']:.2f}% / "
+            f"{row['extract_share_of_jarjar_pct']:.2f}% | {row['existing_count']}/{row['cold_count']} |"
         )
     lines += [
         "",
@@ -154,6 +190,8 @@ def main():
         "`extractEmbeddedJarFile` intervals; it is not added to `jarjar_scan_ms`. The warm run is a second fresh Minecraft JVM on",
         "the same hosted VM with the first run's stock `.cache/jij` restored before Java starts; this is a warm-residual diagnostic, not an A/B.",
         "Cold `output_preexisting=true` rows can be intra-launch content-addressed aliases; warm rows must all be preexisting.",
+        "Strong SHA-256 for physical parents is computed only here, after both Minecraft processes exit; nested-parent digests come from stock child SHA-256.",
+        "No full-parent hashing or trace-file I/O is added to the timed JarJar/discovery interval.",
     ]
     args.markdown_output.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
