@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 TARGET = "net.minecraft.server.Bootstrap"
-EXPECTED = (
+EXPECTED_REQUESTS = (
     {"origin": "securejar_get_maybe_transformed_bytes", "raw_context": "mixin", "effective_reason": "mixin", "caller": "org.spongepowered.asm.launch.MixinLaunchPluginLegacy#getClassNode"},
     {"origin": "securejar_reader_to_class", "raw_context": "null", "effective_reason": "classloading", "caller": "net.minecraft.client.main.Main#lambda$main$0"},
 )
@@ -17,241 +17,151 @@ def kv(line: str) -> dict[str, str]:
     return dict(re.findall(r"([A-Za-z_]+)=([^\s]+)", line))
 
 
-def config_key(detail: str) -> str:
-    return detail.split("#", 1)[0]
-
-
-def merge_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    merged: list[list[int]] = []
-    for start, end in sorted(intervals):
-        if end <= start:
-            continue
-        if not merged or start > merged[-1][1]:
-            merged.append([start, end])
-        else:
-            merged[-1][1] = max(merged[-1][1], end)
-    return [(start, end) for start, end in merged]
-
-
-def numeric(event: dict, key: str) -> bool:
-    return event.get(key, "").isdigit()
-
-
 def parse(text: str) -> dict:
-    lines = text.splitlines()
     requests: list[dict] = []
-    request_ends: dict[str, dict] = {}
-    transform_begins: list[dict] = []
+    request_ends: dict[int, dict] = {}
+    transform_begins: dict[int, dict] = {}
     mixin_events: list[dict] = []
     main_events: list[dict] = []
 
-    for line_no, line in enumerate(lines, 1):
-        if "BOOTOPTIM_ML_FORK_REQUEST " in line:
-            item = kv(line); item["line"] = line_no; requests.append(item)
-        elif "BOOTOPTIM_ML_FORK_REQUEST_END " in line:
-            item = kv(line); item["line"] = line_no; request_ends[item["request_id"]] = item
+    for line_no, line in enumerate(text.splitlines(), 1):
+        if "BOOTOPTIM_ML_FORK_REQUEST_END " in line:
+            item = kv(line)
+            if item.get("class") == TARGET:
+                rid = int(item["request_id"])
+                request_ends[rid] = {**item, "line": line_no, "mono_ns": int(item["mono_ns"])}
+        elif "BOOTOPTIM_ML_FORK_REQUEST " in line:
+            item = kv(line)
+            if item.get("class") == TARGET:
+                requests.append({**item, "line": line_no, "request_id": int(item["request_id"]), "mono_ns": int(item["mono_ns"])})
         elif "BOOTOPTIM_ML_FORK " in line:
             item = kv(line)
             if item.get("class") == TARGET and item.get("stage") == "class_transform_begin":
-                item["line"] = line_no; transform_begins.append(item)
+                rid = int(item["request_id"])
+                transform_begins[rid] = {**item, "line": line_no, "mono_ns": int(item["mono_ns"])}
         elif "BOOTOPTIM_MIXIN_LIFECYCLE " in line:
-            item = kv(line); item["line"] = line_no; mixin_events.append(item)
+            item = kv(line)
+            if item.get("probe") == "agent96-mixin-main-lifecycle-v1":
+                item["line"] = line_no
+                item["mono_ns"] = int(item["mono_ns"])
+                item["elapsed_ns"] = int(item.get("elapsed_ns", "0"))
+                mixin_events.append(item)
         elif "BOOTOPTIM_MAIN_LIFECYCLE " in line:
-            item = kv(line); item["line"] = line_no; main_events.append(item)
+            item = kv(line)
+            item["line"] = line_no
+            item["mono_ns"] = int(item["mono_ns"])
+            main_events.append(item)
 
-    if len(requests) != 2:
-        raise ValueError(f"expected exactly two Bootstrap requests, found {len(requests)}")
-    requests.sort(key=lambda item: int(item["request_id"]))
-    for index, expected in enumerate(EXPECTED):
-        request = requests[index]
+    if len(requests) != 2 or [r["request_id"] for r in requests] != [1, 2]:
+        raise ValueError(f"expected Bootstrap requests [1,2] in order, found {[r['request_id'] for r in requests]}")
+    for index, (request, expected) in enumerate(zip(requests, EXPECTED_REQUESTS), 1):
         for key, value in expected.items():
             if request.get(key) != value:
-                raise ValueError(f"request {index + 1} {key}={request.get(key)!r}, expected {value!r}")
-        if request["request_id"] not in request_ends:
-            raise ValueError(f"request {request['request_id']} missing end marker")
-    if requests[0].get("loader_id") != requests[1].get("loader_id"):
-        raise ValueError("known Bootstrap requests no longer use the same TransformingClassLoader")
-    if requests[0].get("tccl_id") != requests[1].get("tccl_id"):
-        raise ValueError("known Bootstrap requests no longer use the same TCCL")
-
-    if len(transform_begins) != 2:
-        raise ValueError(f"expected exactly two target ClassTransformer begins, found {len(transform_begins)}")
-    transform_begins.sort(key=lambda item: int(item["mono_ns"]))
-    for request, begin in zip(requests, transform_begins):
-        end_line = request_ends[request["request_id"]]["line"]
-        if not (request["line"] < begin["line"] < end_line):
-            raise ValueError(f"request {request['request_id']} does not enclose its target transform")
-        request["transform_begin_ns"] = int(begin["mono_ns"])
-        request["end_ns"] = int(request_ends[request["request_id"]]["mono_ns"])
+                raise ValueError(f"request {index} {key}={request.get(key)!r}, expected {value!r}")
+        if request["request_id"] not in request_ends or request["request_id"] not in transform_begins:
+            raise ValueError(f"request {index} missing end/transform marker")
+        if request_ends[index].get("observed_id") != str(index):
+            raise ValueError(f"request {index} stack identity mismatch")
+    if requests[0].get("loader_id") != requests[1].get("loader_id") or requests[0].get("tccl_id") != requests[1].get("tccl_id"):
+        raise ValueError("Bootstrap requests no longer share TransformingClassLoader/TCCL")
+    if not (requests[0]["line"] < request_ends[1]["line"] < requests[1]["line"]):
+        raise ValueError("request order is not completed Mixin request -> classloading request")
 
     r1_line = requests[0]["line"]
-    open_config = None
-    for event in mixin_events:
-        if event["line"] >= r1_line:
-            break
-        if event.get("event") == "config_prepare_enter":
-            open_config = event
-        elif event.get("event") == "config_prepare_exit" and open_config is not None:
-            if config_key(event.get("detail", "")) == config_key(open_config.get("detail", "")):
-                open_config = None
-    if open_config is None:
-        raise ValueError("request 1 was not enclosed by config.prepare")
-    config_name = config_key(open_config.get("detail", ""))
-    config_exit = next((event for event in mixin_events if event["line"] > r1_line and event.get("event") == "config_prepare_exit" and config_key(event.get("detail", "")) == config_name), None)
-    if config_exit is None:
-        raise ValueError(f"enclosing config {config_name} has no exit marker")
+    r1_end = request_ends[1]["mono_ns"]
+    r2_begin = transform_begins[2]["mono_ns"]
 
-    def first_event(name: str, after_line: int = 0) -> dict:
-        event = next((item for item in mixin_events if item["line"] > after_line and item.get("event") == name), None)
-        if event is None:
-            raise ValueError(f"missing Mixin lifecycle event {name}")
-        return event
+    def enclosing(enter_name: str, exit_name: str) -> tuple[dict, dict]:
+        enters = [e for e in mixin_events if e.get("event") == enter_name and e["line"] < r1_line]
+        if not enters:
+            raise ValueError(f"request 1 not preceded by {enter_name}")
+        enter = enters[-1]
+        exit_event = next((e for e in mixin_events if e.get("event") == exit_name and e["line"] > r1_line), None)
+        if exit_event is None or exit_event["line"] <= enter["line"]:
+            raise ValueError(f"no enclosing {exit_name} for request 1")
+        return enter, exit_event
 
-    prepare_exit = first_event("prepare_configs_exit", r1_line)
-    select_exit = first_event("select_exit", prepare_exit["line"])
-    main_by_name = {item.get("event"): item for item in main_events}
-    required_main = ["main_before_run_and_tick", "bootstrap_worker_entry", "bootstrap_worker_return", "main_after_run_and_tick"]
-    missing = [name for name in required_main if name not in main_by_name]
+    check_enter, check_exit = enclosing("check_select_enter", "check_select_exit")
+    select_enter, select_exit = enclosing("select_enter", "select_exit")
+    prepare_enter, prepare_exit = enclosing("prepare_configs_enter", "prepare_configs_exit")
+    if not (check_enter["line"] < select_enter["line"] < prepare_enter["line"] < r1_line < prepare_exit["line"] < select_exit["line"] < check_exit["line"]):
+        raise ValueError("Mixin lifecycle nesting around request 1 changed")
+
+    main_by_name = {e.get("event"): e for e in main_events}
+    required = ["main_before_run_and_tick", "bootstrap_worker_entry", "bootstrap_worker_return", "main_after_run_and_tick"]
+    missing = [name for name in required if name not in main_by_name]
     if missing:
         raise ValueError(f"missing Main lifecycle markers: {missing}")
+    main_before = main_by_name["main_before_run_and_tick"]["mono_ns"]
+    worker_entry = main_by_name["bootstrap_worker_entry"]["mono_ns"]
+    worker_return = main_by_name["bootstrap_worker_return"]["mono_ns"]
+    main_after = main_by_name["main_after_run_and_tick"]["mono_ns"]
 
-    main_before_line = main_by_name["main_before_run_and_tick"]["line"]
-    r1_end = requests[0]["end_ns"]
-    r2_begin = requests[1]["transform_begin_ns"]
-    config_exit_ns = int(config_exit["mono_ns"])
-    prepare_exit_ns = int(prepare_exit["mono_ns"])
-    select_exit_ns = int(select_exit["mono_ns"])
-    main_before_ns = int(main_by_name["main_before_run_and_tick"]["mono_ns"])
-    worker_entry_ns = int(main_by_name["bootstrap_worker_entry"]["mono_ns"])
-    worker_return_ns = int(main_by_name["bootstrap_worker_return"]["mono_ns"])
-    main_after_ns = int(main_by_name["main_after_run_and_tick"]["mono_ns"])
-    ordered = [r1_end, config_exit_ns, prepare_exit_ns, select_exit_ns, main_before_ns, worker_entry_ns, r2_begin]
+    ordered = [r1_end, prepare_exit["mono_ns"], select_exit["mono_ns"], check_exit["mono_ns"], main_before, worker_entry, r2_begin]
     if ordered != sorted(ordered):
-        raise ValueError(f"causal marker ordering changed: {ordered}")
+        raise ValueError(f"causal ordering changed: {ordered}")
+    if worker_return > main_after:
+        raise ValueError("BackgroundWaiter returned before worker task completed")
 
-    # Console output from unrelated concurrent logging can corrupt diagnostic text.
-    # Attribution only consumes applyMixins exits physically inside the causal
-    # request1-end -> Main-submission window, and requires every such marker to
-    # retain numeric mono/elapsed fields. Corruption outside the measured window
-    # is irrelevant; corruption inside it invalidates the profile instead of
-    # silently under-counting Mixin wall.
-    apply_spans: list[dict] = []
-    malformed_apply_in_window: list[dict] = []
-    for event in mixin_events:
-        if event.get("event") != "apply_mixins_exit":
-            continue
-        if not (request_ends[requests[0]["request_id"]]["line"] < event["line"] < main_before_line):
-            continue
-        if not numeric(event, "mono_ns") or not numeric(event, "elapsed_ns"):
-            malformed_apply_in_window.append(event)
-            continue
-        end_ns = int(event["mono_ns"])
-        wall_ns = int(event["elapsed_ns"])
-        if wall_ns < 0:
-            raise ValueError("negative applyMixins elapsed wall")
-        start_ns = end_ns - wall_ns
-        apply_spans.append({
-            "thread": event.get("thread", "unknown"),
-            "target": event.get("detail"),
-            "start_ns": start_ns,
-            "end_ns": end_ns,
-            "wall_ns": wall_ns,
-            "end_line": event["line"],
-        })
-    if malformed_apply_in_window:
-        raise ValueError(f"malformed applyMixins marker(s) inside causal window: {malformed_apply_in_window[:3]}")
-
-    clipped_apply = []
-    for span in apply_spans:
-        if span["thread"] != "main":
-            continue
-        start = max(r1_end, span["start_ns"])
-        end = min(main_before_ns, span["end_ns"])
-        if end > start:
-            clipped_apply.append((start, end))
-    merged_apply = merge_intervals(clipped_apply)
-    mixin_apply_wall = sum(end - start for start, end in merged_apply)
-    pre_submission_wall = main_before_ns - r1_end
-    outside_apply_wall = pre_submission_wall - mixin_apply_wall
-    if outside_apply_wall < 0:
-        raise ValueError("merged Mixin apply wall exceeds causal pre-submission wall")
-
-    later_configs = [
-        item for item in mixin_events
-        if item.get("event") == "config_prepare_exit" and config_exit["line"] < item["line"] < prepare_exit["line"]
-    ]
-    plugins = [
-        item for item in mixin_events
-        if item.get("event") == "plugin_accept_targets_exit" and config_exit["line"] < item["line"] < prepare_exit["line"]
-    ]
-    posts = [
-        item for item in mixin_events
-        if item.get("event") == "config_post_initialise_exit" and config_exit["line"] < item["line"] < prepare_exit["line"]
-    ]
-
-    callback_groups = {
-        "config_prepare_after_enclosing_config": later_configs,
-        "plugin_accept_targets_after_enclosing_config": plugins,
-        "config_post_initialise_after_enclosing_config": posts,
+    segments = {
+        "request1_end_to_prepare_configs_exit": prepare_exit["mono_ns"] - r1_end,
+        "prepare_configs_exit_to_select_exit": select_exit["mono_ns"] - prepare_exit["mono_ns"],
+        "select_exit_to_check_select_exit": check_exit["mono_ns"] - select_exit["mono_ns"],
+        "check_select_exit_to_background_waiter_call": main_before - check_exit["mono_ns"],
+        "background_waiter_call_to_worker_entry": worker_entry - main_before,
+        "worker_entry_to_request2_transform_begin": r2_begin - worker_entry,
+        "request1_end_to_request2_transform_begin": r2_begin - r1_end,
+        "bootstrap_worker_task_wall": worker_return - worker_entry,
+        "background_waiter_call_wall": main_after - main_before,
+        "worker_return_to_background_waiter_return": main_after - worker_return,
     }
-    callback_sums: dict[str, int] = {}
-    callback_quality: dict[str, dict[str, int]] = {}
-    for name, group in callback_groups.items():
-        valid = [item for item in group if numeric(item, "elapsed_ns")]
-        callback_sums[name] = sum(int(item["elapsed_ns"]) for item in valid)
-        callback_quality[name] = {"total_markers": len(group), "numeric_markers": len(valid), "malformed_markers": len(group) - len(valid)}
-
-    # These callback sums are supplemental nested diagnostics, not a causal
-    # partition. If console interleaving damaged one marker, report the quality
-    # rather than treating the partial sum as complete or failing the parent
-    # lifecycle attribution.
-    prepare_remainder_wall = prepare_exit_ns - config_exit_ns
-    all_callback_complete = all(item["malformed_markers"] == 0 for item in callback_quality.values())
-    if all_callback_complete:
-        callback_sums["prepare_configs_wall_not_in_these_callbacks"] = prepare_remainder_wall - sum(callback_sums.values())
-    top_configs = sorted(
-        ({"config": config_key(item.get("detail", "")), "wall_ns": int(item["elapsed_ns"])} for item in later_configs if numeric(item, "elapsed_ns")),
-        key=lambda item: item["wall_ns"], reverse=True,
-    )[:10]
-
-    partition = {
-        "mixin_processor_apply_wall_request1_end_to_main_submission": mixin_apply_wall,
-        "outside_mixin_processor_apply_wall_request1_end_to_main_submission": outside_apply_wall,
-        "main_submission_to_worker_entry": worker_entry_ns - main_before_ns,
-        "worker_entry_to_request2_transform_begin": r2_begin - worker_entry_ns,
+    inter_request_partition = {
+        "mixin_prepare_configs_suffix_main_thread": segments["request1_end_to_prepare_configs_exit"],
+        "mixin_select_tail_main_thread": segments["prepare_configs_exit_to_select_exit"],
+        "mixin_check_select_tail_main_thread": segments["select_exit_to_check_select_exit"],
+        "unknown_main_thread_after_check_select": segments["check_select_exit_to_background_waiter_call"],
+        "background_waiter_pre_worker_submission_queue_window": segments["background_waiter_call_to_worker_entry"],
+        "bootstrap_worker_preamble": segments["worker_entry_to_request2_transform_begin"],
     }
-    if sum(partition.values()) != r2_begin - r1_end:
-        raise ValueError("inter-request partition does not sum to total causal wall")
+    if sum(inter_request_partition.values()) != segments["request1_end_to_request2_transform_begin"]:
+        raise ValueError("inter-request causal partition does not tile the wall")
+
+    scopes = {
+        "checkSelect": {"start_ns": check_enter["mono_ns"], "end_ns": check_exit["mono_ns"], "wall_ns": check_exit["mono_ns"] - check_enter["mono_ns"], "inclusive": True, "thread": check_enter.get("thread")},
+        "select": {"start_ns": select_enter["mono_ns"], "end_ns": select_exit["mono_ns"], "wall_ns": select_exit["mono_ns"] - select_enter["mono_ns"], "inclusive": True, "thread": select_enter.get("thread")},
+        "prepareConfigs": {"start_ns": prepare_enter["mono_ns"], "end_ns": prepare_exit["mono_ns"], "wall_ns": prepare_exit["mono_ns"] - prepare_enter["mono_ns"], "inclusive": True, "thread": prepare_enter.get("thread")},
+    }
+
+    dag = [
+        {"id": "request1_mixin_bytes", "kind": "causal_request", "thread": requests[0].get("thread"), "predecessors": []},
+        {"id": "prepare_configs_suffix", "kind": "serial_main_thread", "wall_ns": segments["request1_end_to_prepare_configs_exit"], "predecessors": ["request1_mixin_bytes"]},
+        {"id": "select_tail", "kind": "serial_main_thread", "wall_ns": segments["prepare_configs_exit_to_select_exit"], "predecessors": ["prepare_configs_suffix"]},
+        {"id": "check_select_tail", "kind": "serial_main_thread", "wall_ns": segments["select_exit_to_check_select_exit"], "predecessors": ["select_tail"]},
+        {"id": "unknown_main_thread", "kind": "unknown_serial_work", "wall_ns": segments["check_select_exit_to_background_waiter_call"], "predecessors": ["check_select_tail"]},
+        {"id": "background_waiter_pre_worker", "kind": "submission_queue_window", "wall_ns": segments["background_waiter_call_to_worker_entry"], "predecessors": ["unknown_main_thread"]},
+        {"id": "bootstrap_worker", "kind": "concurrent_task", "wall_ns": segments["bootstrap_worker_task_wall"], "predecessors": ["background_waiter_pre_worker"]},
+        {"id": "request2_classloading", "kind": "nested_in_bootstrap_worker", "thread": requests[1].get("thread"), "predecessors": ["bootstrap_worker"]},
+        {"id": "background_waiter_completion_tail", "kind": "wait_cleanup_tail", "wall_ns": segments["worker_return_to_background_waiter_return"], "predecessors": ["bootstrap_worker"]},
+    ]
 
     return {
-        "schema": 3,
-        "metric_type": "single-run monotonic causal wall; applyMixins union is merged/non-overlapping; nested callback wall sums are supplemental and quality-labelled; not A/B",
+        "schema": 4,
+        "metric_type": "single-run monotonic causal wall; lifecycle scopes are inclusive; BackgroundWaiter worker and main wait loop overlap; not A/B or a savings estimate",
         "origin": "hosted_exact_pack",
         "endpoint": "main_menu",
-        "request_contract": requests,
-        "same_loader_id": requests[0]["loader_id"],
-        "enclosing_config": config_name,
-        "segments_ns": {
-            "request1_end_to_enclosing_config_prepare_exit": config_exit_ns - r1_end,
-            "enclosing_config_prepare_exit_to_prepare_configs_exit": prepare_exit_ns - config_exit_ns,
-            "prepare_configs_exit_to_select_exit": select_exit_ns - prepare_exit_ns,
-            "select_exit_to_main_before_run_and_tick": main_before_ns - select_exit_ns,
-            "main_before_run_and_tick_to_worker_entry": worker_entry_ns - main_before_ns,
-            "worker_entry_to_request2_transform_begin": r2_begin - worker_entry_ns,
-            "request1_end_to_request2_transform_begin": r2_begin - r1_end,
-            "bootstrap_worker_entry_to_return": worker_return_ns - worker_entry_ns,
-            "main_run_and_tick_call_wall": main_after_ns - main_before_ns,
+        "request_contract": "mixin_transformed_bytes_then_classloading",
+        "same_loader_id": requests[0].get("loader_id"),
+        "mixin_scopes": scopes,
+        "segments_ns": segments,
+        "inter_request_partition_ns": inter_request_partition,
+        "dag": dag,
+        "classification_notes": {
+            "submission_queue_window": "Marker is immediately before stock BackgroundWaiter.runAndTick; exact FML code performs updateProgress then runner.submit before the worker can enter. This bucket is inclusive and is not pure queue wait.",
+            "concurrent_task": "bootstrap_worker_task_wall runs on the stock single-thread executor while Main remains inside BackgroundWaiter tick/sleep waiting.",
+            "wait_cleanup_tail": "Worker return to runAndTick return is stock completion observation/sleep tail plus runner.shutdown/work.get; it is not worker CPU.",
+            "unknown_serial_work": "Main-thread wall after checkSelect exits and before the BackgroundWaiter call. No owner is inferred by subtraction.",
         },
-        "inter_request_partition_ns": partition,
-        "nested_callback_wall_sums_ns": callback_sums,
-        "nested_callback_marker_quality": callback_quality,
-        "top_config_prepare_after_enclosing_config": top_configs,
-        "mixin_apply_spans_in_gap": [
-            {"start_ns": start, "end_ns": end, "wall_ns": end - start}
-            for start, end in merged_apply
-        ],
-        "mixin_events": mixin_events,
-        "main_events": main_events,
+        "marker_counts": {"mixin": len(mixin_events), "main": len(main_events)},
     }
 
 
