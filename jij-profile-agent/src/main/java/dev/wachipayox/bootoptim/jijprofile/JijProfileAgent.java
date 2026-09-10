@@ -85,9 +85,6 @@ public final class JijProfileAgent {
         public static void exit(@Advice.Enter long start, @Advice.Thrown Throwable thrown) {
             try {
                 Recorder.scanEnd(start, thrown);
-                // The exact-pack launcher may terminate the dev process after the title endpoint.
-                // Persist the completed discovery profile now instead of relying on JVM shutdown.
-                Recorder.flush();
             } catch (Throwable ignored) {
             }
         }
