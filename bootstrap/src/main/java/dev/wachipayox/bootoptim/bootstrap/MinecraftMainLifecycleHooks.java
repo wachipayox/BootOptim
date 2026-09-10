@@ -6,6 +6,34 @@ public final class MinecraftMainLifecycleHooks {
 
     private MinecraftMainLifecycleHooks() {}
 
+    public static void mainEntry() {
+        mark("main_entry");
+    }
+
+    public static void beforeSharedConstantsVersion() {
+        mark("before_shared_constants_version");
+    }
+
+    public static void afterSharedConstantsVersion() {
+        mark("after_shared_constants_version");
+    }
+
+    public static void beforeDataFixersOptimize() {
+        mark("before_datafixers_optimize");
+    }
+
+    public static void afterDataFixersOptimize() {
+        mark("after_datafixers_optimize");
+    }
+
+    public static void beforeCrashReportPreload() {
+        mark("before_crash_report_preload");
+    }
+
+    public static void afterCrashReportPreload() {
+        mark("after_crash_report_preload");
+    }
+
     public static void beforeRunAndTick() {
         mark("main_before_run_and_tick");
     }
