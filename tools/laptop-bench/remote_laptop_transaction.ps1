@@ -144,7 +144,10 @@ function Register-BenchTask([object]$st,[string]$stateFile) {
     # A task exit code alone is not diagnostic. Capture controller streams outside
     # Minecraft's logs; they are examined only after the Java process has ended.
     $runnerOut=Join-Path (Split-Path -Parent $stateFile) 'runner-output.txt'
-    $invoke="& '"+$st.runner.Replace("'","''")+"' -StateFile '"+$stateFile.Replace("'","''")+"' *>&1 | Out-File -LiteralPath '"+$runnerOut.Replace("'","''")+"' -Encoding utf8"
+    $escapedRunner=$st.runner.Replace("'","''")
+    $escapedState=$stateFile.Replace("'","''")
+    $escapedOut=$runnerOut.Replace("'","''")
+    $invoke="try { & '"+$escapedRunner+"' -StateFile '"+$escapedState+"'; exit 0 } catch { `$_.Exception.ToString() | Out-File -LiteralPath '"+$escapedOut+"' -Encoding utf8; exit 1 }"
     $b64=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invoke));$ps="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
     $a=New-ScheduledTaskAction -Execute $ps -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $b64";$pr=New-ScheduledTaskPrincipal -UserId $st.interactiveUser -LogonType Interactive -RunLevel Limited;$set=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Seconds ([int]$st.timeoutSeconds+180))
     Register-ScheduledTask -TaskName $st.taskName -Action $a -Principal $pr -Settings $set -Force|Out-Null

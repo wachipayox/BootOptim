@@ -85,6 +85,9 @@ function Archive-RunEvidence([object]$s) {
         Copy-Item -LiteralPath $source -Destination $destination -Force
         $copied += [pscustomobject]@{name=$name;length=(Get-Item -LiteralPath $destination).Length}
     }
+    # Older state files predate this field.  Declare it before assignment so
+    # StrictMode cannot turn an otherwise completed run into a controller crash.
+    if(-not($s.PSObject.Properties['logArchive'])){Add-Member -InputObject $s -NotePropertyName logArchive -NotePropertyValue @()}
     $s.logArchive=@($copied)
 }
 function Start-P02HostProbe([object]$s) {
@@ -99,7 +102,7 @@ function Start-P02HostProbe([object]$s) {
     $stderr=Join-Path $evidence 'p02-observer.stderr.txt'
     if(Test-Path -LiteralPath $hostEvidence){throw 'P0.2 host evidence already exists'}
     $cold=if($s.PSObject.Properties['p02ColdState']){[string]$s.p02ColdState}else{'unknown'}
-    $invoke="& '$probe' -TargetPid $($s.javaPid) -CreationDate '$($s.javaCreationDate)' -OutputPath '$hostEvidence' -RunId '$($s.runId)' -Origin physical_laptop -Endpoint main_menu -ColdState $cold -SampleIntervalMs 5000 -TimeoutSeconds $($s.timeoutSeconds)"
+    $invoke="& '$probe' -TargetPid $($s.javaPid) -CreationDate '$($s.javaCreationDate)' -OutputPath '$hostEvidence' -RunId '$($s.runId)' -Origin physical_laptop -Endpoint main_menu -ColdState $cold -SampleIntervalMs 30000 -TimeoutSeconds $($s.timeoutSeconds)"
     $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invoke));$ps="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
     $taskName=$s.taskName+'-p02';$action=New-ScheduledTaskAction -Execute $ps -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $encoded"
     $principal=New-ScheduledTaskPrincipal -UserId $s.interactiveUser -LogonType Interactive -RunLevel Limited
@@ -129,6 +132,24 @@ function Recorded-JavaAlive([object]$s) {
         throw 'recorded Java identity could not be revalidated during exit wait'
     }
     return $true
+}
+
+# A controller failure must never leave a completed client looking like a live
+# measurement.  This is deliberately outside the normal cleanup path so it also
+# covers mistakes in finalization/archiving itself.
+trap {
+    $message=$_.Exception.Message
+    try {
+        if(Test-Path -LiteralPath $StateFile){
+            $emergency=Load
+            $emergency.valid=$false
+            $emergency.reason=('runner_unhandled: '+$message)
+            $emergency.phase='invalid'
+            $emergency.finishedUtc=[DateTime]::UtcNow.ToString('o')
+            Save $emergency
+        }
+    } catch {}
+    throw
 }
 
 $s=Load
