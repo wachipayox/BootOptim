@@ -17,6 +17,12 @@ def parse(text: str) -> dict:
         if "BOOTOPTIM_MAIN_LIFECYCLE " not in line:
             continue
         item = kv(line)
+        # Other lifecycle markers can be emitted concurrently by the Bootstrap worker and
+        # interleave with third-party logging on stderr. Agent 99 never treats those lines as
+        # causal evidence: accept only complete monotonic marker records, then require every
+        # DataFixers marker below exactly once and in pinned main-thread order.
+        if "event" not in item or "mono_ns" not in item:
+            continue
         item["line"] = line_no
         item["mono_ns"] = int(item["mono_ns"])
         events.append(item)
