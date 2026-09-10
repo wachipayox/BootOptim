@@ -16,7 +16,7 @@ UPSTREAM_REPO = "https://github.com/FabricMC/Mixin.git"
 UPSTREAM_COMMIT = "023e39334850e839c283be413257bf459f40a5d6"
 VERSION = "0.15.2+mixin.0.8.7"
 GAV_PATH = Path("net/fabricmc/sponge-mixin") / VERSION
-PROBE = "agent96-mixin-main-lifecycle-v1"
+PROBE = "agent96-mixin-prepareconfigs-suffix-v2"
 
 
 def sha256(path: Path) -> str:
