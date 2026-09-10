@@ -93,17 +93,18 @@ function Start-P02HostProbe([object]$s) {
     if(-not(Test-Path -LiteralPath $probe -PathType Leaf)){throw 'P0.2 host probe script is missing'}
     $evidence=Join-Path (Split-Path -Parent $StateFile) 'evidence'
     New-Item -ItemType Directory -Force -Path $evidence|Out-Null
-    $host=Join-Path $evidence 'p02-host.jsonl'
+    # `$Host` is PowerShell's read-only automatic variable; use an explicit evidence name.
+    $hostEvidence=Join-Path $evidence 'p02-host.jsonl'
     $stdout=Join-Path $evidence 'p02-observer.stdout.txt'
     $stderr=Join-Path $evidence 'p02-observer.stderr.txt'
-    if(Test-Path -LiteralPath $host){throw 'P0.2 host evidence already exists'}
+    if(Test-Path -LiteralPath $hostEvidence){throw 'P0.2 host evidence already exists'}
     $cold=if($s.PSObject.Properties['p02ColdState']){[string]$s.p02ColdState}else{'unknown'}
-    $invoke="& '$probe' -TargetPid $($s.javaPid) -CreationDate '$($s.javaCreationDate)' -OutputPath '$host' -RunId '$($s.runId)' -Origin physical_laptop -Endpoint main_menu -ColdState $cold -SampleIntervalMs 5000 -TimeoutSeconds $($s.timeoutSeconds)"
+    $invoke="& '$probe' -TargetPid $($s.javaPid) -CreationDate '$($s.javaCreationDate)' -OutputPath '$hostEvidence' -RunId '$($s.runId)' -Origin physical_laptop -Endpoint main_menu -ColdState $cold -SampleIntervalMs 5000 -TimeoutSeconds $($s.timeoutSeconds)"
     $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invoke))
     $ps="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
     $p=Start-Process -FilePath $ps -ArgumentList "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $encoded" -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     $s.p02ObserverPid=[int]$p.Id
-    $s.p02HostEvidence=$host
+    $s.p02HostEvidence=$hostEvidence
 }
 function Wait-P02HostProbe([object]$s) {
     if(-not($s.PSObject.Properties['p02ObserverPid']) -or [int]$s.p02ObserverPid-le0){return}
