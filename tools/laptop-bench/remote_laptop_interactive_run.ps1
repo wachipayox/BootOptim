@@ -54,11 +54,6 @@ function Launched-Java([object]$s){
         ([IO.Path]::GetFullPath([string]$_.ExecutablePath)).Equals([string]$s.expectedJavaExe,[StringComparison]::OrdinalIgnoreCase)
     })
 }
-function Owned-JavaAlive([object]$s) {
-    $p=Get-CimInstance Win32_Process -Filter "ProcessId=$($s.javaPid)" -ErrorAction SilentlyContinue
-    if(-not$p){return $false}
-    try{return ([DateTime]$p.CreationDate).ToString('o')-eq[string]$s.javaCreationDate}catch{return $false}
-}
 function Prism-Procs([string]$exe){$n=@('prismlauncher.exe','PrismLauncher.exe',[IO.Path]::GetFileName($exe))|Select-Object -Unique;@(Get-CimInstance Win32_Process|Where-Object{$n -contains $_.Name})}
 function Quote-Arg([string]$v){
     if($null-eq$v -or $v.Length-eq0){return '""'}
@@ -105,47 +100,23 @@ function Start-P02HostProbe([object]$s) {
     if(Test-Path -LiteralPath $hostEvidence){throw 'P0.2 host evidence already exists'}
     $cold=if($s.PSObject.Properties['p02ColdState']){[string]$s.p02ColdState}else{'unknown'}
     $invoke="& '$probe' -TargetPid $($s.javaPid) -CreationDate '$($s.javaCreationDate)' -OutputPath '$hostEvidence' -RunId '$($s.runId)' -Origin physical_laptop -Endpoint main_menu -ColdState $cold -SampleIntervalMs 5000 -TimeoutSeconds $($s.timeoutSeconds)"
-    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invoke))
-    $ps="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $p=Start-Process -FilePath $ps -ArgumentList "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $encoded" -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-    $s.p02ObserverPid=[int]$p.Id
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invoke));$ps="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+    $taskName=$s.taskName+'-p02';$action=New-ScheduledTaskAction -Execute $ps -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $encoded"
+    $principal=New-ScheduledTaskPrincipal -UserId $s.interactiveUser -LogonType Interactive -RunLevel Limited
+    $settings=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Seconds ([int]$s.timeoutSeconds+30))
+    Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force|Out-Null
+    Start-ScheduledTask -TaskName $taskName
+    $s.p02ObserverTaskName=$taskName;$s.p02ObserverPid=0
     $s.p02HostEvidence=$hostEvidence
 }
 function Wait-P02HostProbe([object]$s) {
-    if(-not($s.PSObject.Properties['p02ObserverPid']) -or [int]$s.p02ObserverPid-le0){return}
-    $p=Get-Process -Id ([int]$s.p02ObserverPid) -ErrorAction SilentlyContinue
-    if($p){[void]$p.WaitForExit(15000)}
-}
-function Write-P02HostRow([string]$path,[object]$row) {
-    [IO.File]::AppendAllText($path,(($row|ConvertTo-Json -Compress -Depth 8)+[Environment]::NewLine),$Utf8)
-}
-function Start-IntegratedP02HostProbe([object]$s) {
-    if(-not[bool]$s.p02HostProbe){return $null}
-    $evidence=Join-Path (Split-Path -Parent $StateFile) 'evidence';New-Item -ItemType Directory -Force -Path $evidence|Out-Null
-    $path=Join-Path $evidence 'p02-host.jsonl';if(Test-Path -LiteralPath $path){throw 'P0.2 host evidence already exists'}
-    $os=Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue|Select-Object -First 1;$now=[DateTime]::UtcNow
-    Write-P02HostRow $path ([ordered]@{kind='header';schema=1;measurementClass='diagnostic_not_benchmark';runId=$s.runId;origin='physical_laptop';endpoint='main_menu';coldState=$s.p02ColdState;pid=$s.javaPid;creationDate=$s.javaCreationDate;sampleIntervalMs=5000;startedUtc=$now.ToString('o');windowsBootUtc=if($os -and $os.LastBootUpTime){([DateTime]$os.LastBootUpTime).ToUniversalTime().ToString('o')}else{$null}})
-    $s.p02HostEvidence=$path;$s.p02ObserverPid=0
-    [pscustomobject]@{path=$path;next=$now;samples=0;maxSampleCostMs=0.0}
-}
-function Sample-IntegratedP02HostProbe([object]$probe,[object]$s) {
-    if($null-eq$probe -or [DateTime]::UtcNow-lt$probe.next){return}
-    $start=[DateTime]::UtcNow;$sw=[Diagnostics.Stopwatch]::StartNew()
-    $proc=Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -Filter "IDProcess=$($s.javaPid)" -ErrorAction SilentlyContinue|Select-Object -First 1
-    $mem=Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction SilentlyContinue|Select-Object -First 1
-    $disk=Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction SilentlyContinue|Select-Object -First 1
-    $cpu=Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction SilentlyContinue|Select-Object -First 1
-    $sys=Get-CimInstance Win32_PerfFormattedData_PerfOS_System -ErrorAction SilentlyContinue|Select-Object -First 1
-    $sw.Stop();$cost=[Math]::Round([double]$sw.Elapsed.TotalMilliseconds,3);$probe.maxSampleCostMs=[Math]::Max($probe.maxSampleCostMs,$cost)
-    Write-P02HostRow $probe.path ([ordered]@{kind='sample';utc=$start.ToString('o');pid=$s.javaPid;sampleCostMs=$cost;processPercentCpu=$proc.PercentProcessorTime;processIoReadBytesPerSec=$proc.IOReadBytesPersec;processIoWriteBytesPerSec=$proc.IOWriteBytesPersec;processPageFaultsPerSec=$proc.PageFaultsPersec;memoryAvailableMBytes=$mem.AvailableMBytes;memoryCacheBytes=$mem.CacheBytes;memoryStandbyCacheNormalPriorityBytes=$mem.StandbyCacheNormalPriorityBytes;memoryPagesInputPerSec=$mem.PagesInputPersec;memoryPageReadsPerSec=$mem.PageReadsPersec;memoryTransitionFaultsPerSec=$mem.TransitionFaultsPersec;diskReadBytesPerSec=$disk.DiskReadBytesPersec;diskWriteBytesPerSec=$disk.DiskWriteBytesPersec;diskCurrentQueueLength=$disk.CurrentDiskQueueLength;diskAvgQueueLength=$disk.AvgDiskQueueLength;diskAvgSecondsPerRead=$disk.AvgDisksecPerRead;diskPercentTime=$disk.PercentDiskTime;cpuPercent=$cpu.PercentProcessorTime;processorQueueLength=$sys.ProcessorQueueLength})
-    $probe.samples++;$probe.next=$start.AddMilliseconds(5000)
-}
-function Finish-IntegratedP02HostProbe([object]$probe) {
-    if($null-eq$probe){return}
-    Write-P02HostRow $probe.path ([ordered]@{kind='footer';status='completed';samples=$probe.samples;stopReason='process_exited';finishedUtc=[DateTime]::UtcNow.ToString('o');observerCpuMs=0;maxSampleCostMs=[Math]::Round([double]$probe.maxSampleCostMs,3)})
+    if(-not($s.PSObject.Properties['p02ObserverTaskName']) -or -not$s.p02ObserverTaskName){return}
+    $deadline=[DateTime]::UtcNow.AddSeconds(20)
+    do{$task=Get-ScheduledTask -TaskName $s.p02ObserverTaskName -ErrorAction SilentlyContinue;if(-not$task -or $task.State.ToString()-ne'Running'){break};Start-Sleep -Milliseconds 250}while([DateTime]::UtcNow-lt$deadline)
+    try{Unregister-ScheduledTask -TaskName $s.p02ObserverTaskName -Confirm:$false -ErrorAction SilentlyContinue}catch{}
 }
 
-$s=Load;$integratedP02=$null
+$s=Load
 try{Ensure-Native}catch{Fail $s ("native helper setup failed: "+$_.Exception.Message)}
 if([int]$s.schema-ne3){Fail $s "unsupported transaction schema $($s.schema)"}
 try{Assert-ExpectedSession $s}catch{Fail $s $_.Exception.Message}
@@ -203,24 +174,18 @@ try{
     foreach($g in @($bootKeys|Group-Object)){if($g.Count-gt1){throw "duplicate BootOptim JVM property key: $($g.Name)"}}
     foreach($family in @('^-Xmx','^-Xms','^-XX:ActiveProcessorCount=')){if(@($argv|Where-Object{([string]$_)-match$family}).Count-gt1){throw "duplicate JVM singleton option family: $family"}}
     $s.effectiveCommandLineSha256=Text-Sha256 $cmd;$s.observedBootOptimPropertyKeys=@($bootKeys|Sort-Object -Unique);$s.validatedRequiredJvmArgs=@($s.requiredJvmArgs);$s.valid=$true;$s.reason=$null;$s.phase='measuring';Save $s
-    try{$integratedP02=Start-IntegratedP02HostProbe $s;Save $s}catch{$s.p02ObserverError=$_.Exception.GetType().Name;Save $s}
+    try{Start-P02HostProbe $s;Save $s}catch{$s.p02ObserverError=$_.Exception.GetType().Name;Save $s}
 }catch{
     $m=$_.Exception.Message;try{if($javaHandle -and -not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{};try{Stop-PrismOwned $s}catch{};Fail $s $m
 }
 
-$deadline=[DateTime]::UtcNow.AddSeconds([int]$s.timeoutSeconds);$missingJavaSamples=0
-while([DateTime]::UtcNow-lt$deadline){
-    if(Owned-JavaAlive $s){$missingJavaSamples=0}else{$missingJavaSamples++;if($missingJavaSamples-ge2){break}}
-    try{Sample-IntegratedP02HostProbe $integratedP02 $s}catch{if(-not$s.p02ObserverError){$s.p02ObserverError=$_.Exception.GetType().Name;Save $s}}
-    [void]$javaHandle.WaitForExit(250)
-}
-$exited=($missingJavaSamples-ge2) -or $javaHandle.HasExited
+$exited=$javaHandle.WaitForExit(([int]$s.timeoutSeconds)*1000)
 if(-not$exited){
     $s.valid=$false;$s.reason='java_timeout';$s.phase='invalid';Save $s
     try{if(-not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{}
 }else{$s.javaExitedUtc=[DateTime]::UtcNow.ToString('o')}
 try{Stop-PrismOwned $s}catch{$s.valid=$false;$s.reason='prism_close_failed'}
-try{Finish-IntegratedP02HostProbe $integratedP02}catch{$s.p02ObserverWaitError=$_.Exception.GetType().Name}
+try{Wait-P02HostProbe $s}catch{$s.p02ObserverWaitError=$_.Exception.GetType().Name}
 try{Archive-RunEvidence $s}catch{
     # Archive failure is not a game failure, but it must be explicit: subsequent performance or diagnostic
     # analysis has no permission to silently use whatever a later launch writes into the live logs.
