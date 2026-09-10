@@ -100,8 +100,9 @@ public final class ConnectorWarmResidualPatcher {
     private static byte[] patchLocator(byte[] input) {
         ClassNode node = readNode(input);
         requireCallCount(node, "scanMods", "org/sinytra/connector/locator/ConnectorLocator", "locateFabricMods", 1);
-        requireCallCount(node, "scanMods", "org/sinytra/connector/locator/filter/ForgeModPackageFilter", "filterPackages", 1);
-        requireCallCount(node, "scanMods", "org/sinytra/connector/locator/ConnectorLocator", "loadEmbeddedJars", 1);
+        // javac duplicates this exact finally body across the normal/early-return/exception exits.
+        requireCallCount(node, "scanMods", "org/sinytra/connector/locator/filter/ForgeModPackageFilter", "filterPackages", 4);
+        requireCallCount(node, "scanMods", "org/sinytra/connector/locator/ConnectorLocator", "loadEmbeddedJars", 4);
         requireCallCount(node, "locateFabricMods", "org/sinytra/connector/locator/DependencyResolver", "resolveDependencies", 1);
         requireCallCount(node, "locateFabricMods", "org/sinytra/connector/transformer/jar/JarTransformer", "transform", 1);
         requireCallCount(node, "locateFabricMods", "org/sinytra/connector/locator/filter/SplitPackageMerger", "mergeSplitPackages", 1);
