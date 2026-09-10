@@ -19,9 +19,20 @@ public final class MinecraftMainLifecycleHooks {
     public static void bootstrapWorkerEntry() { mark("bootstrap_worker_entry"); }
     public static void bootstrapWorkerReturn() { mark("bootstrap_worker_return"); }
 
-    // Agent 101: nested, observational-only version detection boundaries. Reusing this already-entered
-    // hook class avoids charging a new diagnostic hook class initialization to SharedConstants.<clinit>.
+    // Agent 101/103 nested observational boundaries. Reusing this already-entered hook class avoids
+    // charging a new diagnostic hook class initialization to SharedConstants.<clinit>.
     public static void sharedConstantsClinitEnter() { mark("shared_constants_clinit_enter"); }
+    public static void beforeNettyLeakLevelResolve() { mark("before_netty_leak_level_resolve"); }
+    public static void afterNettyLeakLevelPublish() { mark("after_netty_leak_level_publish"); }
+    public static void beforeDurationConstant() { mark("before_duration_constant"); }
+    public static void afterDurationConstant() { mark("after_duration_constant"); }
+    public static void beforeResourceLeakDetectorSetLevel() { mark("before_resource_leak_detector_set_level"); }
+    public static void afterResourceLeakDetectorSetLevel() { mark("after_resource_leak_detector_set_level"); }
+    public static void beforeCommandSyntaxStackTracePublish() { mark("before_command_syntax_stack_trace_publish"); }
+    public static void afterCommandSyntaxStackTracePublish() { mark("after_command_syntax_stack_trace_publish"); }
+    public static void beforeBrigadierExceptionsConstruction() { mark("before_brigadier_exceptions_construction"); }
+    public static void afterBrigadierExceptionsConstruction() { mark("after_brigadier_exceptions_construction"); }
+    public static void afterBrigadierProviderPublish() { mark("after_brigadier_provider_publish"); }
     public static void sharedConstantsClinitExit() { mark("shared_constants_clinit_exit"); }
     public static void sharedConstantsTryDetectEntry() { mark("shared_constants_try_detect_entry"); }
     public static void beforeDetectedVersionCall() {
