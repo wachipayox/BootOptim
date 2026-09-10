@@ -87,17 +87,37 @@ def parse(text: str) -> dict:
     if not (check_enter["line"] < select_enter["line"] < prepare_enter["line"] < r1_line < prepare_exit["line"] < select_exit["line"] < check_exit["line"]):
         raise ValueError("Mixin lifecycle nesting around request 1 changed")
 
-    main_by_name = {e.get("event"): e for e in main_events}
-    required = ["main_before_run_and_tick", "bootstrap_worker_entry", "bootstrap_worker_return", "main_after_run_and_tick"]
-    missing = [name for name in required if name not in main_by_name]
-    if missing:
-        raise ValueError(f"missing Main lifecycle markers: {missing}")
+    required = [
+        "main_entry",
+        "before_shared_constants_version", "after_shared_constants_version",
+        "before_datafixers_optimize", "after_datafixers_optimize",
+        "before_crash_report_preload", "after_crash_report_preload",
+        "main_before_run_and_tick", "bootstrap_worker_entry", "bootstrap_worker_return", "main_after_run_and_tick",
+    ]
+    main_by_name: dict[str, dict] = {}
+    for name in required:
+        matches = [e for e in main_events if e.get("event") == name]
+        if len(matches) != 1:
+            raise ValueError(f"expected exactly one Main lifecycle marker {name}, found {len(matches)}")
+        main_by_name[name] = matches[0]
+
+    main_entry = main_by_name["main_entry"]["mono_ns"]
+    before_shared = main_by_name["before_shared_constants_version"]["mono_ns"]
+    after_shared = main_by_name["after_shared_constants_version"]["mono_ns"]
+    before_datafix = main_by_name["before_datafixers_optimize"]["mono_ns"]
+    after_datafix = main_by_name["after_datafixers_optimize"]["mono_ns"]
+    before_crash = main_by_name["before_crash_report_preload"]["mono_ns"]
+    after_crash = main_by_name["after_crash_report_preload"]["mono_ns"]
     main_before = main_by_name["main_before_run_and_tick"]["mono_ns"]
     worker_entry = main_by_name["bootstrap_worker_entry"]["mono_ns"]
     worker_return = main_by_name["bootstrap_worker_return"]["mono_ns"]
     main_after = main_by_name["main_after_run_and_tick"]["mono_ns"]
 
-    ordered = [r1_end, prepare_exit["mono_ns"], select_exit["mono_ns"], check_exit["mono_ns"], main_before, worker_entry, r2_begin]
+    ordered = [
+        r1_end, prepare_exit["mono_ns"], select_exit["mono_ns"], check_exit["mono_ns"],
+        main_entry, before_shared, after_shared, before_datafix, after_datafix,
+        before_crash, after_crash, main_before, worker_entry, r2_begin,
+    ]
     if ordered != sorted(ordered):
         raise ValueError(f"causal ordering changed: {ordered}")
     if worker_return > main_after:
@@ -107,7 +127,14 @@ def parse(text: str) -> dict:
         "request1_end_to_prepare_configs_exit": prepare_exit["mono_ns"] - r1_end,
         "prepare_configs_exit_to_select_exit": select_exit["mono_ns"] - prepare_exit["mono_ns"],
         "select_exit_to_check_select_exit": check_exit["mono_ns"] - select_exit["mono_ns"],
-        "check_select_exit_to_background_waiter_call": main_before - check_exit["mono_ns"],
+        "check_select_exit_to_main_entry": main_entry - check_exit["mono_ns"],
+        "main_entry_to_shared_constants_version": before_shared - main_entry,
+        "shared_constants_try_detect_version": after_shared - before_shared,
+        "shared_constants_to_datafixers_optimize": before_datafix - after_shared,
+        "datafixers_optimize_call": after_datafix - before_datafix,
+        "datafixers_to_crash_report_preload": before_crash - after_datafix,
+        "crash_report_preload_call": after_crash - before_crash,
+        "crash_report_preload_to_background_waiter_call": main_before - after_crash,
         "background_waiter_call_to_worker_entry": worker_entry - main_before,
         "worker_entry_to_request2_transform_begin": r2_begin - worker_entry,
         "request1_end_to_request2_transform_begin": r2_begin - r1_end,
@@ -115,16 +142,20 @@ def parse(text: str) -> dict:
         "background_waiter_call_wall": main_after - main_before,
         "worker_return_to_background_waiter_return": main_after - worker_return,
     }
-    inter_request_partition = {
-        "mixin_prepare_configs_suffix_main_thread": segments["request1_end_to_prepare_configs_exit"],
-        "mixin_select_tail_main_thread": segments["prepare_configs_exit_to_select_exit"],
-        "mixin_check_select_tail_main_thread": segments["select_exit_to_check_select_exit"],
-        "unknown_main_thread_after_check_select": segments["check_select_exit_to_background_waiter_call"],
-        "background_waiter_pre_worker_submission_queue_window": segments["background_waiter_call_to_worker_entry"],
-        "bootstrap_worker_preamble": segments["worker_entry_to_request2_transform_begin"],
+
+    post_checkselect_partition = {
+        "pre_main_runtime_handoff": segments["check_select_exit_to_main_entry"],
+        "main_option_fml_telemetry_prefix": segments["main_entry_to_shared_constants_version"],
+        "shared_constants_try_detect_version": segments["shared_constants_try_detect_version"],
+        "tracy_prefix_before_datafixers": segments["shared_constants_to_datafixers_optimize"],
+        "datafixers_optimize_call": segments["datafixers_optimize_call"],
+        "between_datafixers_and_crash_preload": segments["datafixers_to_crash_report_preload"],
+        "crash_report_preload_call": segments["crash_report_preload_call"],
+        "logger_stage_tail_before_background_waiter": segments["crash_report_preload_to_background_waiter_call"],
     }
-    if sum(inter_request_partition.values()) != segments["request1_end_to_request2_transform_begin"]:
-        raise ValueError("inter-request causal partition does not tile the wall")
+    post_checkselect_wall = main_before - check_exit["mono_ns"]
+    if sum(post_checkselect_partition.values()) != post_checkselect_wall:
+        raise ValueError("post-checkSelect partition does not tile the serial wall")
 
     scopes = {
         "checkSelect": {"start_ns": check_enter["mono_ns"], "end_ns": check_exit["mono_ns"], "wall_ns": check_exit["mono_ns"] - check_enter["mono_ns"], "inclusive": True, "thread": check_enter.get("thread")},
@@ -137,29 +168,32 @@ def parse(text: str) -> dict:
         {"id": "prepare_configs_suffix", "kind": "serial_main_thread", "wall_ns": segments["request1_end_to_prepare_configs_exit"], "predecessors": ["request1_mixin_bytes"]},
         {"id": "select_tail", "kind": "serial_main_thread", "wall_ns": segments["prepare_configs_exit_to_select_exit"], "predecessors": ["prepare_configs_suffix"]},
         {"id": "check_select_tail", "kind": "serial_main_thread", "wall_ns": segments["select_exit_to_check_select_exit"], "predecessors": ["select_tail"]},
-        {"id": "unknown_main_thread", "kind": "unknown_serial_work", "wall_ns": segments["check_select_exit_to_background_waiter_call"], "predecessors": ["check_select_tail"]},
-        {"id": "background_waiter_pre_worker", "kind": "submission_queue_window", "wall_ns": segments["background_waiter_call_to_worker_entry"], "predecessors": ["unknown_main_thread"]},
+        {"id": "pre_main_runtime_handoff", "kind": "serial_boundary_residual", "wall_ns": segments["check_select_exit_to_main_entry"], "predecessors": ["check_select_tail"]},
+        {"id": "main_prefix", "kind": "serial_game_fml_prefix", "wall_ns": main_before - main_entry, "predecessors": ["pre_main_runtime_handoff"]},
+        {"id": "background_waiter_pre_worker", "kind": "submission_queue_window", "wall_ns": segments["background_waiter_call_to_worker_entry"], "predecessors": ["main_prefix"]},
         {"id": "bootstrap_worker", "kind": "concurrent_task", "wall_ns": segments["bootstrap_worker_task_wall"], "predecessors": ["background_waiter_pre_worker"]},
         {"id": "request2_classloading", "kind": "nested_in_bootstrap_worker", "thread": requests[1].get("thread"), "predecessors": ["bootstrap_worker"]},
         {"id": "background_waiter_completion_tail", "kind": "wait_cleanup_tail", "wall_ns": segments["worker_return_to_background_waiter_return"], "predecessors": ["bootstrap_worker"]},
     ]
 
     return {
-        "schema": 4,
-        "metric_type": "single-run monotonic causal wall; lifecycle scopes are inclusive; BackgroundWaiter worker and main wait loop overlap; not A/B or a savings estimate",
+        "schema": 5,
+        "probe": "agent98-post-checkselect-main-prefix-v1",
+        "metric_type": "single-run monotonic causal wall; callsite markers are observational; lifecycle scopes are inclusive; not A/B or a savings estimate",
         "origin": "hosted_exact_pack",
         "endpoint": "main_menu",
         "request_contract": "mixin_transformed_bytes_then_classloading",
         "same_loader_id": requests[0].get("loader_id"),
-        "mixin_scopes": scopes,
+        "mixin_scopes_reused_unchanged_from_agent96": scopes,
         "segments_ns": segments,
-        "inter_request_partition_ns": inter_request_partition,
+        "post_checkselect_serial_wall_ns": post_checkselect_wall,
+        "post_checkselect_partition_ns": post_checkselect_partition,
         "dag": dag,
         "classification_notes": {
-            "submission_queue_window": "Marker is immediately before stock BackgroundWaiter.runAndTick; exact FML code performs updateProgress then runner.submit before the worker can enter. This bucket is inclusive and is not pure queue wait.",
-            "concurrent_task": "bootstrap_worker_task_wall runs on the stock single-thread executor while Main remains inside BackgroundWaiter tick/sleep waiting.",
-            "wait_cleanup_tail": "Worker return to runAndTick return is stock completion observation/sleep tail plus runner.shutdown/work.get; it is not worker CPU.",
-            "unknown_serial_work": "Main-thread wall after checkSelect exits and before the BackgroundWaiter call. No owner is inferred by subtraction.",
+            "pre_main_runtime_handoff": "Serial wall from the pre-existing checkSelect exit marker until the first executable instruction of transformed Main.main. Agent 98 does not instrument Mixin, so any remaining transformation/class-definition/launch work stays explicitly in this boundary residual.",
+            "main_option_fml_telemetry_prefix": "Main runtime from method entry through option/FML hook parsing and game-load telemetry setup, ending immediately before SharedConstants.tryDetectVersion.",
+            "datafixers_optimize_call": "Wall only across the synchronous DataFixers.optimize invocation returning its future; later asynchronous optimization work is not attributed here.",
+            "submission_queue_window": "Marker is immediately before stock BackgroundWaiter.runAndTick; exact FML code performs progress/update/submission before the worker can enter. This bucket is not pure queue wait.",
         },
         "marker_counts": {"mixin": len(mixin_events), "main": len(main_events)},
     }
@@ -172,7 +206,7 @@ def main() -> None:
     args = parser.parse_args()
     result = parse(args.console.read_text(encoding="utf-8", errors="replace"))
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print("BOOTOPTIM_MIXIN_MAIN_PROFILE " + json.dumps(result, sort_keys=True), flush=True)
+    print("BOOTOPTIM_AGENT98_MAIN_PREFIX_PROFILE " + json.dumps(result, sort_keys=True), flush=True)
 
 
 if __name__ == "__main__":
