@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Analyze Create 6.0.10 AllBlockEntityTypes.<clinit> as serial entry-to-entry wall."""
+"""Analyze exact-pack Create 6.0.10 AllBlockEntityTypes.<clinit> as serial entry-to-entry wall."""
 
 from __future__ import annotations
 
@@ -13,10 +13,30 @@ import analyze_fml_chain as fml
 
 EXPECTED_CREATE_VERSION = "6.0.10"
 EXPECTED_SOURCE_PIN = "ac0c444d9828da3453ae8cc65338e8de063286fb"
-EXPECTED_FIRST_ENTRY = "schematicannon"
-EXPECTED_LAST_ENTRY = "clipboard"
-MIN_EXPECTED_ENTRY_COUNT = 80
 EXPECTED_BUILDER = "com.simibubi.create.foundation.data.CreateBlockEntityBuilder"
+# 114 stock Create 6.0.10 fields plus Sable 2.0.3's exact-pack Mixin-injected redstone_contact.
+EXPECTED_ENTRY_NAMES = [
+    "schematicannon", "schematic_table", "simple_kinetic", "motor", "gearbox", "encased_shaft",
+    "encased_cogwheel", "encased_large_cogwheel", "adjustable_chain_gearshift", "encased_fan", "nozzle",
+    "clutch", "gearshift", "turntable", "hand_crank", "valve_handle", "cuckoo_clock", "gantry_shaft",
+    "gantry_pinion", "chain_conveyor", "mechanical_pump", "smart_fluid_pipe", "fluid_pipe",
+    "encased_fluid_pipe", "glass_fluid_pipe", "fluid_valve", "fluid_tank", "creative_fluid_tank",
+    "hose_pulley", "spout", "item_drain", "belt", "chute", "smart_chute", "andesite_tunnel",
+    "brass_tunnel", "mechanical_arm", "item_vault", "item_hatch", "packager", "repackager",
+    "package_frogport", "package_postbox", "table_cloth", "packager_link", "stock_ticker",
+    "redstone_requester", "mechanical_piston", "windmill_bearing", "mechanical_bearing",
+    "clockwork_bearing", "rope_pulley", "elevator_pulley", "elevator_contact", "chassis", "sticker",
+    "contraption_controls", "drill", "saw", "harvester", "mechanical_roller", "portable_storage_interface",
+    "portable_fluid_interface", "steam_engine", "steam_whistle", "powered_shaft", "flywheel", "millstone",
+    "crushing_wheel", "crushing_wheel_controller", "water_wheel", "large_water_wheel", "mechanical_press",
+    "mechanical_mixer", "deployer", "basin", "blaze_heater", "mechanical_crafter", "sequenced_gearshift",
+    "rotation_speed_controller", "speedometer", "stressometer", "analog_lever", "placard", "factory_panel",
+    "cart_assembler", "redstone_link", "nixie_tube", "display_link", "stockpile_switch", "creative_crate",
+    "depot", "weighted_ejector", "funnel", "content_observer", "pulse_extender", "pulse_repeater",
+    "pulse_timer", "lectern_controller", "backtank", "peculiar_bell", "cursed_bell", "desk_bell", "toolbox",
+    "track", "fake_track", "bogey", "track_station", "sliding_door", "copycat", "flap_display",
+    "track_signal", "track_observer", "clipboard", "redstone_contact",
+]
 
 
 def detail_fields(detail: str | None) -> dict[str, str]:
@@ -55,13 +75,12 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
 
     entries = [event for event in events if event.get("kind") == "create_be_entry_boundary"]
     entries.sort(key=lambda event: (event["ns"], event.get("seq", 0)))
-    if len(entries) < MIN_EXPECTED_ENTRY_COUNT:
-        raise SystemExit(f"too few block-entity entry boundaries: {len(entries)} < {MIN_EXPECTED_ENTRY_COUNT}")
+    if len(entries) != len(EXPECTED_ENTRY_NAMES):
+        raise SystemExit(f"expected {len(EXPECTED_ENTRY_NAMES)} block-entity entry boundaries, found {len(entries)}")
 
     observed_names: list[str] = []
     entry_rows: list[dict[str, Any]] = []
     previous_ns = begin["ns"]
-    seen: set[str] = set()
     for index, event in enumerate(entries):
         if event.get("tid") != tid:
             raise SystemExit("block-entity entry boundary crossed threads")
@@ -73,9 +92,6 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         name = detail.get("name")
         if not name or name == "null":
             raise SystemExit(f"block-entity boundary lacks name: {detail}")
-        if name in seen:
-            raise SystemExit(f"duplicate block-entity entry boundary: {name}")
-        seen.add(name)
         if detail.get("owner_mod") != "create":
             raise SystemExit(f"block-entity entry owner mismatch: {detail}")
         if "block_entity_type" not in detail.get("registry", ""):
@@ -91,13 +107,13 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
             "start_ns": previous_ns,
             "end_ns": event["ns"],
             "wall_ms": wall_ms,
+            "provenance": "sable_2.0.3_mixin" if name == "redstone_contact" else "create_6.0.10_stock",
         })
         observed_names.append(name)
         previous_ns = event["ns"]
 
-    if observed_names[0] != EXPECTED_FIRST_ENTRY or observed_names[-1] != EXPECTED_LAST_ENTRY:
-        raise SystemExit(
-            f"block-entity source endpoints mismatch: first={observed_names[0]} last={observed_names[-1]}")
+    if observed_names != EXPECTED_ENTRY_NAMES:
+        raise SystemExit(f"exact-pack block-entity runtime topology mismatch: {observed_names}")
 
     tail_ms = (end["ns"] - previous_ns) / 1_000_000.0
     if tail_ms < 0:
@@ -125,8 +141,8 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         "fml": fml_result,
         "family": family_result,
         "entry_count": len(entry_rows),
-        "first_entry": observed_names[0],
-        "last_entry": observed_names[-1],
+        "runtime_topology": observed_names,
+        "runtime_topology_note": "114 Create 6.0.10 stock registrations followed by Sable 2.0.3 Mixin-injected redstone_contact",
         "all_block_entity_types_clinit_ms": clinit_ms,
         "block_entities_family_ms": block_family_ms,
         "clinit_pct_of_block_entities_family": 100.0 * clinit_ms / block_family_ms,
@@ -153,31 +169,33 @@ def markdown(result: dict[str, Any]) -> str:
     fml_result = result["fml"]
     fam = result["family"]
     lines = [
-        "# Create 6.0.10 AllBlockEntityTypes entry profile",
+        "# Exact-pack Create 6.0.10 AllBlockEntityTypes entry profile",
         "",
         f"- FML construction gate: **{fml_result['gate_ms']:.3f} ms**",
+        "- observed non-overlapping execution subchain into Create: " + " -> ".join(f"`{mod}`" for mod in fam["execution_subchain_verified"]),
+        "- direct dependency chain downstream: " + " -> ".join(f"`{mod}`" for mod in fam["direct_dependency_chain_verified"]),
         f"- Create outer node: **{fam['create_outer_node_ms']:.3f} ms**",
         f"- exact `Create.onCtor`: **{fam['create_on_ctor_ms']:.3f} ms**",
         f"- registration-family slice: **{fam['registration_families_ms']:.3f} ms**",
         f"- `block_entities` serial family: **{result['block_entities_family_ms']:.3f} ms**",
-        f"- exact `AllBlockEntityTypes.<clinit>`: **{result['all_block_entity_types_clinit_ms']:.3f} ms** ({result['clinit_pct_of_block_entities_family']:.2f}% of family)",
-        f"- observed entry commits: **{result['entry_count']}**, source endpoints `{result['first_entry']}` -> `{result['last_entry']}`",
+        f"- exact transformed `AllBlockEntityTypes.<clinit>`: **{result['all_block_entity_types_clinit_ms']:.3f} ms** ({result['clinit_pct_of_block_entities_family']:.2f}% of family)",
+        f"- exact-pack entry commits: **{result['entry_count']}**; {result['runtime_topology_note']}",
         f"- family residual before/after `<clinit>`: **{result['before_clinit_ms']:.3f} / {result['after_clinit_ms']:.3f} ms**",
         "",
         "Rows are contiguous non-overlapping serial wall intervals. A row ends when the corresponding `CreateBlockEntityBuilder` has returned through `BlockEntityBuilder.register()`. The interval therefore includes construction/configuration of that entry and any transitive class initialization since the preceding entry. Observer reflection/logging overhead is included; these are attribution measurements, not savings.",
         "",
-        "| rank | source entry | serial wall ms |",
-        "| ---: | --- | ---: |",
+        "| rank | runtime entry | provenance | serial wall ms |",
+        "| ---: | --- | --- | ---: |",
     ]
     for rank, row in enumerate(result["top_entries"], start=1):
-        lines.append(f"| {rank} | `{row['name']}` | {row['wall_ms']:.3f} |")
+        lines.append(f"| {rank} | `{row['name']}` | `{row['provenance']}` | {row['wall_ms']:.3f} |")
     lines.extend([
         "",
         f"Top 10 entry intervals account for **{result['top10_ms']:.3f} ms** ({result['top10_pct_of_clinit']:.2f}% of `<clinit>`).",
         "",
         "## Causal placement",
         "",
-        "`colorwheel -> flywheel -> ponder -> create -> ratatouille` remains verified by the parent family analyzer. The entry intervals are nested inside the same one-thread `block_entities` slice of the critical Create node; no source registration, callback, class-init, failure, or thread ordering is changed.",
+        "The entry intervals are nested inside the same one-thread `block_entities` slice of the critical Create node. Exact-pack runtime topology is pinned after transformation, including Sable's compatibility Mixin; no registration, callback, class-init, failure, or thread ordering is changed.",
     ])
     return "\n".join(lines) + "\n"
 
