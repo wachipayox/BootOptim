@@ -21,7 +21,7 @@ env:
   EXACT_PACK_TAG: exact-pack-2026-09-02-v1
   EXACT_PACK_ASSET: bootoptim-exact-pack.zip
   EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
-  EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd4-linux
+  EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd90497a4d-linux
   MCEF_JAVA_CEF_COMMIT: a78e832f9f13c2c688caea3d04d8b84fcd238d94
   MCEF_PLATFORM: linux_amd64
   MCEF_CACHE_KEY: mcef-jcef-a78e832f9f13c2c688caea3d04d8b84fcd238d94-linux-amd64-v1
@@ -210,7 +210,6 @@ jobs:
         run: |
           set -euo pipefail
           python tools/modlauncher-fork-probe/parse_profile.py --console exact-pack-console.log --output modlauncher-fork-profile-v2.json
-          python tools/mixin-lifecycle-probe/parse_lifecycle.py --console exact-pack-console.log --output agent99-main-prefix-profile.json
           python tools/mixin-lifecycle-probe/parse_datafixers.py --console exact-pack-console.log --output agent99-datafixers-profile.json
           python - <<'PY'
           import json
@@ -218,7 +217,6 @@ jobs:
           result = json.loads(Path('result.json').read_text())
           result['agent99_lifecycle_preflight'] = json.loads(Path('agent99-lifecycle-preflight.json').read_text())
           result['modlauncher_fork_profile_v2'] = json.loads(Path('modlauncher-fork-profile-v2.json').read_text())
-          result['agent99_main_prefix_profile'] = json.loads(Path('agent99-main-prefix-profile.json').read_text())
           result['agent99_datafixers_profile'] = json.loads(Path('agent99-datafixers-profile.json').read_text())
           Path('result.json').write_text(json.dumps(result, indent=2) + '\n')
           PY
@@ -239,7 +237,6 @@ jobs:
             mixin-fork-build.json
             modlauncher-fork-resolution.json
             modlauncher-fork-profile-v2.json
-            agent99-main-prefix-profile.json
             agent99-datafixers-profile.json
             glxinfo.txt
             hosted-runner.txt
