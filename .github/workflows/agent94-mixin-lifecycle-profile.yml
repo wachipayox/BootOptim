@@ -1,4 +1,4 @@
-name: Agent 94 Mixin Lifecycle Profile
+name: Agent 96 Mixin/Main Lifecycle Profile
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: agent94-mixin-lifecycle-${{ github.event.pull_request.number }}
+  group: agent96-mixin-main-lifecycle-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
@@ -47,7 +47,7 @@ env:
 
 jobs:
   profile:
-    if: github.event.pull_request.number == 228
+    if: github.event.pull_request.number == 230
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     steps:
@@ -182,10 +182,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/modlauncher-fork-probe/prepare_runtime.py --root "$PWD" --output "$PWD/.agent94-ml-fork-repo" --report "$PWD/modlauncher-fork-build.json"
-          python tools/mixin-lifecycle-probe/prepare_runtime.py --root "$PWD" --output "$PWD/.agent94-mixin-fork-repo" --report "$PWD/mixin-fork-build.json"
-          export BOOTOPTIM_ML_FORK_REPO="$PWD/.agent94-ml-fork-repo"
-          export BOOTOPTIM_MIXIN_FORK_REPO="$PWD/.agent94-mixin-fork-repo"
+          python tools/modlauncher-fork-probe/prepare_runtime.py --root "$PWD" --output "$PWD/.agent96-ml-fork-repo" --report "$PWD/modlauncher-fork-build.json"
+          python tools/mixin-lifecycle-probe/prepare_runtime.py --root "$PWD" --output "$PWD/.agent96-mixin-fork-repo" --report "$PWD/mixin-fork-build.json"
+          export BOOTOPTIM_ML_FORK_REPO="$PWD/.agent96-ml-fork-repo"
+          export BOOTOPTIM_MIXIN_FORK_REPO="$PWD/.agent96-mixin-fork-repo"
           ./gradlew preparePackBenchmarkClientRun --no-daemon --console=plain
           ./gradlew -I tools/modlauncher-fork-probe/resolve_launch_files.gradle \
             agent94WriteLaunchResolution \
@@ -195,7 +195,7 @@ jobs:
             --resolution modlauncher-fork-resolution.json \
             --modlauncher-build modlauncher-fork-build.json \
             --mixin-build mixin-fork-build.json \
-            --output agent94-lifecycle-preflight.json
+            --output agent96-lifecycle-preflight.json
           echo "BOOTOPTIM_ML_FORK_REPO=$BOOTOPTIM_ML_FORK_REPO" >> "$GITHUB_ENV"
           echo "BOOTOPTIM_MIXIN_FORK_REPO=$BOOTOPTIM_MIXIN_FORK_REPO" >> "$GITHUB_ENV"
           echo "JAVA_TOOL_OPTIONS=-Dboot_optim.modlauncherForkTrace=true" >> "$GITHUB_ENV"
@@ -203,7 +203,7 @@ jobs:
       - name: Launch exact pack to main menu and validate resources
         shell: bash
         run: |
-          python scripts/exact-pack/run_startup.py --variant agent94-mixin-lifecycle --iteration 1 --timeout 1200
+          python scripts/exact-pack/run_startup.py --variant agent96-mixin-main-lifecycle --iteration 1 --timeout 1200
 
       - name: Require exact two-request lifecycle profile
         shell: bash
@@ -215,24 +215,24 @@ jobs:
           import json
           from pathlib import Path
           result = json.loads(Path('result.json').read_text())
-          result['agent94_lifecycle_preflight'] = json.loads(Path('agent94-lifecycle-preflight.json').read_text())
+          result['agent96_lifecycle_preflight'] = json.loads(Path('agent96-lifecycle-preflight.json').read_text())
           result['modlauncher_fork_profile_v2'] = json.loads(Path('modlauncher-fork-profile-v2.json').read_text())
           result['mixin_main_lifecycle_profile'] = json.loads(Path('mixin-main-lifecycle-profile.json').read_text())
           Path('result.json').write_text(json.dumps(result, indent=2) + '\n')
           PY
 
-      - name: Upload Agent 94 lifecycle evidence
+      - name: Upload Agent 96 lifecycle evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agent94-mixin-lifecycle-${{ github.event.pull_request.head.sha }}
+          name: agent96-mixin-main-lifecycle-${{ github.event.pull_request.head.sha }}
           path: |
             result.json
             resource-selection-check.json
             resource-selection-reference.txt
             exact-pack-console.log
             exact-pack-thread-dump.log
-            agent94-lifecycle-preflight.json
+            agent96-lifecycle-preflight.json
             modlauncher-fork-build.json
             mixin-fork-build.json
             modlauncher-fork-resolution.json
