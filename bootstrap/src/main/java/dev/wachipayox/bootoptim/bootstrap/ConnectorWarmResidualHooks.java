@@ -8,7 +8,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,6 +31,9 @@ public final class ConnectorWarmResidualHooks {
     private static final long JVM_START_EPOCH_MS = runtimeStartTime();
     private static final long PID = currentPid();
     private static final AtomicLong NEXT_ID = new AtomicLong();
+    private static final AtomicLong NEXT_RESOURCE_ID = new AtomicLong();
+    // Identity-only diagnostic IDs distinguish equal-looking loader objects without retaining or reusing them operationally.
+    private static final IdentityHashMap<Object, Long> RESOURCE_IDS = new IdentityHashMap<>();
     // Start row: id,parent,predecessor,phase,resource,threadId,threadName,startNano.
     private static final ConcurrentHashMap<Long, Object[]> STARTS = new ConcurrentHashMap<>();
     // Event row: id,parent,predecessor,phase,resource,threadId,threadName,startNano,endNano.
@@ -196,8 +201,24 @@ public final class ConnectorWarmResidualHooks {
     }
 
     private static String stringify(Object value) {
-        try { return value == null ? null : String.valueOf(value); }
-        catch (Throwable ignored) { return "<unprintable>"; }
+        try {
+            if (value == null) return null;
+            if (value instanceof Path[] paths) return Arrays.toString(paths);
+            String text = String.valueOf(value);
+            if (value instanceof CharSequence || value instanceof Path || value instanceof Module) return text;
+            long identity;
+            synchronized (RESOURCE_IDS) {
+                Long existing = RESOURCE_IDS.get(value);
+                if (existing == null) {
+                    existing = NEXT_RESOURCE_ID.incrementAndGet();
+                    RESOURCE_IDS.put(value, existing);
+                }
+                identity = existing;
+            }
+            return value.getClass().getName() + "#" + identity + " " + text;
+        } catch (Throwable ignored) {
+            return "<unprintable>";
+        }
     }
 
     private static String quote(String value) {
