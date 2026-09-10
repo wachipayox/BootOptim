@@ -26,6 +26,7 @@ public final class Recorder {
     private static final ConcurrentLinkedQueue<Event> EVENTS = new ConcurrentLinkedQueue<>();
     private static final AtomicBoolean FLUSHED = new AtomicBoolean();
     private static final ThreadLocal<Boolean> CREATE_ACTIVE = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> CREATE_BLOCK_ENTITY_CLINIT_ACTIVE = new ThreadLocal<>();
     private static volatile boolean active;
     private static volatile boolean versionAccepted;
 
@@ -70,6 +71,7 @@ public final class Recorder {
 
     public static void endGate(Throwable thrown) {
         if (active) recordRaw("gate_end", null, throwableDetail(thrown));
+        CREATE_BLOCK_ENTITY_CLINIT_ACTIVE.remove();
         CREATE_ACTIVE.remove();
         active = false;
     }
@@ -144,6 +146,7 @@ public final class Recorder {
                         + ";code_source=" + String.valueOf(codeSource));
         if (!"create".equals(mod) || !EXPECTED_CREATE_VERSION.equals(createVersion)) {
             recordRaw("create_profile_disabled", "create", "reason=create_version_mismatch");
+            CREATE_BLOCK_ENTITY_CLINIT_ACTIVE.remove();
             CREATE_ACTIVE.remove();
             return;
         }
@@ -158,12 +161,54 @@ public final class Recorder {
         recordRaw("create_boundary", "create", detail);
     }
 
+    public static void createBlockEntityClinitBegin() {
+        if (!active || !Boolean.TRUE.equals(CREATE_ACTIVE.get())) return;
+        if (Boolean.TRUE.equals(CREATE_BLOCK_ENTITY_CLINIT_ACTIVE.get())) {
+            recordRaw("create_be_clinit_reentry", "create", null);
+            return;
+        }
+        CREATE_BLOCK_ENTITY_CLINIT_ACTIVE.set(Boolean.TRUE);
+        recordRaw("create_be_clinit_begin", "create", null);
+    }
+
+    public static void createBlockEntityRegisterBoundary(Object builder, Throwable thrown) {
+        if (!active
+                || !Boolean.TRUE.equals(CREATE_ACTIVE.get())
+                || !Boolean.TRUE.equals(CREATE_BLOCK_ENTITY_CLINIT_ACTIVE.get())) {
+            return;
+        }
+        Object owner = invokeNoArg(builder, "getOwner");
+        String name = stringValue(invokeNoArg(builder, "getName"));
+        String ownerMod = stringValue(invokeNoArg(owner, "getModid"));
+        String registry = stringValue(invokeNoArg(builder, "getRegistryKey"));
+        String builderClass = builder == null ? null : builder.getClass().getName();
+        String detail = "name=" + String.valueOf(name)
+                + ";owner_mod=" + String.valueOf(ownerMod)
+                + ";registry=" + String.valueOf(registry)
+                + ";builder=" + String.valueOf(builderClass);
+        if (thrown != null) detail += ";throw=" + thrown.getClass().getName();
+        recordRaw("create_be_entry_boundary", "create", detail);
+    }
+
+    public static void createBlockEntityClinitEnd(Throwable thrown) {
+        try {
+            if (active
+                    && Boolean.TRUE.equals(CREATE_ACTIVE.get())
+                    && Boolean.TRUE.equals(CREATE_BLOCK_ENTITY_CLINIT_ACTIVE.get())) {
+                recordRaw("create_be_clinit_end", "create", throwableDetail(thrown));
+            }
+        } finally {
+            CREATE_BLOCK_ENTITY_CLINIT_ACTIVE.remove();
+        }
+    }
+
     public static void createCtorEnd(Throwable thrown) {
         try {
             if (active && Boolean.TRUE.equals(CREATE_ACTIVE.get())) {
                 recordRaw("create_ctor_end", "create", throwableDetail(thrown));
             }
         } finally {
+            CREATE_BLOCK_ENTITY_CLINIT_ACTIVE.remove();
             CREATE_ACTIVE.remove();
         }
     }
@@ -180,6 +225,20 @@ public final class Recorder {
         } catch (Throwable ignored) {
             return null;
         }
+    }
+
+    private static Object invokeNoArg(Object target, String methodName) {
+        if (target == null) return null;
+        try {
+            Method method = target.getClass().getMethod(methodName);
+            return method.invoke(target);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static String stringValue(Object value) {
+        return value == null ? null : value.toString();
     }
 
     private static String throwableDetail(Throwable thrown) {
