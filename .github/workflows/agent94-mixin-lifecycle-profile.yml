@@ -1,4 +1,4 @@
-name: Agent 96 Mixin/Main Lifecycle Profile
+name: Agent 96 Mixin prepareConfigs Suffix Profile
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: agent96-mixin-main-lifecycle-${{ github.event.pull_request.number }}
+  group: agent96-mixin-prepareconfigs-suffix-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
@@ -47,7 +47,7 @@ env:
 
 jobs:
   profile:
-    if: github.event.pull_request.number == 230
+    if: github.head_ref == 'agent96/mixin-prepareconfigs-suffix-20260910'
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     steps:
@@ -203,29 +203,29 @@ jobs:
       - name: Launch exact pack to main menu and validate resources
         shell: bash
         run: |
-          python scripts/exact-pack/run_startup.py --variant agent96-mixin-main-lifecycle --iteration 1 --timeout 1200
+          python scripts/exact-pack/run_startup.py --variant agent96-mixin-prepareconfigs-suffix --iteration 1 --timeout 1200
 
-      - name: Require exact two-request lifecycle profile
+      - name: Require exact two-request prepareConfigs profile
         shell: bash
         run: |
           set -euo pipefail
           python tools/modlauncher-fork-probe/parse_profile.py --console exact-pack-console.log --output modlauncher-fork-profile-v2.json
-          python tools/mixin-lifecycle-probe/parse_lifecycle.py --console exact-pack-console.log --output mixin-main-lifecycle-profile.json
+          python tools/mixin-lifecycle-probe/parse_lifecycle.py --console exact-pack-console.log --output mixin-prepareconfigs-profile.json
           python - <<'PY'
           import json
           from pathlib import Path
           result = json.loads(Path('result.json').read_text())
           result['agent96_lifecycle_preflight'] = json.loads(Path('agent96-lifecycle-preflight.json').read_text())
           result['modlauncher_fork_profile_v2'] = json.loads(Path('modlauncher-fork-profile-v2.json').read_text())
-          result['mixin_main_lifecycle_profile'] = json.loads(Path('mixin-main-lifecycle-profile.json').read_text())
+          result['mixin_prepareconfigs_profile'] = json.loads(Path('mixin-prepareconfigs-profile.json').read_text())
           Path('result.json').write_text(json.dumps(result, indent=2) + '\n')
           PY
 
-      - name: Upload Agent 96 lifecycle evidence
+      - name: Upload Agent 96 prepareConfigs evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agent96-mixin-main-lifecycle-${{ github.event.pull_request.head.sha }}
+          name: agent96-mixin-prepareconfigs-suffix-${{ github.event.pull_request.head.sha }}
           path: |
             result.json
             resource-selection-check.json
@@ -237,7 +237,7 @@ jobs:
             mixin-fork-build.json
             modlauncher-fork-resolution.json
             modlauncher-fork-profile-v2.json
-            mixin-main-lifecycle-profile.json
+            mixin-prepareconfigs-profile.json
             glxinfo.txt
             hosted-runner.txt
             run-pack-benchmark/logs/latest.log
