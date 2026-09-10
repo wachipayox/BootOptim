@@ -32,16 +32,35 @@ public final class Recorder {
     }
 
     public static void beginGate(Class<?> owner) {
-        String actualVersion = null;
+        String moduleVersion = null;
+        String moduleName = null;
+        String packageVersion = null;
         try {
-            Package pkg = owner == null ? null : owner.getPackage();
-            actualVersion = pkg == null ? null : pkg.getImplementationVersion();
+            if (owner != null) {
+                Module module = owner.getModule();
+                if (module != null) {
+                    moduleName = module.getName();
+                    var descriptor = module.getDescriptor();
+                    if (descriptor != null) {
+                        moduleVersion = descriptor.rawVersion().orElse(null);
+                    }
+                }
+                Package pkg = owner.getPackage();
+                packageVersion = pkg == null ? null : pkg.getImplementationVersion();
+            }
         } catch (Throwable ignored) {
         }
 
-        versionAccepted = EXPECTED_FML_VERSION.equals(actualVersion);
+        // FancyModLoader's loader JAR exposes a coarse package Implementation-Version (4.0), while
+        // ModLauncher defines the named runtime module as fml_loader@4.0.43. The module descriptor is
+        // therefore the exact version boundary for this diagnostic. Missing/drifted module metadata
+        // disables collection rather than silently accepting a broader 4.0 package version.
+        versionAccepted = "fml_loader".equals(moduleName) && EXPECTED_FML_VERSION.equals(moduleVersion);
         recordRaw("profile_header", null,
-                "expected_fml=" + EXPECTED_FML_VERSION + ";actual_fml=" + String.valueOf(actualVersion));
+                "expected_fml=" + EXPECTED_FML_VERSION
+                        + ";module_name=" + String.valueOf(moduleName)
+                        + ";module_fml=" + String.valueOf(moduleVersion)
+                        + ";package_fml=" + String.valueOf(packageVersion));
         if (!versionAccepted) {
             recordRaw("profile_disabled", null, "reason=fml_version_mismatch");
             active = false;
