@@ -111,8 +111,36 @@ function Wait-P02HostProbe([object]$s) {
     $p=Get-Process -Id ([int]$s.p02ObserverPid) -ErrorAction SilentlyContinue
     if($p){[void]$p.WaitForExit(15000)}
 }
+function Write-P02HostRow([string]$path,[object]$row) {
+    [IO.File]::AppendAllText($path,(($row|ConvertTo-Json -Compress -Depth 8)+[Environment]::NewLine),$Utf8)
+}
+function Start-IntegratedP02HostProbe([object]$s) {
+    if(-not[bool]$s.p02HostProbe){return $null}
+    $evidence=Join-Path (Split-Path -Parent $StateFile) 'evidence';New-Item -ItemType Directory -Force -Path $evidence|Out-Null
+    $path=Join-Path $evidence 'p02-host.jsonl';if(Test-Path -LiteralPath $path){throw 'P0.2 host evidence already exists'}
+    $os=Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue|Select-Object -First 1;$now=[DateTime]::UtcNow
+    Write-P02HostRow $path ([ordered]@{kind='header';schema=1;measurementClass='diagnostic_not_benchmark';runId=$s.runId;origin='physical_laptop';endpoint='main_menu';coldState=$s.p02ColdState;pid=$s.javaPid;creationDate=$s.javaCreationDate;sampleIntervalMs=5000;startedUtc=$now.ToString('o');windowsBootUtc=if($os -and $os.LastBootUpTime){([DateTime]$os.LastBootUpTime).ToUniversalTime().ToString('o')}else{$null}})
+    $s.p02HostEvidence=$path;$s.p02ObserverPid=0
+    [pscustomobject]@{path=$path;next=$now;samples=0;maxSampleCostMs=0.0}
+}
+function Sample-IntegratedP02HostProbe([object]$probe,[object]$s) {
+    if($null-eq$probe -or [DateTime]::UtcNow-lt$probe.next){return}
+    $start=[DateTime]::UtcNow;$sw=[Diagnostics.Stopwatch]::StartNew()
+    $proc=Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -Filter "IDProcess=$($s.javaPid)" -ErrorAction SilentlyContinue|Select-Object -First 1
+    $mem=Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction SilentlyContinue|Select-Object -First 1
+    $disk=Get-CimInstance Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction SilentlyContinue|Select-Object -First 1
+    $cpu=Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction SilentlyContinue|Select-Object -First 1
+    $sys=Get-CimInstance Win32_PerfFormattedData_PerfOS_System -ErrorAction SilentlyContinue|Select-Object -First 1
+    $sw.Stop();$cost=[Math]::Round([double]$sw.Elapsed.TotalMilliseconds,3);$probe.maxSampleCostMs=[Math]::Max($probe.maxSampleCostMs,$cost)
+    Write-P02HostRow $probe.path ([ordered]@{kind='sample';utc=$start.ToString('o');pid=$s.javaPid;sampleCostMs=$cost;processPercentCpu=$proc.PercentProcessorTime;processIoReadBytesPerSec=$proc.IOReadBytesPersec;processIoWriteBytesPerSec=$proc.IOWriteBytesPersec;processPageFaultsPerSec=$proc.PageFaultsPersec;memoryAvailableMBytes=$mem.AvailableMBytes;memoryCacheBytes=$mem.CacheBytes;memoryStandbyCacheNormalPriorityBytes=$mem.StandbyCacheNormalPriorityBytes;memoryPagesInputPerSec=$mem.PagesInputPersec;memoryPageReadsPerSec=$mem.PageReadsPersec;memoryTransitionFaultsPerSec=$mem.TransitionFaultsPersec;diskReadBytesPerSec=$disk.DiskReadBytesPersec;diskWriteBytesPerSec=$disk.DiskWriteBytesPersec;diskCurrentQueueLength=$disk.CurrentDiskQueueLength;diskAvgQueueLength=$disk.AvgDiskQueueLength;diskAvgSecondsPerRead=$disk.AvgDisksecPerRead;diskPercentTime=$disk.PercentDiskTime;cpuPercent=$cpu.PercentProcessorTime;processorQueueLength=$sys.ProcessorQueueLength})
+    $probe.samples++;$probe.next=$start.AddMilliseconds(5000)
+}
+function Finish-IntegratedP02HostProbe([object]$probe) {
+    if($null-eq$probe){return}
+    Write-P02HostRow $probe.path ([ordered]@{kind='footer';status='completed';samples=$probe.samples;stopReason='process_exited';finishedUtc=[DateTime]::UtcNow.ToString('o');observerCpuMs=0;maxSampleCostMs=[Math]::Round([double]$probe.maxSampleCostMs,3)})
+}
 
-$s=Load
+$s=Load;$integratedP02=$null
 try{Ensure-Native}catch{Fail $s ("native helper setup failed: "+$_.Exception.Message)}
 if([int]$s.schema-ne3){Fail $s "unsupported transaction schema $($s.schema)"}
 try{Assert-ExpectedSession $s}catch{Fail $s $_.Exception.Message}
@@ -170,18 +198,23 @@ try{
     foreach($g in @($bootKeys|Group-Object)){if($g.Count-gt1){throw "duplicate BootOptim JVM property key: $($g.Name)"}}
     foreach($family in @('^-Xmx','^-Xms','^-XX:ActiveProcessorCount=')){if(@($argv|Where-Object{([string]$_)-match$family}).Count-gt1){throw "duplicate JVM singleton option family: $family"}}
     $s.effectiveCommandLineSha256=Text-Sha256 $cmd;$s.observedBootOptimPropertyKeys=@($bootKeys|Sort-Object -Unique);$s.validatedRequiredJvmArgs=@($s.requiredJvmArgs);$s.valid=$true;$s.reason=$null;$s.phase='measuring';Save $s
-    try{Start-P02HostProbe $s;Save $s}catch{$s.p02ObserverError=$_.Exception.GetType().Name;Save $s}
+    try{$integratedP02=Start-IntegratedP02HostProbe $s;Save $s}catch{$s.p02ObserverError=$_.Exception.GetType().Name;Save $s}
 }catch{
     $m=$_.Exception.Message;try{if($javaHandle -and -not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{};try{Stop-PrismOwned $s}catch{};Fail $s $m
 }
 
-$exited=$javaHandle.WaitForExit(([int]$s.timeoutSeconds)*1000)
+$deadline=[DateTime]::UtcNow.AddSeconds([int]$s.timeoutSeconds)
+while(-not$javaHandle.HasExited -and [DateTime]::UtcNow-lt$deadline){
+    try{Sample-IntegratedP02HostProbe $integratedP02 $s}catch{if(-not$s.p02ObserverError){$s.p02ObserverError=$_.Exception.GetType().Name;Save $s}}
+    [void]$javaHandle.WaitForExit(250)
+}
+$exited=$javaHandle.HasExited
 if(-not$exited){
     $s.valid=$false;$s.reason='java_timeout';$s.phase='invalid';Save $s
     try{if(-not$javaHandle.HasExited){$javaHandle.Kill();$javaHandle.WaitForExit()}}catch{}
 }else{$s.javaExitedUtc=[DateTime]::UtcNow.ToString('o')}
 try{Stop-PrismOwned $s}catch{$s.valid=$false;$s.reason='prism_close_failed'}
-try{Wait-P02HostProbe $s}catch{$s.p02ObserverWaitError=$_.Exception.GetType().Name}
+try{Finish-IntegratedP02HostProbe $integratedP02}catch{$s.p02ObserverWaitError=$_.Exception.GetType().Name}
 try{Archive-RunEvidence $s}catch{
     # Archive failure is not a game failure, but it must be explicit: subsequent performance or diagnostic
     # analysis has no permission to silently use whatever a later launch writes into the live logs.
