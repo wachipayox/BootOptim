@@ -1,4 +1,4 @@
-name: Agent111 Create Registration Families
+name: Agent111 Create Block Entity Entries
 
 on:
   push:
@@ -103,7 +103,10 @@ jobs:
         shell: bash
         run: |
           ./gradlew :fml-chain-agent:jar test bootstrap:test
-          python -m py_compile tools/fml-chain/analyze_fml_chain.py tools/fml-chain/analyze_create_families.py
+          python -m py_compile \
+            tools/fml-chain/analyze_fml_chain.py \
+            tools/fml-chain/analyze_create_families.py \
+            tools/fml-chain/analyze_create_block_entities.py
 
       - name: Download and verify exact pack
         shell: bash
@@ -169,20 +172,26 @@ jobs:
         shell: bash
         run: python scripts/exact-pack/run_startup.py --variant smoke --iteration 1 --timeout 1200
 
-      - name: Analyze FML DAG and Create registration families
+      - name: Analyze FML DAG, Create families, and block-entity entries
         shell: bash
         run: |
           python tools/fml-chain/analyze_create_families.py \
             --input run-pack-benchmark/bootoptim-fml-chain.jsonl \
             --json-output create-families-summary.json \
             --markdown-output create-families-summary.md
+          python tools/fml-chain/analyze_create_block_entities.py \
+            --input run-pack-benchmark/bootoptim-fml-chain.jsonl \
+            --json-output create-block-entities-summary.json \
+            --markdown-output create-block-entities-summary.md
           cat create-families-summary.md >> "$GITHUB_STEP_SUMMARY"
+          printf '\n\n' >> "$GITHUB_STEP_SUMMARY"
+          cat create-block-entities-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agent111-create-registration-families
+          name: agent111-create-block-entity-entries
           path: |
             result.json
             resource-selection-check.json
@@ -190,6 +199,8 @@ jobs:
             exact-pack-console.log
             create-families-summary.json
             create-families-summary.md
+            create-block-entities-summary.json
+            create-block-entities-summary.md
             run-pack-benchmark/bootoptim-fml-chain.jsonl
             run-pack-benchmark/logs/latest.log
             run-pack-benchmark/logs/bootoptim-startup.log
