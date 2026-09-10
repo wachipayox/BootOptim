@@ -40,6 +40,20 @@ function Target-Java([string]$game,[string]$root){
     $all=@(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'")
     @($all|Where-Object{$c=[string]$_.CommandLine;$c -and (($c.IndexOf($game,[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge0))})
 }
+function Launched-Java([object]$s){
+    # Prism's Java command on this machine does not reliably retain the literal instance path, so
+    # Target-Java can miss a genuine game process. Bind the launch candidate instead to the active
+    # session, the transaction launch time and the exact Java executable. Full JVM-token validation
+    # below remains the final identity gate before any timing is accepted.
+    $notBefore=([DateTime]$s.launchStartedUtc).AddSeconds(-5)
+    $all=@(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'")
+    @($all|Where-Object{
+        [int]$_.SessionId -eq [int]$s.expectedSessionId -and
+        ([DateTime]$_.CreationDate) -ge $notBefore -and
+        $_.ExecutablePath -and -not[string]::IsNullOrWhiteSpace([string]$s.expectedJavaExe) -and
+        ([IO.Path]::GetFullPath([string]$_.ExecutablePath)).Equals([string]$s.expectedJavaExe,[StringComparison]::OrdinalIgnoreCase)
+    })
+}
 function Prism-Procs([string]$exe){$n=@('prismlauncher.exe','PrismLauncher.exe',[IO.Path]::GetFileName($exe))|Select-Object -Unique;@(Get-CimInstance Win32_Process|Where-Object{$n -contains $_.Name})}
 function Quote-Arg([string]$v){
     if($null-eq$v -or $v.Length-eq0){return '""'}
@@ -126,7 +140,7 @@ $appearanceTimeoutSeconds=[Math]::Min(300,[Math]::Max(90,[int]$s.timeoutSeconds-
 $deadline=[DateTime]::UtcNow.AddSeconds($appearanceTimeoutSeconds)
 do{
     Start-Sleep -Milliseconds 1000
-    $c=@(Target-Java $s.gameRoot $s.instanceRoot|Where-Object{[int]$_.SessionId-eq[int]$s.expectedSessionId})
+    $c=@(Launched-Java $s)
     if($c.Count-gt1){try{Stop-PrismOwned $s}catch{};Fail $s "multiple target Java processes: $($c.Count)"}
     if($c.Count-eq1){$java=$c[0];break}
 }while([DateTime]::UtcNow-lt$deadline)
