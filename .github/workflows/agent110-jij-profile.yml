@@ -214,6 +214,12 @@ jobs:
             jij-profile-summary.json
             jij-profile-summary.md
             jij-profile-results/**
+            exact-pack-console.log
+            result.json
+            resource-selection-check.json
+            run-pack-benchmark/bootoptim-jij-profile.jsonl
+            run-pack-benchmark/logs/latest.log
+            run-pack-benchmark/logs/bootoptim-startup.log
             xvfb.log
             glxinfo.txt
           if-no-files-found: ignore
