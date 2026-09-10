@@ -4,6 +4,8 @@ import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import java.lang.instrument.Instrumentation;
+import java.nio.file.Path;
+import java.util.jar.JarFile;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
 
@@ -19,6 +21,17 @@ public final class FmlChainAgent {
 
     public static void premain(String ignored, Instrumentation instrumentation) {
         if (!Boolean.getBoolean("boot_optim.fmlChainProfile")) return;
+
+        // FML lives in ModLauncher's service/module loaders and cannot resolve classes that exist only
+        // in the javaagent's application-loader namespace. Put the same diagnostic jar on bootstrap
+        // before Recorder is first resolved; Recorder itself depends only on java.base/JDK APIs.
+        try {
+            Path agentJar = Path.of(FmlChainAgent.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            instrumentation.appendToBootstrapClassLoaderSearch(new JarFile(agentJar.toFile()));
+        } catch (Throwable error) {
+            System.err.println("BOOTOPTIM_FML_CHAIN_INSTALL_FAILED " + error);
+            return;
+        }
 
         Recorder.installShutdownFlush();
 
