@@ -72,6 +72,34 @@ def union_ns(scopes: list[dict]) -> int:
     return total
 
 
+def summarize_resources(scopes: list[dict]) -> dict:
+    grouped: dict[str, dict] = {}
+    for scope in scopes:
+        raw = scope.get("resource")
+        resource = "<null>" if raw is None else str(raw)
+        duration_ns = max(0, int(scope["duration_ns"]))
+        row = grouped.setdefault(resource, {"calls": 0, "total_ns": 0, "max_ns": 0})
+        row["calls"] += 1
+        row["total_ns"] += duration_ns
+        row["max_ns"] = max(row["max_ns"], duration_ns)
+    rows = [
+        {
+            "resource": resource,
+            "calls": data["calls"],
+            "total_ms": round(data["total_ns"] / 1_000_000.0, 3),
+            "max_ms": round(data["max_ns"] / 1_000_000.0, 3),
+        }
+        for resource, data in grouped.items()
+    ]
+    rows.sort(key=lambda row: (-row["total_ms"], row["resource"]))
+    return {
+        "calls": len(scopes),
+        "unique_resources": len(grouped),
+        "repeated_resource_calls": sum(max(0, row["calls"] - 1) for row in rows),
+        "resources": rows,
+    }
+
+
 def analyze_connector(trace_path: Path, boot_trace_path: Path) -> dict:
     records = [json.loads(line) for line in trace_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     header = next(r for r in records if r.get("record") == "connector_trace_header")
@@ -139,14 +167,31 @@ def analyze_connector(trace_path: Path, boot_trace_path: Path) -> dict:
         direct = [s for s in scopes if int(s.get("parent_id", 0)) == int(locate["id"])]
         locate_residual_ns += max(0, int(locate["duration_ns"]) - union_ns(direct))
 
+    resource_phases = (
+        "connector_split_fabric_jar_packages",
+        "connector_split_existing_mod_packages",
+        "connector_split_loaded_module_packages",
+        "connector_split_analyze_package",
+        "connector_locate_previous_mod_projection",
+        "connector_locate_should_ignore_mod",
+        "connector_locate_duplicate_handling",
+        "connector_locate_nested_discovery",
+        "connector_locate_nested_prepare",
+    )
+    resource_breakdown = {
+        phase: summarize_resources(by_phase.get(phase, []))
+        for phase in resource_phases
+    }
+
     causal = dependency_overlap(header, by_phase["connector_dependency_locator_callback"], boot_trace_path)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "connector_version": header["connector_version"],
         "connector_commit": header["connector_commit"],
         "scope_count": len(scopes),
         "cache_event_count": len(caches),
         "phase_union_ms": phase_union_ms,
+        "resource_breakdown": resource_breakdown,
         "transform_cache": {
             "decisions": len(transform_cache),
             "hits": sum(bool(c["hit"]) for c in transform_cache),
