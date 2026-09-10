@@ -37,6 +37,7 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [FML 4.0.43 virtual JiJ discovery — 2026-09-10](fml-4.0.43-jij-filesystem-2026-09-10.md) — **PROFILED / COPY+SHA SIDECAR PREMISE REJECTED FOR 4.0.43**: exact-pack `fml_loader@4.0.43` uses the virtual `jij:` filesystem, not the later content-addressed copy+SHA extractor; hosted run #13 attributes 1.928 s inclusive JarJar wall inside 5.739 s dependency discovery but establishes no safe optimization.
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
 - [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
