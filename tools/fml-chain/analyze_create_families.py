@@ -12,7 +12,8 @@ import analyze_fml_chain as fml
 
 EXPECTED_CREATE_VERSION = "6.0.10"
 EXPECTED_SOURCE_PIN = "ac0c444d9828da3453ae8cc65338e8de063286fb"
-REQUIRED_DEPENDENCY_SUBCHAIN = ["colorwheel", "flywheel", "ponder", "create", "ratatouille"]
+REQUIRED_EXECUTION_SUBCHAIN = ["colorwheel", "flywheel", "ponder", "create"]
+REQUIRED_DIRECT_DEPENDENCY_CHAIN = ["colorwheel", "flywheel", "ponder", "create", "ratatouille"]
 
 START_BOUNDARY = "com.simibubi.create.foundation.data.CreateRegistrate.registerEventListeners"
 FAMILY_BOUNDARIES = [
@@ -73,11 +74,32 @@ def contains_subchain(chain: list[str], expected: list[str]) -> bool:
     return any(chain[i:i + width] == expected for i in range(len(chain) - width + 1))
 
 
+def direct_dependencies(events: list[dict[str, Any]]) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {}
+    for event in events:
+        if event.get("kind") != "dependencies" or not event.get("mod"):
+            continue
+        result[event["mod"]] = [value for value in (event.get("detail") or "").split(",") if value]
+    return result
+
+
 def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
     fml_result = fml.analyze(events)
-    dependency_chain = fml_result["dependency_last_predecessor_chain_mods"]
-    if not contains_subchain(dependency_chain, REQUIRED_DEPENDENCY_SUBCHAIN):
-        raise SystemExit("expected dependency subchain not observed: " + " -> ".join(REQUIRED_DEPENDENCY_SUBCHAIN))
+
+    # The sink can vary between exact-pack runs because unrelated worker serialization after Create can
+    # change which dependent finishes last. What must remain causal is (a) the non-overlapping observed
+    # execution chain into Create and (b) the direct dependency edges out through ratatouille.
+    execution_chain = fml_result["observed_execution_critical_chain_mods"]
+    if not contains_subchain(execution_chain, REQUIRED_EXECUTION_SUBCHAIN):
+        raise SystemExit("expected execution subchain into Create not observed: " + " -> ".join(REQUIRED_EXECUTION_SUBCHAIN))
+    deps = direct_dependencies(events)
+    missing_edges = [
+        f"{parent}->{child}"
+        for parent, child in zip(REQUIRED_DIRECT_DEPENDENCY_CHAIN, REQUIRED_DIRECT_DEPENDENCY_CHAIN[1:])
+        if parent not in deps.get(child, [])
+    ]
+    if missing_edges:
+        raise SystemExit("expected direct dependency edges not observed: " + ", ".join(missing_edges))
 
     disabled = [event for event in events if event.get("kind") == "create_profile_disabled"]
     if disabled:
@@ -165,7 +187,8 @@ def analyze(events: list[dict[str, Any]]) -> dict[str, Any]:
         "family_tiling_error_ms": family_tiling_error_ms,
         "families": family_rows,
         "largest_family": largest,
-        "dependency_subchain_verified": REQUIRED_DEPENDENCY_SUBCHAIN,
+        "execution_subchain_verified": REQUIRED_EXECUTION_SUBCHAIN,
+        "direct_dependency_chain_verified": REQUIRED_DIRECT_DEPENDENCY_CHAIN,
         "interpretation": {
             "timing_kind": "non-overlapping serial wall intervals between exact stock Create 6.0.10 call returns; each interval includes target class initialization before its return",
             "savings_claim": False,
@@ -181,7 +204,8 @@ def markdown(result: dict[str, Any]) -> str:
         "# Create 6.0.10 registration-family profile nested in FML DAG",
         "",
         f"- FML construction gate: **{fml_result['gate_ms']:.3f} ms**",
-        "- dependency lineage: " + " -> ".join(f"`{mod}`" for mod in fml_result["dependency_last_predecessor_chain_mods"]),
+        "- observed non-overlapping execution subchain into Create: " + " -> ".join(f"`{mod}`" for mod in result["execution_subchain_verified"]),
+        "- direct dependency chain through downstream Ratatouille: " + " -> ".join(f"`{mod}`" for mod in result["direct_dependency_chain_verified"]),
         f"- Create outer node: **{result['create_outer_node_ms']:.3f} ms**",
         f"- Create outer constructor-exclusive: **{result['create_outer_constructor_exclusive_ms']:.3f} ms**",
         f"- exact `Create.onCtor`: **{result['create_on_ctor_ms']:.3f} ms**",
@@ -198,7 +222,7 @@ def markdown(result: dict[str, Any]) -> str:
         "",
         "## Causal placement",
         "",
-        "`colorwheel -> flywheel -> ponder -> create -> ratatouille`",
+        "The execution-chain check is intentionally anchored at Create rather than the run's final FML sink: unrelated work on downstream executor workers can change which dependent finishes last without changing Create's causal criticality. Direct dependency edges separately prove `create -> ratatouille` for the exact pack.",
         "",
         "Inside the `create` node the measured family rows execute in the exact stock source order on one immutable worker tid. No callbacks, class initialization, registration calls, failures, or threads are moved.",
         "",
