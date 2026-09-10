@@ -9,12 +9,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-final class Recorder {
+public final class Recorder {
     private static final String EXPECTED_FML_VERSION = System.getProperty(
             "boot_optim.fmlChainProfile.expectedFmlVersion", "4.0.43");
     private static final Path OUTPUT = Path.of(System.getProperty(
@@ -28,11 +27,11 @@ final class Recorder {
 
     private Recorder() {}
 
-    static void installShutdownFlush() {
+    public static void installShutdownFlush() {
         Runtime.getRuntime().addShutdownHook(new Thread(Recorder::flush, "bootoptim-fml-chain-flush"));
     }
 
-    static void beginGate(Class<?> owner) {
+    public static void beginGate(Class<?> owner) {
         String actualVersion = null;
         try {
             Package pkg = owner == null ? null : owner.getPackage();
@@ -52,14 +51,14 @@ final class Recorder {
         recordRaw("gate_begin", null, "phase=Mod Construction");
     }
 
-    static void endGate(Throwable thrown) {
+    public static void endGate(Throwable thrown) {
         if (active) {
             recordRaw("gate_end", null, thrown == null ? null : "throw=" + thrown.getClass().getName());
         }
         active = false;
     }
 
-    static void dependency(Object modInfo, Object result) {
+    public static void dependency(Object modInfo, Object result) {
         if (!active) return;
         String mod = modId(modInfo);
         StringBuilder deps = new StringBuilder();
@@ -74,27 +73,27 @@ final class Recorder {
         recordRaw("dependencies", mod, deps.toString());
     }
 
-    static void constructBegin(Object container) {
+    public static void constructBegin(Object container) {
         if (!active) return;
         recordRaw("construct_begin", modId(container), null);
     }
 
-    static void constructEnd(Object container, Throwable thrown) {
+    public static void constructEnd(Object container, Throwable thrown) {
         if (!active) return;
         recordRaw("construct_end", modId(container), throwableDetail(thrown));
     }
 
-    static void subscriberBegin(Object container) {
+    public static void subscriberBegin(Object container) {
         if (!active) return;
         recordRaw("subscriber_begin", modId(container), null);
     }
 
-    static void subscriberEnd(Object container, Throwable thrown) {
+    public static void subscriberEnd(Object container, Throwable thrown) {
         if (!active) return;
         recordRaw("subscriber_end", modId(container), throwableDetail(thrown));
     }
 
-    static boolean constructEventBegin(Object container, Object event) {
+    public static boolean constructEventBegin(Object container, Object event) {
         if (!active || event == null
                 || !"net.neoforged.fml.event.lifecycle.FMLConstructModEvent".equals(event.getClass().getName())) {
             return false;
@@ -103,7 +102,7 @@ final class Recorder {
         return true;
     }
 
-    static void constructEventEnd(Object container, boolean recorded, Throwable thrown) {
+    public static void constructEventEnd(Object container, boolean recorded, Throwable thrown) {
         if (!recorded) return;
         recordRaw("construct_event_end", modId(container), throwableDetail(thrown));
     }
@@ -133,7 +132,7 @@ final class Recorder {
                 Thread.currentThread().getName()));
     }
 
-    static void flush() {
+    public static void flush() {
         if (!FLUSHED.compareAndSet(false, true)) return;
         var snapshot = new ArrayList<>(EVENTS);
         snapshot.sort(Comparator.comparingLong(Event::ns).thenComparingLong(Event::sequence));
