@@ -1,4 +1,4 @@
-name: Agent110 JarJar Copy SHA Validation
+name: Agent110 FML 4.0.43 JiJ Validation
 
 on:
   push:
@@ -39,7 +39,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-22.04
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -136,7 +136,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf build/mcef-libraries .mcef-mirror .exact-pack-run run-pack-benchmark .agent110-jij-cache jij-profile-results
+          rm -rf build/mcef-libraries .mcef-mirror .exact-pack-run run-pack-benchmark
           mkdir -p build/mcef-libraries
           cp -a .mcef-jcef/. build/mcef-libraries/
           chmod +x "build/mcef-libraries/$MCEF_PLATFORM/jcef_helper"
@@ -147,62 +147,17 @@ jobs:
           echo "BOOTOPTIM_MCEF_MIRROR_ROOT=$mirror_root" >> "$GITHUB_ENV"
           python scripts/exact-pack/prepare_fixture.py --zip .exact-pack-cache/bootoptim-exact-pack.zip --sha256 "$EXACT_PACK_SHA256" --extract .exact-pack-run --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 
-      - name: Cold profile
+      - name: Exact-pack JiJ profile
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/exact-pack/run_startup.py --variant jij-cold --iteration 1 --timeout 1200 --rerun-tasks
-          test -f run-pack-benchmark/bootoptim-jij-profile.jsonl
-          test -d run-pack-benchmark/.cache/jij
-          mkdir -p jij-profile-results/cold .agent110-jij-cache
-          cp -a run-pack-benchmark/.cache/jij/. .agent110-jij-cache/
-          cp result.json resource-selection-check.json exact-pack-console.log jij-profile-results/cold/
-          cp run-pack-benchmark/bootoptim-jij-profile.jsonl jij-profile-results/cold/
-          cp run-pack-benchmark/logs/latest.log jij-profile-results/cold/latest.log
-          cp run-pack-benchmark/logs/bootoptim-startup.log jij-profile-results/cold/bootoptim-startup.log
-
-      - name: Restore stock JIJ cache after pack Sync
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$(find .agent110-jij-cache -type f -print -quit)"
-          mkdir -p "$HOME/.gradle/init.d"
-          cat > "$HOME/.gradle/init.d/agent110-restore-jij.gradle" <<'GRADLE'
-          gradle.projectsEvaluated {
-              def task = rootProject.tasks.findByName('preparePackBenchmark')
-              if (task != null) {
-                  task.doLast {
-                      def source = rootProject.file('.agent110-jij-cache')
-                      def destination = rootProject.file('run-pack-benchmark/.cache/jij')
-                      if (!source.isDirectory()) throw new GradleException("Agent110 JIJ snapshot missing: ${source}")
-                      project.delete(destination)
-                      project.copy { from source; into destination }
-                  }
-              }
-          }
-          GRADLE
-
-      - name: Warm-existing profile
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf run-pack-benchmark/logs run-pack-benchmark/crash-reports run-pack-benchmark/mods/mcef-cache
-          rm -f result.json resource-selection-check.json resource-selection-reference.txt exact-pack-console.log exact-pack-thread-dump.log run-pack-benchmark/bootoptim-jij-profile.jsonl
-          python scripts/exact-pack/run_startup.py --variant jij-warm-existing --iteration 2 --timeout 1200 --rerun-tasks
-          test -f run-pack-benchmark/bootoptim-jij-profile.jsonl
-          mkdir -p jij-profile-results/warm
-          cp result.json resource-selection-check.json exact-pack-console.log jij-profile-results/warm/
-          cp run-pack-benchmark/bootoptim-jij-profile.jsonl jij-profile-results/warm/
-          cp run-pack-benchmark/logs/latest.log jij-profile-results/warm/latest.log
-          cp run-pack-benchmark/logs/bootoptim-startup.log jij-profile-results/warm/bootoptim-startup.log
-
-      - name: Analyze
-        shell: bash
-        run: |
+          python scripts/exact-pack/run_startup.py --variant jij-fml-4.0.43 --iteration 1 --timeout 1200 --rerun-tasks
+          test -s run-pack-benchmark/bootoptim-jij-profile.jsonl
           python tools/jij-profile/analyze_jij_profile.py \
-            --cold-trace jij-profile-results/cold/bootoptim-jij-profile.jsonl --cold-startup jij-profile-results/cold/exact-pack-console.log \
-            --warm-trace jij-profile-results/warm/bootoptim-jij-profile.jsonl --warm-startup jij-profile-results/warm/exact-pack-console.log \
-            --json-output jij-profile-summary.json --markdown-output jij-profile-summary.md
+            --trace run-pack-benchmark/bootoptim-jij-profile.jsonl \
+            --startup exact-pack-console.log \
+            --json-output jij-profile-summary.json \
+            --markdown-output jij-profile-summary.md
           cat jij-profile-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload diagnostics
@@ -213,7 +168,6 @@ jobs:
           path: |
             jij-profile-summary.json
             jij-profile-summary.md
-            jij-profile-results/**
             exact-pack-console.log
             result.json
             resource-selection-check.json
