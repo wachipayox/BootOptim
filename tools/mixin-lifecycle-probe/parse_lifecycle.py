@@ -33,7 +33,7 @@ def parse(text: str) -> dict:
         elif "BOOTOPTIM_ML_FORK_REQUEST " in line:
             item = kv(line)
             if item.get("class") == TARGET:
-                requests.append({**item, "line": line_no, "request_id": int(item["request_id"]), "mono_ns": int(item["mono_ns"])})
+                requests.append({**item, "line": line_no, "request_id": int(item["request_id"])})
         elif "BOOTOPTIM_ML_FORK " in line:
             item = kv(line)
             if item.get("class") == TARGET and item.get("stage") == "class_transform_begin":
