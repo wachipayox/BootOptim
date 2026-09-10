@@ -27,6 +27,7 @@ public final class JijProfileAgent {
 
     public static void premain(String ignored, Instrumentation instrumentation) {
         if (!Boolean.getBoolean("boot_optim.jijProfile")) return;
+        System.err.println("BOOTOPTIM_JIJ_PROFILE_ARMED target=" + TARGET);
         try {
             instrumentation.appendToBootstrapClassLoaderSearch(createBootstrapBridgeJar());
         } catch (Throwable error) {
@@ -39,13 +40,17 @@ public final class JijProfileAgent {
                 .disableClassFormatChanges()
                 .assureReadEdgeTo(instrumentation, JijProfileAgent.class, Recorder.class)
                 .type(named(TARGET))
-                .transform((builder, type, classLoader, module, protectionDomain) -> builder
-                        .visit(Advice.to(ScanAdvice.class)
-                                .on(named("scanMods").and(takesArguments(2))))
-                        .visit(Advice.to(LoadAdvice.class)
-                                .on(named("loadModFileFrom").and(takesArguments(4))))
-                        .visit(Advice.to(ExtractAdvice.class)
-                                .on(named("extractEmbeddedJarFile").and(takesArguments(3)))))
+                .transform((builder, type, classLoader, module, protectionDomain) -> {
+                    System.err.println("BOOTOPTIM_JIJ_PROFILE_TRANSFORM target=" + type.getName()
+                            + " module=" + (module == null ? "null" : module.getActualName()));
+                    return builder
+                            .visit(Advice.to(ScanAdvice.class)
+                                    .on(named("scanMods").and(takesArguments(2))))
+                            .visit(Advice.to(LoadAdvice.class)
+                                    .on(named("loadModFileFrom").and(takesArguments(4))))
+                            .visit(Advice.to(ExtractAdvice.class)
+                                    .on(named("extractEmbeddedJarFile").and(takesArguments(3))));
+                })
                 .installOn(instrumentation);
     }
 
