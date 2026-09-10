@@ -17,17 +17,22 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
 /**
- * Agent 101 diagnostic-only profiler for the exact Minecraft 1.21.1 version-detection topology.
+ * Diagnostic-only profiler for the exact Minecraft 1.21.1 SharedConstants/version topology.
  *
- * <p>The matcher is deliberately fail-closed. It only mutates SharedConstants, DetectedVersion and
- * GsonHelper when their expected 1.21.1 bytecode shapes are unique. It adds timestamp calls only;
- * it does not replace the version, resource stream, parser, field publication, exceptions, or
- * thread ownership.</p>
+ * <p>Agent 103 extends the validated Agent 101 probe with coarse boundaries inside
+ * SharedConstants.<clinit>. The matcher is deliberately fail-closed on the exact active-use
+ * sequence that can trigger transitive initialization. Hooks only timestamp existing boundaries;
+ * they do not read or write the observed fields, force another class to initialize, replace calls,
+ * alter failures, or move work between threads.</p>
  */
 public final class MinecraftVersionLifecycleTransformer implements ITransformer<ClassNode> {
     private static final String SHARED = "net/minecraft/SharedConstants";
     private static final String DETECTED = "net/minecraft/DetectedVersion";
     private static final String GSON_HELPER = "net/minecraft/util/GsonHelper";
+    private static final String RESOURCE_LEAK_DETECTOR = "io/netty/util/ResourceLeakDetector";
+    private static final String RESOURCE_LEAK_LEVEL = "io/netty/util/ResourceLeakDetector$Level";
+    private static final String COMMAND_SYNTAX = "com/mojang/brigadier/exceptions/CommandSyntaxException";
+    private static final String BRIGADIER_EXCEPTIONS = "net/minecraft/commands/BrigadierExceptions";
     private static final String WORLD_VERSION = "Lnet/minecraft/WorldVersion;";
     private static final String HOOKS = "dev/wachipayox/bootoptim/bootstrap/MinecraftMainLifecycleHooks";
 
@@ -47,12 +52,24 @@ public final class MinecraftVersionLifecycleTransformer implements ITransformer<
         MethodNode detect = uniqueMethod(input, "tryDetectVersion", "()V");
         if (clinit == null || detect == null) return input;
 
-        MethodInsnNode getProperty = uniqueCall(clinit, "java/lang/System", "getProperty", "(Ljava/lang/String;)Ljava/lang/String;");
-        MethodInsnNode setLeakLevel = uniqueCall(clinit, "io/netty/util/ResourceLeakDetector", "setLevel", null);
-        MethodInsnNode brigadierCtor = uniqueCall(clinit, "net/minecraft/commands/BrigadierExceptions", "<init>", "()V");
+        FieldInsnNode nettyLevelGet = uniqueField(clinit, Opcodes.GETSTATIC, RESOURCE_LEAK_LEVEL, "DISABLED", "Lio/netty/util/ResourceLeakDetector$Level;");
+        FieldInsnNode nettyLevelPut = uniqueField(clinit, Opcodes.PUTSTATIC, SHARED, "NETTY_LEAK_DETECTION", "Lio/netty/util/ResourceLeakDetector$Level;");
+        MethodInsnNode durationOfMillis = uniqueCall(clinit, "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;");
+        MethodInsnNode durationToNanos = uniqueCall(clinit, "java/time/Duration", "toNanos", "()J");
+        FieldInsnNode maxTickPut = uniqueField(clinit, Opcodes.PUTSTATIC, SHARED, "MAXIMUM_TICK_TIME_NANOS", "J");
+        FieldInsnNode illegalCharsPut = uniqueField(clinit, Opcodes.PUTSTATIC, SHARED, "ILLEGAL_FILE_CHARACTERS", "[C");
+        MethodInsnNode setLeakLevel = uniqueCall(clinit, RESOURCE_LEAK_DETECTOR, "setLevel", "(Lio/netty/util/ResourceLeakDetector$Level;)V");
+        FieldInsnNode stackTracePut = uniqueField(clinit, Opcodes.PUTSTATIC, COMMAND_SYNTAX, "ENABLE_COMMAND_STACK_TRACES", "Z");
+        TypeInsnNode brigadierNew = uniqueType(clinit, Opcodes.NEW, BRIGADIER_EXCEPTIONS);
+        MethodInsnNode brigadierCtor = uniqueCall(clinit, BRIGADIER_EXCEPTIONS, "<init>", "()V");
+        FieldInsnNode builtInPut = uniqueField(clinit, Opcodes.PUTSTATIC, COMMAND_SYNTAX, "BUILT_IN_EXCEPTIONS", "Lcom/mojang/brigadier/exceptions/BuiltInExceptionProvider;");
         List<AbstractInsnNode> clinitReturns = returns(clinit, Opcodes.RETURN);
-        if (getProperty == null || setLeakLevel == null || brigadierCtor == null || clinitReturns.size() != 1
-                || !ordered(clinit, getProperty, setLeakLevel, brigadierCtor)) return input;
+        if (nettyLevelGet == null || nettyLevelPut == null || durationOfMillis == null || durationToNanos == null
+                || maxTickPut == null || illegalCharsPut == null || setLeakLevel == null || stackTracePut == null
+                || brigadierNew == null || brigadierCtor == null || builtInPut == null || clinitReturns.size() != 1
+                || !ordered(clinit, nettyLevelGet, nettyLevelPut, durationOfMillis, durationToNanos, maxTickPut,
+                        illegalCharsPut, setLeakLevel, stackTracePut, brigadierNew, brigadierCtor, builtInPut,
+                        clinitReturns.get(0))) return input;
 
         FieldInsnNode currentGet = uniqueField(detect, Opcodes.GETSTATIC, SHARED, "CURRENT_VERSION", WORLD_VERSION);
         MethodInsnNode detectedCall = uniqueCall(detect, DETECTED, "tryDetectVersion", "()Lnet/minecraft/WorldVersion;");
@@ -66,7 +83,19 @@ public final class MinecraftVersionLifecycleTransformer implements ITransformer<
         if (clinitFirst == null || detectFirst == null) return input;
 
         clinit.instructions.insertBefore(clinitFirst, hook("sharedConstantsClinitEnter"));
+        clinit.instructions.insertBefore(nettyLevelGet, hook("beforeNettyLeakLevelResolve"));
+        clinit.instructions.insert(nettyLevelPut, hook("afterNettyLeakLevelPublish"));
+        clinit.instructions.insertBefore(durationOfMillis, hook("beforeDurationConstant"));
+        clinit.instructions.insert(maxTickPut, hook("afterDurationConstant"));
+        clinit.instructions.insertBefore(setLeakLevel, hook("beforeResourceLeakDetectorSetLevel"));
+        clinit.instructions.insert(setLeakLevel, hook("afterResourceLeakDetectorSetLevel"));
+        clinit.instructions.insertBefore(stackTracePut, hook("beforeCommandSyntaxStackTracePublish"));
+        clinit.instructions.insert(stackTracePut, hook("afterCommandSyntaxStackTracePublish"));
+        clinit.instructions.insertBefore(brigadierNew, hook("beforeBrigadierExceptionsConstruction"));
+        clinit.instructions.insert(brigadierCtor, hook("afterBrigadierExceptionsConstruction"));
+        clinit.instructions.insert(builtInPut, hook("afterBrigadierProviderPublish"));
         clinit.instructions.insertBefore(clinitReturns.get(0), hook("sharedConstantsClinitExit"));
+
         detect.instructions.insertBefore(detectFirst, hook("sharedConstantsTryDetectEntry"));
         detect.instructions.insertBefore(detectedCall, hook("beforeDetectedVersionCall"));
         detect.instructions.insertBefore(currentPut, hook("beforeVersionPublication"));
@@ -230,5 +259,5 @@ public final class MinecraftVersionLifecycleTransformer implements ITransformer<
     public TargetType<ClassNode> getTargetType() { return TargetType.CLASS; }
 
     @Override
-    public String[] labels() { return new String[] { "boot_optim_agent101_version_detection_profile" }; }
+    public String[] labels() { return new String[] { "boot_optim_agent103_sharedconstants_clinit_profile" }; }
 }
