@@ -4,6 +4,7 @@ package dev.wachipayox.bootoptim.bootstrap;
 public final class ConnectorWarmResidualPatcherEntry {
     public static void main(String[] args) throws Exception {
         ConnectorWarmResidualPatcher.main(args);
+        ConnectorSplitPackageDetailPatcher.main(args);
         ConnectorWarmResidualRelocator.main(args);
     }
 
