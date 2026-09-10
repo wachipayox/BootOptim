@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import http.server
+import json
 import os
 import signal
 import subprocess
@@ -111,6 +112,11 @@ def main() -> None:
         action="store_true",
         help="Force Gradle's pack preparation task to run again; useful for same-VM paired diagnostics.",
     )
+    parser.add_argument(
+        "--allow-resource-mismatch",
+        action="store_true",
+        help="Diagnostic scaling mode: keep phase evidence when a reduced variant changes resource selection.",
+    )
     args = parser.parse_args()
 
     root = Path.cwd()
@@ -201,7 +207,8 @@ def main() -> None:
                  "--log", str(latest_log)],
                 cwd=root, stdout=report, check=False,
             )
-        if resource_check.returncode != 0:
+        resource_contract_valid = resource_check.returncode == 0
+        if not resource_contract_valid and not args.allow_resource_mismatch:
             raise SystemExit("Exact-pack resource contract failed; see resource-selection-check.json.")
 
         summary = subprocess.run(
@@ -220,6 +227,16 @@ def main() -> None:
         )
         if summary.returncode != 0:
             raise SystemExit(f"Exact-pack summarizer failed with exit {summary.returncode}")
+        result = json.loads(result_json.read_text(encoding="utf-8"))
+        result["resource_contract_valid"] = resource_contract_valid
+        # Scaling mode permits a reduced variant to continue after its
+        # resource selection diverges, but a full exact-pack run remains a
+        # normal measurement when the contract actually passes.
+        result["diagnostic_only"] = bool(args.allow_resource_mismatch and not resource_contract_valid)
+        manifest_path = Path(fixture_root) / ".bootoptim-scaling-variant.json"
+        if manifest_path.is_file():
+            result["scaling_variant_manifest"] = json.loads(manifest_path.read_text(encoding="utf-8"))
+        result_json.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     finally:
         if process is not None:
             terminate_tree(process)
