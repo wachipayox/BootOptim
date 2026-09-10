@@ -230,7 +230,7 @@ public final class Recorder {
         }
 
         String toJson() {
-            String parentDigest = PATH_DIGESTS.get(parentPath);
+            String parentDigest = parentPath == null ? null : PATH_DIGESTS.get(parentPath);
             return "{\"seq\":" + sequence
                     + ",\"kind\":" + quote(kind)
                     + ",\"start_ns\":" + startNs
