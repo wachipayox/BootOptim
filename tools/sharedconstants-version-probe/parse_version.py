@@ -25,15 +25,35 @@ def parse(text: str) -> dict:
         item["mono_ns"] = int(item["mono_ns"])
         events.append(item)
 
-    def one(name: str) -> dict:
-        matches = [e for e in events if e.get("event") == name]
-        if len(matches) != 1:
-            raise ValueError(f"expected exactly one {name}, found {len(matches)}")
-        return matches[0]
+    def matches(name: str) -> list[dict]:
+        return [e for e in events if e.get("event") == name]
 
-    required = [
-        "before_shared_constants_version",
-        "after_shared_constants_version",
+    def one(name: str) -> dict:
+        found = matches(name)
+        if len(found) != 1:
+            raise ValueError(f"expected exactly one {name}, found {len(found)}")
+        return found[0]
+
+    outer_before = one("before_shared_constants_version")
+    outer_after = one("after_shared_constants_version")
+    outer_start = outer_before["mono_ns"]
+    outer_end = outer_after["mono_ns"]
+    if outer_end < outer_start:
+        raise ValueError("outer SharedConstants call has negative wall")
+
+    # SharedConstants.tryDetectVersion is legitimately called again later in startup after
+    # CURRENT_VERSION has already been published. The Agent 101 target is specifically the callsite
+    # in Main.main bounded by the pre-existing before/after markers, so fail closed on exactly one
+    # occurrence of every nested boundary inside that outer interval rather than globally.
+    def one_within(name: str) -> dict:
+        found = [e for e in matches(name) if outer_start <= e["mono_ns"] <= outer_end]
+        if len(found) != 1:
+            raise ValueError(
+                f"expected exactly one {name} inside Main SharedConstants interval, found {len(found)}"
+            )
+        return found[0]
+
+    required_inner = [
         "shared_constants_try_detect_entry",
         "before_detected_version_call",
         "detected_version_try_detect_entry",
@@ -48,7 +68,11 @@ def parse(text: str) -> dict:
         "after_version_publication",
         "shared_constants_try_detect_exit",
     ]
-    by_name = {name: one(name) for name in required}
+    by_name = {
+        "before_shared_constants_version": outer_before,
+        "after_shared_constants_version": outer_after,
+        **{name: one_within(name) for name in required_inner},
+    }
 
     clinit_pairs = {}
     for key, enter_name, exit_name in (
@@ -56,18 +80,11 @@ def parse(text: str) -> dict:
         ("DetectedVersion", "detected_version_clinit_enter", "detected_version_clinit_exit"),
         ("GsonHelper", "gson_helper_clinit_enter", "gson_helper_clinit_exit"),
     ):
-        enter = one(enter_name)
-        exit_event = one(exit_name)
+        enter = one_within(enter_name)
+        exit_event = one_within(exit_name)
         if exit_event["mono_ns"] < enter["mono_ns"]:
             raise ValueError(f"{key} clinit exit precedes entry")
         clinit_pairs[key] = (enter, exit_event)
-
-    outer_before = by_name["before_shared_constants_version"]
-    outer_after = by_name["after_shared_constants_version"]
-    outer_start = outer_before["mono_ns"]
-    outer_end = outer_after["mono_ns"]
-    if outer_end < outer_start:
-        raise ValueError("outer SharedConstants call has negative wall")
 
     ordered_names = [
         "before_shared_constants_version",
@@ -92,15 +109,14 @@ def parse(text: str) -> dict:
 
     thread = outer_before.get("thread")
     tccl_id = outer_before.get("tccl_id")
-    for name in required:
+    for name in ordered_names:
         event = by_name[name]
         if event.get("thread") != thread or event.get("tccl_id") != tccl_id:
             raise ValueError(f"{name} changed thread/TCCL within version detection")
     for key, pair in clinit_pairs.items():
         for event in pair:
-            if outer_start <= event["mono_ns"] <= outer_end:
-                if event.get("thread") != thread or event.get("tccl_id") != tccl_id:
-                    raise ValueError(f"{key} clinit inside outer call changed thread/TCCL")
+            if event.get("thread") != thread or event.get("tccl_id") != tccl_id:
+                raise ValueError(f"{key} clinit inside outer call changed thread/TCCL")
 
     values = {name: by_name[name]["mono_ns"] for name in ordered_names}
     segments = {
@@ -131,13 +147,24 @@ def parse(text: str) -> dict:
             "start_ns": start,
             "end_ns": end,
             "wall_ns": end - start,
-            "within_outer_call": outer_start <= start <= end <= outer_end,
-            "before_outer_call": end < outer_start,
+            "within_outer_call": True,
+            "before_outer_call": False,
             "thread": enter.get("thread"),
         }
 
+    observed_calls = {
+        "shared_constants_try_detect_total": len(matches("shared_constants_try_detect_entry")),
+        "shared_constants_try_detect_inside_main_call": len(
+            [e for e in matches("shared_constants_try_detect_entry") if outer_start <= e["mono_ns"] <= outer_end]
+        ),
+        "detected_version_try_detect_total": len(matches("detected_version_try_detect_entry")),
+        "detected_version_try_detect_inside_main_call": len(
+            [e for e in matches("detected_version_try_detect_entry") if outer_start <= e["mono_ns"] <= outer_end]
+        ),
+    }
+
     return {
-        "schema": 1,
+        "schema": 2,
         "probe": "agent101-sharedconstants-version-detection-v1",
         "origin": "hosted_exact_pack",
         "endpoint": "main_menu",
@@ -145,15 +172,17 @@ def parse(text: str) -> dict:
         "outer_shared_constants_try_detect_version_wall_ns": outer_wall,
         "segments_ns": segments,
         "class_initialization": class_initialization,
+        "observed_call_counts": observed_calls,
         "thread": thread,
         "tccl_id": tccl_id,
         "classification_notes": {
+            "main_call_scope": "Nested markers are selected only inside the existing Main.main before/after SharedConstants.tryDetectVersion boundary. Later legitimate calls are counted but excluded from this attribution.",
             "version_resource_lookup_open": "Wall across Class.getResourceAsStream('/version.json'): resource lookup plus opening the JAR-backed stream; it does not include later stream consumption.",
             "gson_parse_reader_including_stream_reads": "Wall inside GsonHelper.parse(Reader). Because Gson consumes the Reader here, this includes JSON parsing plus the InputStreamReader/JAR stream reads caused by parsing; the diagnostic intentionally does not pretend to separate those effects.",
             "json_expression_to_gson_parse_entry": "Residual from NEW DetectedVersion until GsonHelper.parse(Reader) entry; if GsonHelper first initializes here, its <clinit> is nested in this interval.",
             "gson_parse_exit_to_version_object_constructed": "Residual after parse return through the stock DetectedVersion(JsonObject) constructor. No constructor substitution or field extraction is performed.",
             "current_version_publication": "Wall across the original PUTSTATIC SharedConstants.CURRENT_VERSION only; publication semantics and failure behavior remain stock.",
-            "class_initialization": "<clinit> walls are reported independently and flagged by whether they occurred inside the outer Main call. Linkage before first <clinit> instruction remains in the surrounding dispatch residual.",
+            "class_initialization": "<clinit> walls are reported independently inside the outer Main call. Linkage before the first <clinit> instruction remains in the surrounding dispatch residual.",
         },
     }
 
