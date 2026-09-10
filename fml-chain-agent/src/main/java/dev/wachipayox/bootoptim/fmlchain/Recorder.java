@@ -142,13 +142,15 @@ public final class Recorder {
     }
 
     private static void recordRaw(String kind, String mod, String detail) {
+        Thread thread = Thread.currentThread();
         EVENTS.add(new Event(
                 SEQUENCE.incrementAndGet(),
                 System.nanoTime() - ORIGIN_NS,
                 kind,
                 mod,
                 detail,
-                Thread.currentThread().getName()));
+                thread.getName(),
+                thread.threadId()));
     }
 
     public static void flush() {
@@ -174,14 +176,15 @@ public final class Recorder {
         }
     }
 
-    private record Event(long sequence, long ns, String kind, String mod, String detail, String thread) {
+    private record Event(long sequence, long ns, String kind, String mod, String detail, String thread, long threadId) {
         String toJson() {
             return "{\"seq\":" + sequence
                     + ",\"ns\":" + ns
                     + ",\"kind\":\"" + escape(kind) + "\""
                     + ",\"mod\":" + nullable(mod)
                     + ",\"detail\":" + nullable(detail)
-                    + ",\"thread\":\"" + escape(thread) + "\"}";
+                    + ",\"thread\":\"" + escape(thread) + "\""
+                    + ",\"tid\":" + threadId + "}";
         }
 
         private static String nullable(String value) {
