@@ -7,106 +7,52 @@ import cpw.mods.modlauncher.api.TransformerVoteResult;
 import java.util.Set;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
-import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.tree.InsnNode;
 
-/** Diagnostic-only early transformer. It never changes resource lookup/listing results. */
+/**
+ * Validation-only source-equivalent shim for the exact 1.21.1 CITResewn broken-path probe.
+ *
+ * <p>Agent 133 attribution proved every exact-pack call with an empty list path comes from
+ * {@code citresewn$brokenpaths$parseMetadata}. Stock 1.21.1 rejects that empty path in
+ * {@code FileUtil.decomposePath} before enumerating anything, invokes no ResourceOutput callback,
+ * throws no exception to the caller, and simply returns after logging the error. Returning at the
+ * same method boundary therefore preserves the resource/metadata result while avoiding the invalid
+ * source call. This transformer exists only to validate the proposed upstream/fork source fix; it
+ * is not a production BootOptim workaround.</p>
+ */
 public final class PathPackResourcesDiagnosticTransformer implements ITransformer<ClassNode> {
     private static final String TARGET_CLASS = "net.minecraft.server.packs.PathPackResources";
-    private static final String GET_RESOURCE_DESC = "(Lnet/minecraft/resources/ResourceLocation;Ljava/nio/file/Path;)Lnet/minecraft/server/packs/resources/IoSupplier;";
     private static final String LIST_RESOURCES_DESC = "(Lnet/minecraft/server/packs/PackType;Ljava/lang/String;Ljava/lang/String;Lnet/minecraft/server/packs/PackResources$ResourceOutput;)V";
 
     @Override
     public ClassNode transform(ClassNode input, ITransformerVotingContext context) {
-        MethodNode getResource = find(input, "getResource", GET_RESOURCE_DESC);
-        MethodNode listResources = find(input, "listResources", LIST_RESOURCES_DESC);
-
-        if (getResource != null) {
-            injectEmptyResourceLocation(getResource);
-        }
-        if (listResources != null) {
-            injectEmptyListPath(listResources);
-        }
-
-        System.out.println("[BootOptim PathPack early diagnostic] transform_applied getResource="
-                + (getResource != null) + " listResources=" + (listResources != null));
-        if (getResource == null || listResources == null) {
-            System.out.println("[BootOptim PathPack early diagnostic] methods="
-                    + input.methods.stream().map(candidate -> candidate.name + candidate.desc).toList());
-        }
-        return input;
-    }
-
-    private static MethodNode find(ClassNode input, String name, String desc) {
-        return input.methods.stream()
-                .filter(candidate -> name.equals(candidate.name) && desc.equals(candidate.desc))
+        MethodNode listResources = input.methods.stream()
+                .filter(candidate -> "listResources".equals(candidate.name)
+                        && LIST_RESOURCES_DESC.equals(candidate.desc))
                 .findFirst()
                 .orElse(null);
-    }
+        if (listResources == null) {
+            System.out.println("[BootOptim PathPack validation] transform_miss");
+            return input;
+        }
 
-    private static void injectEmptyResourceLocation(MethodNode method) {
-        LabelNode skip = new LabelNode();
-        InsnList injected = new InsnList();
-        injected.add(new VarInsnNode(Opcodes.ALOAD, 0));
-        injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL,
-                "net/minecraft/resources/ResourceLocation", "getPath", "()Ljava/lang/String;", false));
-        injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/String", "isEmpty", "()Z", false));
-        injected.add(new JumpInsnNode(Opcodes.IFEQ, skip));
-        printLabelAndObject(injected, "[BootOptim PathPack early diagnostic] resource-location=", 0);
-        printLabelAndObject(injected, "[BootOptim PathPack early diagnostic] resource-basePath=", 1);
-        injected.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Thread", "dumpStack", "()V", false));
-        injected.add(skip);
-        method.instructions.insert(injected);
-    }
-
-    private static void injectEmptyListPath(MethodNode method) {
-        LabelNode skip = new LabelNode();
+        LabelNode continueStock = new LabelNode();
         InsnList injected = new InsnList();
         injected.add(new VarInsnNode(Opcodes.ALOAD, 3));
         injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/String", "isEmpty", "()Z", false));
-        injected.add(new JumpInsnNode(Opcodes.IFEQ, skip));
+        injected.add(new JumpInsnNode(Opcodes.IFEQ, continueStock));
+        injected.add(new InsnNode(Opcodes.RETURN));
+        injected.add(continueStock);
+        listResources.instructions.insert(injected);
 
-        injected.add(new FieldInsnNode(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;"));
-        injected.add(new LdcInsnNode("[BootOptim PathPack early diagnostic] list-packId="));
-        injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "print", "(Ljava/lang/String;)V", false));
-        injected.add(new FieldInsnNode(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;"));
-        injected.add(new VarInsnNode(Opcodes.ALOAD, 0));
-        injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL,
-                "net/minecraft/server/packs/PathPackResources", "packId", "()Ljava/lang/String;", false));
-        injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL,
-                "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false));
-
-        injected.add(new FieldInsnNode(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;"));
-        injected.add(new LdcInsnNode("[BootOptim PathPack early diagnostic] list-root="));
-        injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "print", "(Ljava/lang/String;)V", false));
-        injected.add(new FieldInsnNode(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;"));
-        injected.add(new VarInsnNode(Opcodes.ALOAD, 0));
-        injected.add(new FieldInsnNode(Opcodes.GETFIELD,
-                "net/minecraft/server/packs/PathPackResources", "root", "Ljava/nio/file/Path;"));
-        injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL,
-                "java/io/PrintStream", "println", "(Ljava/lang/Object;)V", false));
-
-        printLabelAndObject(injected, "[BootOptim PathPack early diagnostic] list-packType=", 1);
-        printLabelAndObject(injected, "[BootOptim PathPack early diagnostic] list-namespace=", 2);
-        injected.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Thread", "dumpStack", "()V", false));
-        injected.add(skip);
-        method.instructions.insert(injected);
-    }
-
-    private static void printLabelAndObject(InsnList injected, String label, int local) {
-        injected.add(new FieldInsnNode(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;"));
-        injected.add(new LdcInsnNode(label));
-        injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "print", "(Ljava/lang/String;)V", false));
-        injected.add(new FieldInsnNode(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;"));
-        injected.add(new VarInsnNode(Opcodes.ALOAD, local));
-        injected.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL,
-                "java/io/PrintStream", "println", "(Ljava/lang/Object;)V", false));
+        System.out.println("[BootOptim PathPack validation] source_equivalent_empty_list_noop_applied");
+        return input;
     }
 
     @Override
