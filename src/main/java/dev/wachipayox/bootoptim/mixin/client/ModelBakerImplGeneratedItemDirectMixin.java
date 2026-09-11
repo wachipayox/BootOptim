@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.optimization.client.DirectGeneratedItemBaker;
+import dev.wachipayox.bootoptim.profiling.client.BakePlanCensusProfiler;
 import java.util.function.Function;
 import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -41,6 +42,9 @@ abstract class ModelBakerImplGeneratedItemDirectMixin {
                 modelState,
                 false);
         if (result != null) {
+            // A cancellable HEAD returns before a separate RETURN census observer can fire.
+            // Close only the opt-in diagnostic frame; this is a no-op when the census is disabled.
+            BakePlanCensusProfiler.endUncached(model);
             cir.setReturnValue(result);
         }
     }
