@@ -13,12 +13,22 @@ contract-valid Minecraft launches, but they are not an orthogonal experiment
 for attributing a cost to the named ID block.
 
 This follow-up changes the planner's DOE unit, not Minecraft runtime behavior.
-A top-level physical JAR is indivisible. Duplicate logical IDs across multiple
-JARs and explicit compatibility/runtime families are collapsed into larger
-artifact units before a partition is generated. Runtime-symbol provider edges
-are applied before dependency closure. Complement materialization then records
+A top-level physical JAR is indivisible. Explicit compatibility/runtime families
+can collapse multiple top-level JARs into one experimental unit before a
+partition is generated. Repeated logical IDs in different top-level JARs are
+instead alternative physical providers for dependency closure; they do not by
+themselves justify merging those outer JARs. Runtime-symbol provider edges are
+applied before dependency closure. Complement materialization then records
 separately the artifacts assigned to the removed arm and artifacts removed only
 because their closure reaches the excluded arm.
+
+The distinction matters in the exact pack: WorldEdit, Sodium and Iris can embed
+Fabric API modules whose logical IDs also appear in the top-level Forgified
+Fabric API artifact. Treating every repeated ID as physical identity creates a
+false multi-JAR superunit. The planner therefore asks whether any remaining
+physical provider satisfies a dependency while preserving every top-level JAR
+as an independent unit unless an explicit compatibility/runtime family joins
+it to another artifact.
 
 ## Plan and manifest contract
 
@@ -43,7 +53,8 @@ with the selected JAR set.
 which the same top-level artifact is assigned to more than one arm. Dependency
 closure may still remove additional artifacts from a complement; that is
 reported as induced closure and must not be interpreted as direct cost of the
-assigned arm.
+assigned arm. Explicit operator exclusions retain `operator_exclusion` as their
+manifest cause even if the same artifact is also assigned to the removed arm.
 
 ## Regression fixtures
 
