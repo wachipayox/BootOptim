@@ -218,6 +218,12 @@ def parse_aggregate(args):
         summary[variant]["decocraft_models_remapped"] = median([row.get("decocraft_models_remapped") for row in subset])
         summary[variant]["decocraft_atlas_removed"] = median([row.get("decocraft_atlas_removed") for row in subset])
         summary[variant]["blocks_atlas"] = stable_text(atlas_text(row) for row in subset)
+        summary[variant]["resource_contract_invalid_runs"] = sum(
+            1 for row in subset if row.get("resource_contract_valid") is False
+        )
+        summary[variant]["diagnostic_only_runs"] = sum(
+            1 for row in subset if row.get("diagnostic_only") is True
+        )
 
     # Paired diagnostics carry an explicit pair/order marker.  Keep their
     # within-VM deltas separate from the ordinary per-variant medians: the
@@ -268,8 +274,8 @@ def parse_aggregate(args):
         "",
         "Hosted measurements are a reproducible software-pack surrogate. Hardware-sensitive conclusions still require a real-hardware gate.",
         "",
-        "| Variant | Runs | main_menu ms | mod_entrypoint ms | post-mod ms | MCEF ms | reload→FancyMenu ms | panorama ms | Decocraft status | remapped | sprites removed | blocks atlas | mixin errors |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- | ---: |",
+        "| Variant | Runs | main_menu ms | mod_entrypoint ms | post-mod ms | MCEF ms | reload→FancyMenu ms | panorama ms | Decocraft status | remapped | sprites removed | blocks atlas | mixin errors | resource-invalid | diagnostic-only |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: |",
     ]
     for variant in variants:
         data = summary[variant]
@@ -280,7 +286,8 @@ def parse_aggregate(args):
             f"{format_ms(data['fancymenu_panorama_ms'])} | {data['decocraft_status']} | "
             f"{data['decocraft_models_remapped'] if data['decocraft_models_remapped'] is not None else 'n/a'} | "
             f"{data['decocraft_atlas_removed'] if data['decocraft_atlas_removed'] is not None else 'n/a'} | "
-            f"{data['blocks_atlas']} | {data['bootoptim_mixin_errors']} |"
+            f"{data['blocks_atlas']} | {data['bootoptim_mixin_errors']} | "
+            f"{data['resource_contract_invalid_runs']} | {data['diagnostic_only_runs']} |"
         )
 
     if "candidate" in summary and "control" in summary:
