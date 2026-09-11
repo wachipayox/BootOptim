@@ -20,7 +20,7 @@ The production candidate waits until NeoForge common setup, after Sinytra Connec
 
 Any level/message/logger/pack/path drift is fail-open and remains visible. The filter returns `NEUTRAL` for all nonmatching events. A startup contract self-check verifies representative target, wrong-level, wrong-logger, wrong-pack, unrelated-warning, and parsing-error cases before the filter can arm.
 
-The filter is removed at the first title screen, its logger/filter references are cleared, and one summary is emitted with the exact suppression count. No CIT objects, resource objects, parsed properties, models, or reload-generation state are retained.
+At the first title screen BootOptim sets the matcher inactive, stops the filter, drops its own filter reference and emits one summary with the exact suppression count. Log4j 2.24.x exposes `Logger.addFilter` but no symmetric public `removeFilter`; the logger therefore retains only the stopped filter shell until its own context is destroyed. Because `armed=false`, that shell returns `NEUTRAL` for every later event and captures no logger, CIT, resource, parsed-property, model or reload-generation object. BootOptim itself retains no runtime object from CITResewn or the resource pack.
 
 ## Kill switch
 
