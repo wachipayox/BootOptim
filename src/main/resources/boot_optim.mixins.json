@@ -14,8 +14,7 @@
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
-    "client.UnbakedGeometryHelperDecocraftReuseMixin",
-    "client.PathPackResourcesEmptyPathDiagnosticMixin"
+    "client.UnbakedGeometryHelperDecocraftReuseMixin"
   ],
   "injectors": {
     "defaultRequire": 0
