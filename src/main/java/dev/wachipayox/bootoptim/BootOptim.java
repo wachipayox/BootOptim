@@ -3,7 +3,6 @@ package dev.wachipayox.bootoptim;
 import dev.wachipayox.bootoptim.optimization.client.CitResewnGlowingTrimLegacyWarningSuppression;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
-import dev.wachipayox.bootoptim.profiling.client.PathPackResourcesErrorDiagnostic;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -23,7 +22,6 @@ public final class BootOptim {
     public BootOptim(IEventBus modEventBus) {
         StartupProfiler.markModEntrypoint();
         if (FMLEnvironment.dist == Dist.CLIENT) {
-            PathPackResourcesErrorDiagnostic.install();
             CitResewnGlowingTrimLegacyWarningSuppression.install(modEventBus);
             if (StartupProfiler.isEnabled()) {
                 ClientStartupHooks.install();
