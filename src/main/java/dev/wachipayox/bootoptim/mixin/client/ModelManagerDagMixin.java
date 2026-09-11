@@ -1,5 +1,6 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
+import dev.wachipayox.bootoptim.profiling.client.DecocraftEligibilityProbe;
 import dev.wachipayox.bootoptim.profiling.client.ModelDagDependencies;
 import dev.wachipayox.bootoptim.profiling.client.ResourceReloadDagTrace;
 import java.util.concurrent.CompletableFuture;
@@ -28,6 +29,7 @@ abstract class ModelManagerDagMixin {
     private void bootoptim$reloadHead(CallbackInfoReturnable<?> cir) {
         bootoptim$generation = ResourceReloadDagTrace.listenerGeneration();
         ResourceReloadDagTrace.beginModelManager(bootoptim$generation);
+        DecocraftEligibilityProbe.beginGeneration(bootoptim$generation);
         bootoptim$reloadScheduleTask = ResourceReloadDagTrace.beginLexicalTask(
                 "model_manager_reload_schedule", bootoptim$generation, null);
     }
@@ -60,6 +62,7 @@ abstract class ModelManagerDagMixin {
         ResourceReloadDagTrace.endLexicalTask(taskId, "model_manager_block_models_schedule", "returned_future");
         if (cir.getReturnValue() instanceof CompletableFuture<?> future) {
             ResourceReloadDagTrace.observeAsyncPhase("model_manager_block_models_preparation", generation, taskId, future);
+            future.whenComplete((ignored, failure) -> DecocraftEligibilityProbe.blockModelsReady(generation, failure));
         }
     }
 
