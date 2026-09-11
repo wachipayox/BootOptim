@@ -19,8 +19,17 @@ from artifact_scaling_physical import build_plan as _physical_build_plan  # noqa
 _base.build_plan = _physical_build_plan
 
 from artifact_scaling import *  # noqa: F401,F403,E402
-main = _base.main
 build_plan = _physical_build_plan
+
+
+def main():
+    # Branch-scoped diagnostic continuation of PR #251. The existing workflow
+    # already passes --group directives to this entrypoint; this sentinel keeps
+    # the accepted parent scope explicit without changing runtime behavior.
+    if "agent120-scope=create-side" in sys.argv:
+        from plan_create_side_bisect import main as scoped_main
+        return scoped_main()
+    return _base.main()
 
 
 if __name__ == "__main__":
