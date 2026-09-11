@@ -64,6 +64,9 @@ def main() -> None:
         subprocess.run([
             sys.executable, os.fspath(root / "tools/mixin-lifecycle-probe/apply_probe.py"), "--checkout", os.fspath(checkout)
         ], cwd=root, check=True)
+        subprocess.run([
+            sys.executable, os.fspath(root / "tools/mixin-lifecycle-probe/apply_agent124.py"), "--checkout", os.fspath(checkout)
+        ], cwd=root, check=True)
 
         env = os.environ.copy()
         env["JAVA_HOME"] = jdk21
@@ -109,6 +112,7 @@ def main() -> None:
         "jar": str(staged_jar),
         "jar_sha256": sha256(staged_jar),
         "repository": str(output),
+        "agent124_observation_patch": True,
     }
     report.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(payload, sort_keys=True), flush=True)
