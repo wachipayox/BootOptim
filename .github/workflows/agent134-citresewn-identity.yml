@@ -42,12 +42,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          zip=.exact-pack-cache/bootoptim-exact-pack.zip
-          entry=$(unzip -Z1 "$zip" | grep -E '/\(svfr\) CitResewn \{v0\} \[1\.21\.1\] \[MAINLOC\]\.jar$' | head -n1)
-          test -n "$entry"
-          test "$(unzip -Z1 "$zip" | grep -Ec '/\(svfr\) CitResewn \{v0\} \[1\.21\.1\] \[MAINLOC\]\.jar$')" = 1
           mkdir -p identity
-          unzip -p "$zip" "$entry" > identity/exact-pack-citresewn.jar
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          pack=Path('.exact-pack-cache/bootoptim-exact-pack.zip')
+          with ZipFile(pack) as z:
+              matches=[n for n in z.namelist() if n.endswith('/(svfr) CitResewn {v0} [1.21.1] [MAINLOC].jar')]
+              if len(matches) != 1:
+                  raise SystemExit(f'expected exactly one CITResewn jar, got {matches!r}')
+              Path('identity/fixture-entry.txt').write_text(matches[0]+'\n')
+              Path('identity/exact-pack-citresewn.jar').write_bytes(z.read(matches[0]))
+          PY
           exact_sha256=$(sha256sum identity/exact-pack-citresewn.jar | awk '{print $1}')
           exact_sha512=$(sha512sum identity/exact-pack-citresewn.jar | awk '{print $1}')
           exact_size=$(stat -c %s identity/exact-pack-citresewn.jar)
@@ -66,6 +72,7 @@ jobs:
           PY
           published_sha512=$(awk -F= '$1=="sha512"{print $2}' identity/modrinth-primary.txt)
           published_size=$(awk -F= '$1=="size"{print $2}' identity/modrinth-primary.txt)
+          entry=$(cat identity/fixture-entry.txt)
           {
             echo "fixture_entry=$entry"
             echo "exact_sha256=$exact_sha256"
@@ -85,10 +92,13 @@ jobs:
           rm -f identity/exact-pack-citresewn.jar
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: agent134-citresewn-identity
           path: |
             identity/citresewn-identity.txt
             identity/modrinth-primary.txt
             identity/modrinth-version.json
+            identity/fixture-entry.txt
+          if-no-files-found: ignore
           retention-days: 14
