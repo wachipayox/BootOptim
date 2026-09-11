@@ -66,7 +66,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
-        return List.of(new PathPackResourcesDiagnosticTransformer());
+        return List.of();
     }
 
     private static void mark(String phase) {
