@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.bootstrap;
 
 import cpw.mods.modlauncher.api.ITransformer;
 import cpw.mods.modlauncher.api.ITransformerVotingContext;
+import cpw.mods.modlauncher.api.TargetType;
 import cpw.mods.modlauncher.api.TransformerVoteResult;
 import java.util.Set;
 import org.objectweb.asm.Opcodes;
@@ -78,7 +79,12 @@ public final class PathPackResourcesDiagnosticTransformer implements ITransforme
     }
 
     @Override
-    public Set<Target> targets() {
+    public Set<Target<ClassNode>> targets() {
         return Set.of(Target.targetPreClass(TARGET_CLASS));
+    }
+
+    @Override
+    public TargetType<ClassNode> getTargetType() {
+        return TargetType.PRE_CLASS;
     }
 }
