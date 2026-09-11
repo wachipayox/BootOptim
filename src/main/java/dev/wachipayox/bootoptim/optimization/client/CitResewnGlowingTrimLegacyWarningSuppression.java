@@ -44,7 +44,6 @@ public final class CitResewnGlowingTrimLegacyWarningSuppression {
 
     private static volatile boolean armed;
     private static volatile boolean setupAttempted;
-    private static org.apache.logging.log4j.core.Logger targetLogger;
     private static Filter filter;
 
     private CitResewnGlowingTrimLegacyWarningSuppression() {}
@@ -138,7 +137,6 @@ public final class CitResewnGlowingTrimLegacyWarningSuppression {
 
             selectedFilter.start();
             target.addFilter(selectedFilter);
-            targetLogger = target;
             filter = selectedFilter;
             armed = true;
             LOGGER.info(
@@ -206,12 +204,12 @@ public final class CitResewnGlowingTrimLegacyWarningSuppression {
         }
 
         armed = false;
-        org.apache.logging.log4j.core.Logger logger = targetLogger;
         Filter installedFilter = filter;
-        targetLogger = null;
         filter = null;
-        if (logger != null && installedFilter != null) {
-            logger.removeFilter(installedFilter);
+        if (installedFilter != null) {
+            // Log4j 2.24.x exposes Logger.addFilter but no symmetric public removeFilter API.
+            // Stopping plus armed=false makes the attached filter permanently NEUTRAL; BootOptim drops
+            // its own reference here. The filter captures no CIT/resource/model object or logger/context.
             installedFilter.stop();
         }
 
