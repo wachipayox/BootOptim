@@ -117,10 +117,10 @@ def physical_complement(name, kind, requested_roots, assigned_artifacts, records
     for artifact in sorted(artifact_to_ids, key=str.lower):
         if artifact in selected:
             status, reason, missing = "included", "retained_dependency_closed_remainder", []
-        elif artifact in assigned:
-            status, reason, missing = "excluded", "partition_unit_exclusion", []
         elif artifact in operator:
             status, reason, missing = "excluded", "operator_exclusion", []
+        elif artifact in assigned:
+            status, reason, missing = "excluded", "partition_unit_exclusion", []
         else:
             detail = induced_reasons.get(artifact, {})
             status = "excluded"
