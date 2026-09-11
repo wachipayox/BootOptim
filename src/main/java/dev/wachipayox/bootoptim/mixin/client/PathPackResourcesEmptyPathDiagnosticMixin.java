@@ -1,7 +1,9 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.PackResources;
+import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.PathPackResources;
 import net.minecraft.server.packs.resources.IoSupplier;
 import org.slf4j.Logger;
@@ -18,11 +20,11 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 /**
- * Diagnostic-only attribution for the exact-pack empty-root-path failures.
+ * Diagnostic-only attribution for the exact-pack empty resource-path failures.
  *
  * <p>This intentionally does not cancel, replace, catch or otherwise alter the
  * PathPackResources lookup. It only emits an adjacent attribution record before
- * the stock validation/error path runs.</p>
+ * the stock getResource path reaches its validation/error handling.</p>
  */
 @Mixin(PathPackResources.class)
 public abstract class PathPackResourcesEmptyPathDiagnosticMixin {
@@ -32,11 +34,14 @@ public abstract class PathPackResourcesEmptyPathDiagnosticMixin {
     @Final
     private Path root;
 
-    @Inject(method = "getRootResource", at = @At("HEAD"))
-    private void bootoptim$attributeEmptyRootPath(
-            String[] elements,
+    @Inject(
+            method = "getResource(Lnet/minecraft/server/packs/PackType;Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/server/packs/resources/IoSupplier;",
+            at = @At("HEAD"))
+    private void bootoptim$attributeEmptyResourcePath(
+            PackType packType,
+            ResourceLocation location,
             CallbackInfoReturnable<IoSupplier<InputStream>> cir) {
-        if (elements.length != 1 || !elements[0].isEmpty()) {
+        if (!location.getPath().isEmpty()) {
             return;
         }
 
@@ -48,9 +53,12 @@ public abstract class PathPackResourcesEmptyPathDiagnosticMixin {
                 .collect(Collectors.joining(" <- "));
 
         BOOTOPTIM_DIAGNOSTIC_LOGGER.error(
-                "[BootOptim PathPack diagnostic] empty root path packId='{}' root='{}' stack={}",
+                "[BootOptim PathPack diagnostic] empty resource path packId='{}' root='{}' packType={} namespace='{}' location='{}' stack={}",
                 packId,
                 this.root,
+                packType,
+                location.getNamespace(),
+                location,
                 stack);
     }
 }
