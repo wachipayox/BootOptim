@@ -22,6 +22,10 @@ def main() -> None:
     text = path.read_text(encoding="utf-8")
 
     text = replace_once(text,
+        """            System.err.printf(\"BOOTOPTIM_MIXIN_LIFECYCLE probe=%s event=%s mono_ns=%d elapsed_ns=%d thread=%s detail=%s%n\",\n                    \"agent96-mixin-prepareconfigs-suffix-v2\", event, now, startNanos == 0L ? 0L : now - startNanos,\n                    Thread.currentThread().getName(), safeDetail);\n""",
+        """            String bootOptimLine = String.format(java.util.Locale.ROOT,\n                    \"BOOTOPTIM_MIXIN_LIFECYCLE probe=%s event=%s mono_ns=%d elapsed_ns=%d thread=%s detail=%s\",\n                    \"agent96-mixin-prepareconfigs-suffix-v2\", event, now, startNanos == 0L ? 0L : now - startNanos,\n                    Thread.currentThread().getName(), safeDetail);\n            System.err.println(bootOptimLine);\n""", "atomic trace emission")
+
+    text = replace_once(text,
         """                MixinProcessor.logger.log(this.verboseLoggingLevel, \"Preparing {} ({})\", config, config.getDeclaredMixinCount());\n                config.prepare(extensions);\n                totalMixins += config.getMixinCount();\n""",
         """                MixinProcessor.logger.log(this.verboseLoggingLevel, \"Preparing {} ({})\", config, config.getDeclaredMixinCount());\n                long bootOptimOneConfigStart = bootOptimNow();\n                String bootOptimOneConfigDetail = config.getName() + \"|declared=\" + config.getDeclaredMixinCount();\n                try {\n                    config.prepare(extensions);\n                } finally {\n                    bootOptimTrace(\"config_prepare_one\", bootOptimOneConfigStart, bootOptimOneConfigDetail);\n                }\n                totalMixins += config.getMixinCount();\n""", "per-config prepare timing")
 
