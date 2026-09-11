@@ -221,7 +221,7 @@ jobs:
 
       - name: Harness unit/self tests
         shell: bash
-        run: python scripts/appcds/production_jar_harness.py self-test
+        run: python scripts/appcds/production_jar_harness_v2.py self-test
 
       - name: Run production JAR-only archive generation and fresh-process consumption smoke
         shell: bash
@@ -230,7 +230,7 @@ jobs:
           python -m http.server "$BOOTOPTIM_MCEF_MIRROR_PORT" --bind 127.0.0.1 --directory .mcef-mirror > .mcef-mirror.log 2>&1 &
           mirror_pid=$!
           trap 'kill "$mirror_pid" 2>/dev/null || true' EXIT
-          python scripts/appcds/production_jar_harness.py run \
+          python scripts/appcds/production_jar_harness_v2.py run \
             --repo . \
             --workspace .appcds-production \
             --pack "$BOOTOPTIM_PACK_DIR" \
