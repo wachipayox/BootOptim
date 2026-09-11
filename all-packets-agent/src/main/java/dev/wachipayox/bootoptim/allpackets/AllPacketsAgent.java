@@ -12,10 +12,7 @@ import java.lang.reflect.Method;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
 
-/**
- * Diagnostic-only, version-pinned observer for Create 6.0.10 AllPackets startup work.
- * It records timing markers only; it does not change packet/codec/handler registration.
- */
+/** Diagnostic-only, version-pinned observer for Create 6.0.10 AllPackets startup work. */
 public final class AllPacketsAgent {
     private static final String ENABLED = "boot_optim.allPacketsProfile.enabled";
     private static final String CLINIT_ACTIVE = "boot_optim.allPacketsProfile.clinitActive";
@@ -86,7 +83,8 @@ public final class AllPacketsAgent {
         public static void exit(@Advice.Enter long start, @Advice.Thrown Throwable thrown) {
             long now = System.nanoTime();
             System.err.println("BOOTOPTIM_ALLPACKETS_CREATE_CTOR_END ns=" + now
-                    + " dur_ns=" + (now - start) + throwable(thrown));
+                    + " dur_ns=" + (now - start)
+                    + (thrown == null ? "" : " throw=" + thrown.getClass().getName()));
             System.setProperty(CLINIT_ACTIVE, "false");
             System.setProperty(ENABLED, "false");
         }
@@ -109,7 +107,8 @@ public final class AllPacketsAgent {
             if (start == 0L) return;
             long now = System.nanoTime();
             System.err.println("BOOTOPTIM_ALLPACKETS_CLINIT_END ns=" + now
-                    + " dur_ns=" + (now - start) + throwable(thrown));
+                    + " dur_ns=" + (now - start)
+                    + (thrown == null ? "" : " throw=" + thrown.getClass().getName()));
             System.setProperty(CLINIT_ACTIVE, "false");
         }
     }
@@ -129,7 +128,8 @@ public final class AllPacketsAgent {
             if (start == 0L) return;
             long now = System.nanoTime();
             System.err.println("BOOTOPTIM_ALLPACKETS_DEP_CLINIT_END ns=" + now + " class=" + owner.getName()
-                    + " dur_ns=" + (now - start) + throwable(thrown));
+                    + " dur_ns=" + (now - start)
+                    + (thrown == null ? "" : " throw=" + thrown.getClass().getName()));
         }
     }
 
@@ -151,7 +151,8 @@ public final class AllPacketsAgent {
                 name = "unknown";
             }
             System.err.println("BOOTOPTIM_ALLPACKETS_ENUM_CTOR ns=" + now + " name=" + name
-                    + " dur_ns=" + (now - start) + throwable(thrown));
+                    + " dur_ns=" + (now - start)
+                    + (thrown == null ? "" : " throw=" + thrown.getClass().getName()));
         }
     }
 
@@ -169,7 +170,8 @@ public final class AllPacketsAgent {
             if (start == 0L) return;
             long now = System.nanoTime();
             System.err.println("BOOTOPTIM_ALLPACKETS_REGISTER_END ns=" + now
-                    + " dur_ns=" + (now - start) + throwable(thrown));
+                    + " dur_ns=" + (now - start)
+                    + (thrown == null ? "" : " throw=" + thrown.getClass().getName()));
         }
     }
 
@@ -184,7 +186,8 @@ public final class AllPacketsAgent {
             if (start == 0L) return;
             long now = System.nanoTime();
             System.err.println("BOOTOPTIM_ALLPACKETS_REGISTER_PACKET ns=" + now
-                    + " dur_ns=" + (now - start) + throwable(thrown));
+                    + " dur_ns=" + (now - start)
+                    + (thrown == null ? "" : " throw=" + thrown.getClass().getName()));
         }
     }
 
@@ -202,7 +205,8 @@ public final class AllPacketsAgent {
             if (start == 0L) return;
             long now = System.nanoTime();
             System.err.println("BOOTOPTIM_ALLPACKETS_REGISTER_ALL_END ns=" + now
-                    + " dur_ns=" + (now - start) + throwable(thrown));
+                    + " dur_ns=" + (now - start)
+                    + (thrown == null ? "" : " throw=" + thrown.getClass().getName()));
         }
     }
 
@@ -222,11 +226,8 @@ public final class AllPacketsAgent {
             if (start == 0L) return;
             long now = System.nanoTime();
             System.err.println("BOOTOPTIM_ALLPACKETS_NETWORK_HELPER_END ns=" + now
-                    + " dur_ns=" + (now - start) + throwable(thrown));
+                    + " dur_ns=" + (now - start)
+                    + (thrown == null ? "" : " throw=" + thrown.getClass().getName()));
         }
-    }
-
-    private static String throwable(Throwable thrown) {
-        return thrown == null ? "" : " throw=" + thrown.getClass().getName();
     }
 }
