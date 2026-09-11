@@ -190,6 +190,11 @@ jobs:
             --sha256 "$EXACT_PACK_SHA256" \
             --extract .appcds-exact-pack-run \
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
+
+      - name: Stage production Linux JCEF and reference selection
+        shell: bash
+        run: |
+          set -euo pipefail
           cp "$BOOTOPTIM_PACK_DIR/options.txt" .appcds-options-reference.txt
           rm -rf "$BOOTOPTIM_PACK_DIR/mods/mcef-libraries/$MCEF_PLATFORM"
           mkdir -p "$BOOTOPTIM_PACK_DIR/mods/mcef-libraries"
