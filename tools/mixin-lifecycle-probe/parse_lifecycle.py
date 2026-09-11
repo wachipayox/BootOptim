@@ -19,6 +19,18 @@ def fields(line: str, marker: str) -> dict[str, str]:
     return dict(re.findall(r"([A-Za-z_]+)=([^\s]+)", tail))
 
 
+def detail_fields(detail: str) -> dict[str, str]:
+    parts = detail.split("|") if detail else []
+    out: dict[str, str] = {}
+    if parts:
+        out["config"] = parts[0]
+    for part in parts[1:]:
+        if "=" in part:
+            key, value = part.split("=", 1)
+            out[key] = value
+    return out
+
+
 def parse(text: str) -> dict:
     requests: list[dict] = []
     ends: dict[int, dict] = {}
@@ -85,9 +97,6 @@ def parse(text: str) -> dict:
     if [by_event[n]["line"] for n in names] != sorted(by_event[n]["line"] for n in names):
         raise ValueError("Mixin lifecycle ordering changed")
 
-    # Only these stock Main boundaries contextualise the handoff to request 2. The
-    # worker-return marker is emitted concurrently with vanilla logging and can
-    # interleave on stderr, so it is deliberately not a gate for prepareConfigs.
     required_main = ["main_before_run_and_tick", "bootstrap_worker_entry"]
     missing_main = [name for name in required_main if name not in main]
     if missing_main:
@@ -137,9 +146,41 @@ def parse(text: str) -> dict:
     if any(v < 0 for v in segments.values()):
         raise ValueError("negative causal segment")
 
+    def observations(event_name: str) -> list[dict]:
+        rows: list[dict] = []
+        for event in mixin:
+            if event.get("event") != event_name:
+                continue
+            rows.append({
+                **detail_fields(event.get("detail", "")),
+                "wall_ns": event["elapsed_ns"],
+                "line": event["line"],
+                "thread": event.get("thread"),
+            })
+        rows.sort(key=lambda row: row["wall_ns"], reverse=True)
+        return rows
+
+    prepare_by_config = observations("config_prepare_one")
+    plugins_by_config = observations("plugin_accept_targets_one")
+    post_by_config = observations("post_initialise_one")
+    if not prepare_by_config:
+        raise ValueError("missing Agent124 per-config prepare observations")
+
+    observed_children = {
+        "config_prepare": sum(row["wall_ns"] for row in prepare_by_config),
+        "plugin_accept_targets": sum(row["wall_ns"] for row in plugins_by_config),
+        "post_initialise": sum(row["wall_ns"] for row in post_by_config),
+    }
+    child_residual = {
+        key: coarse[key]["wall_ns"] - observed_children[key]
+        for key in observed_children
+    }
+    if any(value < 0 for value in child_residual.values()):
+        raise ValueError("per-config child observations exceed enclosing coarse scope")
+
     return {
-        "schema": 5,
-        "metric_type": "single-run monotonic causal wall; checkSelect/select/prepareConfigs are inclusive; coarse prepareConfigs method-block scopes are non-overlapping; not A/B or savings",
+        "schema": 6,
+        "metric_type": "single-run monotonic causal wall; outer scopes inclusive; coarse phases sequential; per-config child timings exclude their own trace print overhead; not A/B or savings",
         "origin": "hosted_exact_pack",
         "endpoint": "main_menu",
         "request_contract": "mixin_transformed_bytes_then_classloading",
@@ -147,6 +188,14 @@ def parse(text: str) -> dict:
         "mixin_scopes": outer,
         "prepare_configs_coarse_scopes": coarse,
         "prepare_configs_suffix_partition_ns": suffix,
+        "per_config_observations": {
+            "prepare": prepare_by_config,
+            "plugin_accept_targets": plugins_by_config,
+            "post_initialise": post_by_config,
+            "observed_child_wall_ns": observed_children,
+            "enclosing_minus_child_ns": child_residual,
+            "residual_note": "Includes loop/bookkeeping plus diagnostic marker emission overhead between children; it is not attributable stock work or savings.",
+        },
         "segments_ns": segments,
         "dag": [
             {"id": "request1_mixin_bytes", "predecessors": []},
@@ -157,11 +206,11 @@ def parse(text: str) -> dict:
             {"id": "boundary_residual", "wall_ns": sum(v for k, v in suffix.items() if k.startswith("boundary_residual_")), "kind": "explicit_probe_boundary_residual", "predecessors": ["config_commit"]},
         ],
         "classification_notes": {
-            "config_prepare": "Mutable: constructs MixinInfo, increments global mixin order, loads/transforms mixin bytes, invokes plugin filtering, mutates ClassInfo/target/config/listener-visible state. Whole scope is not a pure-work candidate.",
+            "config_prepare": "Mutable: constructs MixinInfo, loads/transforms mixin bytes, filters/records targets, mutates global/config/ClassInfo/listener-visible state. Whole scope is not a pure-work candidate.",
             "plugin_accept_targets": "Third-party IMixinConfigPlugin callback in stock pending-config order; do not move or parallelise.",
             "post_initialise": "May call plugin.getMixins, prepare companion mixins, validate MixinInfo, notify onInit listeners, and remove invalid mappings; ordered mutable state.",
             "config_commit": "Stock publication addAll/sort/clear; ordered state commit.",
-            "future_purity": "Only a narrower immutable preparse could be investigated later, and only after proving independence from class acquisition/transformation, plugin callbacks, global mixin order, ClassInfo caches/target registration, listeners, extensions, validation and publication. Not implemented here.",
+            "future_purity": "Only a narrower immutable read/preparse can be reopened, after proving independence from class acquisition/transformation, plugin callbacks, global mixin order, ClassInfo caches/target registration, listeners, extensions, validation and publication.",
         },
         "marker_counts": {"mixin": len(mixin), "main_valid": len(main), "main_malformed": len(malformed_main_markers)},
         "malformed_main_marker_events": malformed_main_markers,
