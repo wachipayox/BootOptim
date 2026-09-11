@@ -2,7 +2,7 @@
 """Production-launch parity shim for the hosted AppCDS JAR-only harness.
 
 The first hosted run exposed that the initial materializer did not mirror the
-NeoForge 1.21.1 RunProductionClient inheritance algorithm exactly.  Keep the
+NeoForge 1.21.1 RunProductionClient inheritance algorithm exactly. Keep the
 original diagnostic harness intact, but replace its launcher materialization
 and argument expansion with the version-pinned production semantics used by
 NeoForge's own 1.21.1 end-to-end production-client task:
@@ -13,20 +13,21 @@ NeoForge's own 1.21.1 end-to-end production-client task:
   appended last, so NeoForge's ignoreList=${version_name}.jar applies;
 * version_name is the installed child profile id, not a doubly-prefixed id.
 
-No CDS policy is relaxed here.  Archive generation/consumption, strong identity,
+No CDS policy is relaxed here. Archive generation/consumption, strong identity,
 resource/reload gates, application shared-class hit proof and javaagent refusal
 remain in production_jar_harness.py.
 """
 from __future__ import annotations
 
-import json
+import os
 import shutil
-import sys
 from pathlib import Path
 from typing import Any
 
 import launcher_materialize as lm
 import production_jar_harness as base
+
+_ORIGINAL_SELF_TEST = base.self_test
 
 
 def coordinate_override_key(name: str) -> tuple[str, str, str, str]:
@@ -87,7 +88,7 @@ def fixed_materialize_launcher(workspace: Path, minecraft: str, neoforge: str, j
         raise RuntimeError(f"unexpected installed NeoForge profile id: {child_id!r}")
 
     # NeoForge 1.21.1's own RunProductionClient copies the original client jar
-    # under the child version id and appends that path last.  The child profile's
+    # under the child version id and appends that path last. The child profile's
     # ignoreList references ${version_name}.jar, so using versions/1.21.1/1.21.1.jar
     # changes BootstrapLauncher module ownership and is not production-equivalent.
     original_game_jar = state["launcher"] / "versions" / minecraft / f"{minecraft}.jar"
@@ -119,7 +120,7 @@ def fixed_materialize_launcher(workspace: Path, minecraft: str, neoforge: str, j
 
 
 def fixed_build_launch(repo: Path, state: dict[str, Any], pack: Path, java: Path, base_jvm: list[str]) -> tuple[list[str], list[str], list[str]]:
-    cp = lm.os.pathsep.join(str(path) for path in state["classpath"])
+    cp = os.pathsep.join(str(path) for path in state["classpath"])
     child_id = state["neo"].get("id")
     if not isinstance(child_id, str):
         raise RuntimeError("NeoForge child profile has no id")
@@ -128,7 +129,7 @@ def fixed_build_launch(repo: Path, state: dict[str, Any], pack: Path, java: Path
         "launcher_name": "bootoptim-hosted-production-jar-harness",
         "launcher_version": "1",
         "classpath": cp,
-        "classpath_separator": lm.os.pathsep,
+        "classpath_separator": os.pathsep,
         "library_directory": str(state["libraries"]),
         "auth_player_name": "BootOptimCI",
         "version_name": child_id,
@@ -166,8 +167,7 @@ def fixed_build_launch(repo: Path, state: dict[str, Any], pack: Path, java: Path
 
 
 def extended_self_test() -> None:
-    original = base.self_test
-    original()
+    _ORIGINAL_SELF_TEST()
     assert coordinate_override_key("g:a:1") == ("g", "a", "", "jar")
     assert coordinate_override_key("g:a:2:client") == ("g", "a", "client", "jar")
     assert coordinate_override_key("g:a:3:client@zip") == ("g", "a", "client", "zip")
@@ -186,7 +186,7 @@ def extended_self_test() -> None:
     print("APP_CDS_PRODUCTION_JAR_HARNESS v2 launcher-parity self-test ok")
 
 
-# Patch only the two launcher-parity seams.  All archive policy/gates remain in
+# Patch only the two launcher-parity seams. All archive policy/gates remain in
 # the original harness and therefore cannot be accidentally weakened by this shim.
 base.materialize_launcher = fixed_materialize_launcher
 base.build_launch = fixed_build_launch
