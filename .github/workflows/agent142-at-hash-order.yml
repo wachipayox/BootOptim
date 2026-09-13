@@ -1,0 +1,48 @@
+name: Agent142 AT HashMap order equivalence
+
+on:
+  push:
+    branches: [agent142/access-transformers-incremental-10.0.1]
+    paths:
+      - '.github/workflows/agent142-at-hash-order.yml'
+      - 'third_party/access-transformers-10.0.1/tests/HashMapPublicationOrderTest.java'
+      - 'third_party/access-transformers-10.0.1/patches/0001-incremental-per-file-transaction.patch'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collision-order:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+      - name: Test stock publication order under adversarial collisions
+        shell: bash
+        env:
+          AT_COMMIT: 139da711070c67f7e62cc20ea43507aa216cc8c6
+        run: |
+          set -euo pipefail
+          git init .agent142-order-upstream
+          git -C .agent142-order-upstream remote add origin https://github.com/neoforged/AccessTransformers.git
+          git -C .agent142-order-upstream fetch --depth=1 origin "$AT_COMMIT"
+          git -C .agent142-order-upstream fetch --unshallow --tags --force origin 10.0.x
+          git -C .agent142-order-upstream checkout --detach "$AT_COMMIT"
+          git -C .agent142-order-upstream apply --recount "$GITHUB_WORKSPACE/third_party/access-transformers-10.0.1/patches/0001-incremental-per-file-transaction.patch"
+          cp third_party/access-transformers-10.0.1/tests/HashMapPublicationOrderTest.java \
+            .agent142-order-upstream/src/test/java/net/neoforged/accesstransformer/parser/HashMapPublicationOrderTest.java
+          sed -i 's/org.powermock:powermock-core:2.0+/org.powermock:powermock-core:2.0.9/' .agent142-order-upstream/settings.gradle
+          cat >> .agent142-order-upstream/build.gradle <<'EOF'
+          test {
+              include '**/HashMapPublicationOrderTest.class'
+          }
+          EOF
+          (cd .agent142-order-upstream && ./gradlew test --no-daemon --console=plain)
