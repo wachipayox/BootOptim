@@ -1,0 +1,61 @@
+import java.lang.module.ModuleFinder
+import java.util.zip.ZipFile
+
+// Validation-only task. The actual substitution lives in override.init.gradle.
+gradle.projectsEvaluated {
+    def root = gradle.rootProject
+    root.tasks.register('agent144VerifyAtResolution') {
+        doLast {
+            def expectedVersion = System.getenv('BOOTOPTIM_AT_OVERRIDE_VERSION')
+            if (!expectedVersion) throw new GradleException('BOOTOPTIM_AT_OVERRIDE_VERSION is required')
+            def cfg = root.configurations.findByName('runtimeClasspath')
+            if (cfg == null || !cfg.canBeResolved) throw new GradleException('runtimeClasspath is not resolvable')
+
+            def artifacts = cfg.resolvedConfiguration.resolvedArtifacts.toList()
+            def stockRoots = artifacts.findAll { a ->
+                a.moduleVersion.id.group == 'net.neoforged' && a.name == 'accesstransformers'
+            }
+            if (!stockRoots.isEmpty()) {
+                throw new GradleException("stock root AccessTransformers still resolved: ${stockRoots*.moduleVersion*.id}")
+            }
+            def candidates = artifacts.findAll { a ->
+                a.moduleVersion.id.group == 'dev.bootoptim.atfork' &&
+                        a.name == 'accesstransformers' &&
+                        a.moduleVersion.id.version == expectedVersion
+            }
+            if (candidates.size() != 1) {
+                throw new GradleException("expected exactly one candidate root artifact, got ${candidates*.moduleVersion*.id}")
+            }
+
+            def classProviders = []
+            artifacts.findAll { it.file.name.endsWith('.jar') }.each { a ->
+                ZipFile zf = new ZipFile(a.file)
+                try {
+                    if (zf.getEntry('net/neoforged/accesstransformer/parser/AccessTransformerList.class') != null) {
+                        classProviders << a
+                    }
+                } finally {
+                    zf.close()
+                }
+            }
+            if (classProviders.size() != 1 || classProviders[0] != candidates[0]) {
+                throw new GradleException("AccessTransformerList providers must be candidate-only: ${classProviders*.moduleVersion*.id}")
+            }
+
+            def moduleNames = ModuleFinder.of(candidates[0].file.toPath()).findAll()*.descriptor()*.name() as Set
+            if (moduleNames != ['net.neoforged.accesstransformer'] as Set) {
+                throw new GradleException("unexpected candidate JPMS modules: ${moduleNames}")
+            }
+
+            def atModlauncher = artifacts.findAll { a ->
+                a.moduleVersion.id.group == 'net.neoforged.accesstransformers' && a.name == 'at-modlauncher'
+            }
+            if (atModlauncher.size() != 1 || atModlauncher[0].moduleVersion.id.version != '10.0.1') {
+                throw new GradleException("stock at-modlauncher:10.0.1 must remain exactly once: ${atModlauncher*.moduleVersion*.id}")
+            }
+
+            println "AGENT144_AT_RESOLUTION candidate=${candidates[0].moduleVersion.id} file=${candidates[0].file}"
+            println "AGENT144_AT_RESOLUTION module=net.neoforged.accesstransformer classProviders=1 stockRoot=0 atModlauncher=${atModlauncher[0].moduleVersion.id}"
+        }
+    }
+}
