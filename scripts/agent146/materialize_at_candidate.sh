@@ -23,9 +23,9 @@ python3 "$ROOT_DIR/scripts/agent146/apply_at_candidate.py" "$SRC"
   cd "$SRC"
   ./gradlew jar generatePomFileForMavenJavaPublication --no-daemon
 )
-mapfile -t jars < <(find "$SRC/build/libs" -maxdepth 1 -type f -name 'accesstransformers-*.jar' ! -name '*sources*' ! -name '*testsjar*' | sort)
-test "${#jars[@]}" -eq 1
-cp "${jars[0]}" "$OUT/candidate-first.jar"
+jar="$SRC/build/libs/AccessTransformers-10.0.1.jar"
+test -f "$jar"
+cp "$jar" "$OUT/candidate-first.jar"
 repo="$OUT/repo/net/neoforged/accesstransformers/$VERSION"
 mkdir -p "$repo"
 cp "$OUT/candidate-first.jar" "$repo/accesstransformers-$VERSION.jar"
