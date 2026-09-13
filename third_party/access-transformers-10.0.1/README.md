@@ -1,53 +1,55 @@
 # AccessTransformers 10.0.1 source candidate
 
-This directory does **not** vendor AccessTransformers classes into BootOptim. It records a source-level candidate patch and provenance for building a single replacement parser module for the exact NeoForge 1.21.1 dependency.
+This directory does **not** vendor AccessTransformers classes into BootOptim. It records a source-level patch, reproducible source pin and a branch-only dependency bridge for evaluating one replacement of the exact NeoForge 1.21.1 AccessTransformers engine.
 
-## Upstream and exact version
+## Exact upstream, artifact and license
 
-- Upstream: https://github.com/neoforged/AccessTransformers
-- Published runtime artifacts: `net.neoforged:accesstransformers:10.0.1`, `net.neoforged.accesstransformers:at-parser:10.0.1`, and `net.neoforged.accesstransformers:at-modlauncher:10.0.1`.
-- Source commit used by this candidate: `8274f92c0f11ef1a95cc0d78c2ba3a15783e105c` (`Use absolute paths in origin names (#10)`). It is the last upstream commit before the 10.0.1 publication window and the next source commit is `90f1408667758034e10a1963564ae67c0ae1a548` on 2024-11-23. The candidate workflow additionally checks the published 10.0.1 parser JAR manifest `Git-Commit` against `8274f92` before building; a mismatch fails closed.
-- Historical base tag: `10.0` -> commit `ce0a186070ec31f41c86f43c2676ef2d52bba7a0`. NeoForged GradleUtils derives the patch release version from Git history; there is no `10.0.1` Git tag in the upstream tag set.
-- License: MIT. The exact upstream notice is retained as `LICENSE.txt` and is also embedded into the rebuilt parser JAR by the candidate patch.
+- Upstream: `neoforged/AccessTransformers`.
+- Exact runtime artifact: `net.neoforged:accesstransformers:10.0.1`.
+- Exact public source commit: `139da711070c67f7e62cc20ea43507aa216cc8c6` (`Bump major to 10.0`). The published 10.0.1 JAR manifest states `Implementation-Version: 10.0.1+139da711` and `Git-Commit: 139da711`; the candidate workflow downloads and SHA-verifies that artifact and fails closed unless those fields match. The same JAR contains `net/neoforged/accesstransformer/parser/AccessTransformerList.class`.
+- The exact 10.0.1 source is the older monolithic engine on upstream's `10.0.x` line, **not** the later split `at-parser` implementation on `main`. The first candidate workflow deliberately caught this distinction before source tests were accepted.
+- License: MIT. `LICENSE.txt` is copied from upstream and the workflow byte-compares it with the pinned source before build. The patch also embeds the notice into the rebuilt fork JAR.
 
-No decompiled source is used. The patch applies to the public upstream source commit above.
+No decompiled source is used or redistributed.
 
-## Algorithmic correction
+## Exact stock algorithm
 
-Upstream 10.0.1 `AccessTransformerFiles.loadAT` starts every file by copying the complete accumulated `HashMap<Target, Transformation>`, parses/merges into that copy, scans every accumulated transformation for invalid final-state conflicts, clears and republishes the entire global map, then rebuilds every target class from the entire key set.
+`AccessTransformerList.loadAT(CharStream)` keeps file parsing transactional. ANTLR parses the complete current file into an ordered `List<AccessTransformer>` first. Stock then:
 
-The candidate preserves the per-file transaction but makes its successful hot path proportional to the current file:
+1. copies the complete accumulated `HashMap<Target<?>, AccessTransformer>`;
+2. merges current-file rules into that copy in visitor/list order;
+3. scans **all** accumulated values for invalid final-state conflicts;
+4. on success clears the live map and republishes the entire copy;
+5. rebuilds the full `Set<Type>` target cache from every accumulated key.
 
-1. Parse the file in stock line/rule order into a `LinkedHashMap` overlay containing only touched targets. A repeated target merges against the previous staged value; its first occurrence merges against the committed value. `Transformation.mergeStates` is unchanged, so modifier precedence, finality and ordered origin strings are unchanged.
-2. The committed state is an invariant-valid state because no file is published before validation. Therefore a new invalid final state can only occur on a touched target. Successful validation checks only staged values.
-3. If any staged value is invalid, reconstruct a full stock-style temporary `HashMap` **only on that failure path**, inserting new touched keys in first-encounter order, then call the existing full invalid-map scan/logger and throw the same `IllegalArgumentException`. The committed map/targets remain untouched.
-4. On success, `putAll` publishes only touched mappings. The public `getAccessTransformers()` object remains the same unmodifiable live view.
-5. Target class names are monotonic under successful AT loads. They are added incrementally while no `getTargets()` set has escaped. If `getTargets()` has been observed, the next successful file deliberately falls back to a full rebuild from the authoritative transformation map before publication; this detaches retained references and discards caller mutations exactly as stock does. The initial immutable empty set becomes mutable after the first successful load, including an empty file, matching stock behavior.
+A parse failure occurs before the state copy and leaves committed state untouched. A finality conflict is diagnosed after the full temporary merge and also leaves committed state untouched. `AccessTransformer.mergeStates` creates a new value and appends origins in left-then-right order, including the stock synthetic merge origin.
 
-The candidate does not cache across launches, deduplicate AT files/rules, reorder files/rules, parse ahead, or move work to another thread.
+## Incremental correction and equivalence contract
 
-## Equivalence contract and tests
+The candidate keeps the same per-file transaction but stages only the targets touched by the current file in first-encounter order. The first occurrence of a target merges against committed state; repeated occurrences merge against the staged value. Because committed state is valid by construction, a newly invalid final state can only be on a touched target, so the successful validation scan is limited to staged values.
 
-The patch adds differential tests against a literal stock-reference implementation for:
+If a staged conflict exists, the candidate deliberately reconstructs the stock full temporary `HashMap` **only on the failure path**, inserts staged targets in first-encounter order, runs the existing full invalid scan/logger, and throws the same `IllegalArgumentException`. Thus committed state, first failing file, rule order, merge/finality semantics and ordered origin lists are unchanged.
 
-- sequential multi-file merge state, ordered `origins()` and target membership;
-- duplicate/touched targets and inner-class-generated targets;
-- conflicting `+f`/`-f` finality: same exception text and whole-file rollback;
-- malformed input: same parser exception class/message/line and rollback;
-- the unusual mutable `getTargets()` exposure: caller mutation remains visible through the escaped old set, but is discarded from the newly published target set on the next successful file.
+On success, only staged mappings are published. Target `Type`s are monotonic and are added incrementally until `getTargets()` exposes its mutable set. Once a target set may have escaped, the next successful file falls back to stock's full target-set rebuild so retained references detach and caller mutations are discarded exactly as before. The first successful empty file still converts the initial immutable empty set into a mutable set, matching stock.
 
-Further promotion gating must compare transformed class bytes for representative class/field/method/wildcard/inner-class ATs and capture invalid-target log ordering under multiple conflicting targets. HashMap/HashSet iteration order is not an API ordering guarantee; file/rule order and origin order are preserved.
+The candidate does **not** cache across runs, fingerprint prefixes, deduplicate files/rules, parse ahead, reorder input, or move work across threads.
 
-## Packaging rule: replace, never add beside stock
+## Tests and remaining semantic gates
 
-Only `at-parser` contains the changed class. The clean pack route is a **single-module replacement**: replace the dependency edge `net.neoforged.accesstransformers:at-parser:10.0.1` with one version-pinned fork JAR carrying the same JPMS module name `net.neoforged.accesstransformer.parser`. Keep stock `accesstransformers` and `at-modlauncher` 10.0.1. Do not place the fork beside the stock parser JAR and do not shade these packages into BootOptim.
+The patch adds differential tests against a literal stock-reference implementation for sequential multi-file state/origins/inner-class targets, conflicting `+f`/`-f` rollback, malformed parser rollback, and the unusual mutable `getTargets()` exposure/detachment behavior. Upstream's own tests are run unchanged in the same source build.
 
-The branch-only Gradle bridge substitutes the parser dependency to a temporary local Maven coordinate only when `BOOTOPTIM_AT_PARSER_OVERRIDE_REPO` and `BOOTOPTIM_AT_PARSER_OVERRIDE_VERSION` are set. Normal BootOptim builds are unchanged. The candidate workflow checks dependency resolution and a hosted exact-pack smoke; a module/class duplication would fail the dependency gate or JPMS launch.
+Before promotion, add/retain a transformed-byte differential for representative class/field/method/wildcard/inner-class rules and a multi-conflict diagnostic-order assertion. `HashMap`/`HashSet` iteration order is not an API ordering contract, but the candidate intentionally reconstructs stock topology on the conflict path because diagnostics are observable.
 
-For an actual modpack distribution, publish the fork as a pinned binary with source/commit/license metadata and make the launcher/version manifest select it **instead of** the stock `at-parser:10.0.1`. If the launcher cannot express a single replacement cleanly, this candidate is not distributable through that launcher and must remain unshipped.
+## Packaging: replace the engine, never duplicate it
+
+The changed class is inside the exact root module `net.neoforged:accesstransformers:10.0.1`, JPMS module `net.neoforged.accesstransformer`. The clean route is therefore a **single-module replacement** of that artifact with one version-pinned fork carrying the same JPMS module name. Keep stock `net.neoforged.accesstransformers:at-modlauncher:10.0.1`; do not add a second AccessTransformers engine JAR, do not put the fork in `mods/`, and do not shade its packages into BootOptim.
+
+The branch-only `override.init.gradle` substitutes the exact engine dependency with a temporary local Maven coordinate only when `BOOTOPTIM_AT_OVERRIDE_REPO` and `BOOTOPTIM_AT_OVERRIDE_VERSION` are set. Normal BootOptim builds are unchanged. Hosted smoke exercises the replacement under ModDevGradle; duplicate modules/classes should fail launch rather than silently select one.
+
+For an actual Prism/modpack distribution, the instance/version metadata must select the fork **instead of** the stock `accesstransformers:10.0.1` library. If the distribution mechanism cannot express one unambiguous replacement, this candidate is a no-ship even if source tests are green.
 
 ## Performance evidence boundary
 
-PR #274 attributed 97 `FMLLoader.addAccessTransformer` calls to 266.609 ms of 269.009 ms in one hosted diagnostic. PR #275 measured `LoadingModList.addAccessTransformers` at 233.611 ms wall / 232.572 ms CPU inside a 286.449 ms Stage-2 run. The physical attribution supplied for this investigation is 1,356.24 ms wall / 968.75 ms CPU. These are inclusive/direct attribution measurements, **not savings** and not TTMM A/B evidence.
+PR #274 attributes 97 `FMLLoader.addAccessTransformer` calls to 266.609 ms of 269.009 ms in one hosted diagnostic. PR #275 measured `LoadingModList.addAccessTransformers` at 233.611 ms wall / 232.572 ms CPU inside a 286.449 ms Stage-2 run. The supplied physical attribution is 1,356.24 ms wall / 968.75 ms CPU. These are direct/inclusive attribution measurements, **not savings and not TTMM evidence**.
 
-The next performance gate, only after source tests and smoke pass, is a separate hosted exact-pack A/B with candidate vs stock using identical endpoints. Physical A/B is justified only if hosted shows a coherent critical-path signal.
+After equivalence tests and hosted smoke pass, the next performance gate is a separate exact-pack hosted A/B of stock vs fork with identical endpoints. Only a coherent critical-path signal justifies physical A/B; the laptop is not part of this candidate workflow.
