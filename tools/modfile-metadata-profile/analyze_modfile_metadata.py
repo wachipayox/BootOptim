@@ -11,12 +11,11 @@ def ms(ns):
 
 def parse_detail(text):
     out = {}
-    if not text:
-        return out
-    for part in text.split(';'):
-        if '=' in part:
-            k, v = part.split('=', 1)
-            out[k] = v
+    if text:
+        for part in text.split(';'):
+            if '=' in part:
+                key, value = part.split('=', 1)
+                out[key] = value
     return out
 
 
@@ -26,12 +25,12 @@ def union_ns(events):
         return 0
     total = 0
     start, end = intervals[0]
-    for s, e in intervals[1:]:
-        if s <= end:
-            end = max(end, e)
+    for next_start, next_end in intervals[1:]:
+        if next_start <= end:
+            end = max(end, next_end)
         else:
             total += end - start
-            start, end = s, e
+            start, end = next_start, next_end
     return total + end - start
 
 
@@ -41,18 +40,19 @@ def cpu_ns(events):
 
 
 def contained(children, parents):
-    return [c for c in children if any(c['tid'] == p['tid'] and p['start_ns'] <= c['start_ns'] and c['end_ns'] <= p['end_ns'] for p in parents)]
+    return [c for c in children if any(
+        c['tid'] == p['tid'] and p['start_ns'] <= c['start_ns'] and c['end_ns'] <= p['end_ns']
+        for p in parents)]
 
 
 def metric(events):
     cpu = cpu_ns(events)
-    tids = sorted({e['tid'] for e in events})
     return {
         'calls': len(events),
         'union_wall_ms': ms(union_ns(events)),
         'sum_wall_ms': ms(sum(e['duration_ns'] for e in events)),
         'thread_cpu_ms': None if cpu is None else ms(cpu),
-        'thread_count': len(tids),
+        'thread_count': len({e['tid'] for e in events}),
     }
 
 
@@ -72,20 +72,19 @@ def main():
         raise SystemExit('instrumented stock boundary threw: ' + ', '.join(e['kind'] + ':' + e['detail'] for e in throws))
 
     by_kind = defaultdict(list)
-    for e in events:
-        by_kind[e['kind']].append(e)
+    for event in events:
+        by_kind[event['kind']].append(event)
 
     stage1 = by_kind['stage1_validation']
     reads = by_kind['read_mod_list']
     standard = by_kind['mods_toml_parser']
     loads = by_kind['file_config_load']
     copies = by_kind['immutable_copy_write_reparse']
-    identifies = by_kind['identify_mods']
-    if len(stage1) != 1 or not reads or not standard or not loads or not copies or not identifies:
+    if len(stage1) != 1 or not reads or not standard or not loads or not copies:
         raise SystemExit('missing required FML metadata boundaries')
 
-    for e in reads:
-        e['_detail'] = parse_detail(e.get('detail'))
+    for event in reads:
+        event['_detail'] = parse_detail(event.get('detail'))
     initial_reads = [e for e in reads if e['_detail'].get('phase') != 'stage1']
     stage1_reads = [e for e in reads if e['_detail'].get('phase') == 'stage1']
     if not initial_reads or not stage1_reads:
@@ -94,27 +93,30 @@ def main():
     def is_standard(read):
         return any(s['tid'] == read['tid'] and read['start_ns'] <= s['start_ns'] and s['end_ns'] <= read['end_ns'] for s in standard)
 
-    parser_groups = defaultdict(lambda: {'initial': [], 'stage1': [], 'identities_initial': set(), 'identities_stage1': set(), 'standard': False})
-    for e in reads:
-        d = e['_detail']
-        ptype = d.get('parser_class', 'unknown')
-        phase = 'stage1' if d.get('phase') == 'stage1' else 'initial'
-        parser_groups[ptype][phase].append(e)
-        parser_groups[ptype]['standard'] = parser_groups[ptype]['standard'] or is_standard(e)
+    parser_groups = defaultdict(lambda: {
+        'initial': [], 'stage1': [], 'identities_initial': set(), 'identities_stage1': set(), 'standard': False
+    })
+    for event in reads:
+        detail = event['_detail']
+        parser_type = detail.get('parser_class', 'unknown')
+        phase = 'stage1' if detail.get('phase') == 'stage1' else 'initial'
+        group = parser_groups[parser_type]
+        group[phase].append(event)
+        group['standard'] = group['standard'] or is_standard(event)
         try:
-            parser_groups[ptype]['identities_' + phase].add(int(d.get('parser_identity', '0')))
+            group['identities_' + phase].add(int(detail.get('parser_identity', '0')))
         except ValueError:
             pass
 
     parser_summary = {}
     double_standard = False
-    for ptype, group in parser_groups.items():
+    for parser_type, group in parser_groups.items():
         initial_ids = group['identities_initial']
         stage1_ids = group['identities_stage1']
         shared = initial_ids & stage1_ids
         if group['standard'] and group['initial'] and group['stage1'] and shared:
             double_standard = True
-        parser_summary[ptype] = {
+        parser_summary[parser_type] = {
             'classification': 'standard_neoforge_mods_toml' if group['standard'] else 'other',
             'initial': metric(group['initial']),
             'stage1': metric(group['stage1']),
@@ -125,8 +127,10 @@ def main():
     if not double_standard:
         raise SystemExit('standard neoforge.mods.toml parser was not observed in both routes with shared parser identity')
 
-    stage1_standard = [s for s in standard if any(r['tid'] == s['tid'] and r['start_ns'] <= s['start_ns'] and s['end_ns'] <= r['end_ns'] for r in stage1_reads)]
-    initial_standard = [s for s in standard if any(r['tid'] == s['tid'] and r['start_ns'] <= s['start_ns'] and s['end_ns'] <= r['end_ns'] for r in initial_reads)]
+    stage1_standard = [s for s in standard if any(
+        r['tid'] == s['tid'] and r['start_ns'] <= s['start_ns'] and s['end_ns'] <= r['end_ns'] for r in stage1_reads)]
+    initial_standard = [s for s in standard if any(
+        r['tid'] == s['tid'] and r['start_ns'] <= s['start_ns'] and s['end_ns'] <= r['end_ns'] for r in initial_reads)]
     stage1_loads = contained(loads, stage1_standard)
     stage1_copies = contained(copies, stage1_standard)
     initial_loads = contained(loads, initial_standard)
@@ -136,14 +140,18 @@ def main():
     if len(initial_loads) != len(initial_standard) or len(initial_copies) != len(initial_standard):
         raise SystemExit('initial standard parser did not contain exactly one FileConfig.load and one immutable-copy reparse per call')
 
-    helpers = by_kind['coremod_checks'] + by_kind['mixin_checks'] + by_kind['access_transformer_metadata_checks'] + stage1_reads
+    coremods = by_kind['coremod_checks']
+    mixins = by_kind['mixin_checks']
+    access_transformers = by_kind['access_transformer_metadata_checks']
+    if not coremods or not mixins or not access_transformers:
+        raise SystemExit('stage1 coremod/mixin/access-transformer metadata checks were not all observed')
+
     stage1_wall = union_ns(stage1)
-    identify_wall = union_ns(identifies)
-    helper_wall = union_ns(contained(helpers, identifies))
-    std_stage1_wall = union_ns(stage1_standard)
-    std_stage1_children = union_ns(stage1_loads + stage1_copies)
-    std_initial_wall = union_ns(initial_standard)
-    std_initial_children = union_ns(initial_loads + initial_copies)
+    stage1_named = union_ns(stage1_reads + coremods + mixins + access_transformers)
+    standard_stage1_wall = union_ns(stage1_standard)
+    standard_stage1_children = union_ns(stage1_loads + stage1_copies)
+    standard_initial_wall = union_ns(initial_standard)
+    standard_initial_children = union_ns(initial_loads + initial_copies)
 
     result = {
         'fml_version': headers[0]['module_version'],
@@ -151,59 +159,66 @@ def main():
         'parser_types': parser_summary,
         'segments': {
             'stage1_validation': metric(stage1),
-            'identify_mods': metric(identifies),
-            'stage1_outside_identify_wall_ms': ms(max(0, stage1_wall - identify_wall)),
             'stage1_read_mod_list': metric(stage1_reads),
-            'stage1_coremod_checks': metric(by_kind['coremod_checks']),
-            'stage1_mixin_checks': metric(by_kind['mixin_checks']),
-            'stage1_access_transformer_metadata_checks': metric(by_kind['access_transformer_metadata_checks']),
-            'identify_residual_after_named_children_wall_ms': ms(max(0, identify_wall - helper_wall)),
+            'stage1_coremod_checks': metric(coremods),
+            'stage1_mixin_checks': metric(mixins),
+            'stage1_access_transformer_metadata_checks': metric(access_transformers),
+            'stage1_residual_after_named_children_wall_ms': ms(max(0, stage1_wall - stage1_named)),
             'standard_initial_total': metric(initial_standard),
             'standard_initial_file_config_load': metric(initial_loads),
             'standard_initial_immutable_copy_write_reparse': metric(initial_copies),
-            'standard_initial_parser_residual_wall_ms': ms(max(0, std_initial_wall - std_initial_children)),
+            'standard_initial_parser_residual_wall_ms': ms(max(0, standard_initial_wall - standard_initial_children)),
             'standard_stage1_total': metric(stage1_standard),
             'standard_stage1_file_config_load': metric(stage1_loads),
             'standard_stage1_immutable_copy_write_reparse': metric(stage1_copies),
-            'standard_stage1_parser_residual_wall_ms': ms(max(0, std_stage1_wall - std_stage1_children)),
+            'standard_stage1_parser_residual_wall_ms': ms(max(0, standard_stage1_wall - standard_stage1_children)),
         },
         'throws': [],
         'notes': [
             'Wall unions are non-overlapping interval unions; sum_wall_ms is reported only as task-sum context.',
-            'Access-transformer metadata helper excludes the later per-path Files.exists/notExists probes, which remain in identify residual.',
+            'The stage1 residual includes loop/bookkeeping and later per-path access-transformer Files.exists/notExists probes.',
+            'The direct ModFile.identifyMods advice is not used as a required boundary because this exact launch shape did not transform that already-loaded class; stage1 readModList plus helper calls are instead bounded directly by ModValidator.stage1Validation.',
             'Parser identity is System.identityHashCode only; no parser or ModFile object is retained.',
         ],
     }
     Path(args.json_output).write_text(json.dumps(result, indent=2, sort_keys=True) + '\n')
 
-    seg = result['segments']
+    segments = result['segments']
     lines = [
         '# Agent 137 ModFile metadata profile', '',
         f"- FML: `{result['fml_version']}`",
         '- standard `neoforge.mods.toml` parser observed in both initial construction and stage 1: **yes**',
-        '', '## Non-overlapping wall / thread CPU', '',
+        '', '## Wall union / thread CPU', '',
         '| scope | calls | union wall ms | thread CPU ms |', '|---|---:|---:|---:|'
     ]
     order = [
-        ('stage1_validation', 'stage1Validation'), ('identify_mods', 'identifyMods'),
-        ('stage1_read_mod_list', 'stage1 readModList'), ('stage1_coremod_checks', 'coremod checks'),
-        ('stage1_mixin_checks', 'mixin checks'), ('stage1_access_transformer_metadata_checks', 'AT metadata checks'),
-        ('standard_initial_total', 'standard parser initial total'), ('standard_initial_file_config_load', 'initial FileConfig.load'),
+        ('stage1_validation', 'stage1Validation'),
+        ('stage1_read_mod_list', 'stage1 readModList'),
+        ('stage1_coremod_checks', 'coremod checks'),
+        ('stage1_mixin_checks', 'mixin checks'),
+        ('stage1_access_transformer_metadata_checks', 'AT metadata checks'),
+        ('standard_initial_total', 'standard parser initial total'),
+        ('standard_initial_file_config_load', 'initial FileConfig.load'),
         ('standard_initial_immutable_copy_write_reparse', 'initial immutable write→reparse'),
-        ('standard_stage1_total', 'standard parser stage1 total'), ('standard_stage1_file_config_load', 'stage1 FileConfig.load'),
-        ('standard_stage1_immutable_copy_write_reparse', 'stage1 immutable write→reparse')]
+        ('standard_stage1_total', 'standard parser stage1 total'),
+        ('standard_stage1_file_config_load', 'stage1 FileConfig.load'),
+        ('standard_stage1_immutable_copy_write_reparse', 'stage1 immutable write→reparse'),
+    ]
     for key, label in order:
-        m = seg[key]
-        cpu = 'n/a' if m['thread_cpu_ms'] is None else f"{m['thread_cpu_ms']:.3f}"
-        lines.append(f"| {label} | {m['calls']} | {m['union_wall_ms']:.3f} | {cpu} |")
-    lines += ['', '## Residuals', '',
-              f"- stage1 outside identifyMods: **{seg['stage1_outside_identify_wall_ms']:.3f} ms wall**",
-              f"- identifyMods after read/coremod/mixin/AT-metadata children: **{seg['identify_residual_after_named_children_wall_ms']:.3f} ms wall**",
-              f"- standard initial parser outside FileConfig.load + immutable copy: **{seg['standard_initial_parser_residual_wall_ms']:.3f} ms wall**",
-              f"- standard stage1 parser outside FileConfig.load + immutable copy: **{seg['standard_stage1_parser_residual_wall_ms']:.3f} ms wall**",
-              '', '## Parser aggregates', '']
-    for ptype, p in parser_summary.items():
-        lines.append(f"- `{ptype}` — {p['classification']}; initial={p['initial']['calls']}, stage1={p['stage1']['calls']}, shared parser identities={p['shared_parser_identity_count']}")
+        data = segments[key]
+        cpu = 'n/a' if data['thread_cpu_ms'] is None else f"{data['thread_cpu_ms']:.3f}"
+        lines.append(f"| {label} | {data['calls']} | {data['union_wall_ms']:.3f} | {cpu} |")
+    lines += [
+        '', '## Non-overlap residuals', '',
+        f"- stage1 after read/coremod/mixin/AT-metadata children: **{segments['stage1_residual_after_named_children_wall_ms']:.3f} ms wall**",
+        f"- standard initial parser outside FileConfig.load + immutable copy: **{segments['standard_initial_parser_residual_wall_ms']:.3f} ms wall**",
+        f"- standard stage1 parser outside FileConfig.load + immutable copy: **{segments['standard_stage1_parser_residual_wall_ms']:.3f} ms wall**",
+        '', '## Parser aggregates', ''
+    ]
+    for parser_type, data in parser_summary.items():
+        lines.append(
+            f"- `{parser_type}` — {data['classification']}; initial={data['initial']['calls']}, "
+            f"stage1={data['stage1']['calls']}, shared parser identities={data['shared_parser_identity_count']}")
     Path(args.markdown_output).write_text('\n'.join(lines) + '\n')
 
 
