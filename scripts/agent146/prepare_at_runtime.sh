@@ -23,7 +23,7 @@ git -C "$WORK/source" checkout -q FETCH_HEAD
 test "$(git -C "$WORK/source" rev-parse HEAD)" = "$UPSTREAM_COMMIT"
 test "$(git -C "$WORK/source" rev-parse HEAD:src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerList.java)" = "$EXPECTED_LIST_BLOB"
 test "$(git -C "$WORK/source" rev-parse HEAD:license.txt)" = "$EXPECTED_LICENSE_BLOB"
-grep -q '^MIT License$' "$WORK/source/license.txt"
+grep -q '^The MIT License (MIT)$' "$WORK/source/license.txt"
 python3 "$ROOT_DIR/scripts/agent146/apply_at_candidate.py" "$WORK/source"
 
 (
