@@ -81,54 +81,66 @@ public final class FmlRegistrationProfileAgent {
         return new JarFile(bridge.toFile());
     }
 
-    private static long[] begin(String kind, Class<?> owner, String detail) {
-        try { return Recorder.beginFml(kind, owner, detail); } catch (Throwable ignored) { return null; }
-    }
-
-    private static void end(String kind, Class<?> owner, long[] state, Throwable thrown) {
-        try { Recorder.end(kind, owner, state, thrown); } catch (Throwable ignored) {}
-    }
-
     public static final class AddATsAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("add_access_transformers", owner, null); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("add_access_transformers", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.beginFml("add_access_transformers", owner, null); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("add_access_transformers", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
 
     public static final class AddMixinsAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("add_mixin_configs", owner, null); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("add_mixin_configs", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.beginFml("add_mixin_configs", owner, null); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("add_mixin_configs", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
 
     public static final class AddEnumsAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("add_enum_extenders", owner, null); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("add_enum_extenders", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.beginFml("add_enum_extenders", owner, null); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("add_enum_extenders", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
 
     public static final class AddATFileAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner, @Advice.Argument(0) Object path) {
-            return begin("access_transformer_file", owner, path == null ? null : path.toString());
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.beginFml("access_transformer_file", owner, null); } catch (Throwable ignored) { return null; }
         }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("access_transformer_file", owner, state, thrown); }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("access_transformer_file", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
 
     public static final class QueueMixinAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner, @Advice.Argument(0) String config, @Advice.Argument(1) String modId) {
-            return begin("mixin_config_queue", owner, String.valueOf(modId) + ":" + config);
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.beginFml("mixin_config_queue", owner, null); } catch (Throwable ignored) { return null; }
         }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("mixin_config_queue", owner, state, thrown); }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("mixin_config_queue", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
 
     public static final class LoadEnumPrototypesAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner, @Advice.Argument(0) Map<?, ?> paths) {
-            return begin("enum_prototypes_total", owner, "files=" + (paths == null ? -1 : paths.size()));
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.beginFml("enum_prototypes_total", owner, null); } catch (Throwable ignored) { return null; }
         }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("enum_prototypes_total", owner, state, thrown); }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("enum_prototypes_total", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
 
     public static final class LoadEnumFileAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner, @Advice.Argument(1) Object path) {
-            return begin("enum_prototype_file", owner, path == null ? null : path.toString());
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.beginFml("enum_prototype_file", owner, null); } catch (Throwable ignored) { return null; }
         }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("enum_prototype_file", owner, state, thrown); }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("enum_prototype_file", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
 }
