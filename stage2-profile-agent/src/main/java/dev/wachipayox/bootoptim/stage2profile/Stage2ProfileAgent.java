@@ -40,7 +40,6 @@ public final class Stage2ProfileAgent {
             System.err.println("BOOTOPTIM_STAGE2_PROFILE_INSTALL_FAILED " + error);
             return;
         }
-
         Recorder.installShutdownFlush();
         new AgentBuilder.Default()
                 .disableClassFormatChanges()
@@ -120,7 +119,7 @@ public final class Stage2ProfileAgent {
     }
     public static final class BackgroundCtorAdvice {
         @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { try { return Recorder.beginFml("background_scan_ctor", owner); } catch (Throwable ignored) { return null; } }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { try { Recorder.end("background_scan_ctor", owner, state, thrown); } catch (Throwable ignored) {} }
+        @Advice.OnMethodExit public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state) { try { Recorder.end("background_scan_ctor", owner, state, null); } catch (Throwable ignored) {} }
     }
     public static final class AddForScanningAdvice {
         @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { try { return Recorder.beginFml("add_for_scanning", owner); } catch (Throwable ignored) { return null; } }
