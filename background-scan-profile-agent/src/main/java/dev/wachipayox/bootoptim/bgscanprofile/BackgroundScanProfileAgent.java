@@ -82,50 +82,76 @@ public final class BackgroundScanProfileAgent {
         return new JarFile(bridge.toFile());
     }
 
-    private static long[] beginFml(String kind, Class<?> owner) {
-        try { return Recorder.beginFml(kind, owner); } catch (Throwable ignored) { return null; }
-    }
-    private static long[] begin(String kind, Class<?> owner) {
-        try { return Recorder.begin(kind, owner); } catch (Throwable ignored) { return null; }
-    }
-    private static void end(String kind, Class<?> owner, long[] state, Throwable thrown) {
-        try { Recorder.end(kind, owner, state, thrown); } catch (Throwable ignored) {}
-    }
-
     public static final class Stage2Advice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return beginFml("stage2_validation", owner); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("stage2_validation", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.beginFml("stage2_validation", owner); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("stage2_validation", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
     public static final class AddForScanningAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("add_for_scanning", owner); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("add_for_scanning", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.begin("add_for_scanning", owner); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("add_for_scanning", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
     public static final class SubmitAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("submit_for_scanning", owner); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("submit_for_scanning", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.begin("submit_for_scanning", owner); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("submit_for_scanning", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
     public static final class CompletedAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("add_completed_file", owner); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("add_completed_file", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.begin("add_completed_file", owner); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("add_completed_file", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
     public static final class CompileAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("compile_content", owner); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("compile_content", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.begin("compile_content", owner); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("compile_content", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
     public static final class SetResultAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("set_scan_result", owner); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("set_scan_result", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.begin("set_scan_result", owner); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("set_scan_result", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
     public static final class GetResultAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("get_scan_result", owner); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("get_scan_result", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.begin("get_scan_result", owner); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("get_scan_result", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
     public static final class WaitAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("scan_barrier_wait", owner); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("scan_barrier_wait", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.begin("scan_barrier_wait", owner); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("scan_barrier_wait", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
     public static final class GatherAdvice {
-        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("gather_initialize", owner); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("gather_initialize", owner, state, thrown); }
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) {
+            try { return Recorder.begin("gather_initialize", owner); } catch (Throwable ignored) { return null; }
+        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) {
+            try { Recorder.end("gather_initialize", owner, state, thrown); } catch (Throwable ignored) {}
+        }
     }
 }
