@@ -1,9 +1,9 @@
 package dev.wachipayox.bootoptim.depresprofile;
 
 import static net.bytebuddy.matcher.ElementMatchers.hasSuperType;
+import static net.bytebuddy.matcher.ElementMatchers.isInterface;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.not;
-import static net.bytebuddy.matcher.ElementMatchers.isInterface;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import java.io.IOException;
@@ -93,11 +93,11 @@ public final class DependencyResolutionProfileAgent {
         return new JarFile(bridge.toFile());
     }
 
-    private static long[] begin(String kind, Class<?> owner) {
+    public static long[] begin(String kind, Class<?> owner) {
         try { return Recorder.beginFml(kind, owner); } catch (Throwable ignored) { return null; }
     }
 
-    private static void end(String kind, Class<?> owner, long[] state, Throwable thrown) {
+    public static void end(String kind, Class<?> owner, long[] state, Throwable thrown) {
         try { Recorder.end(kind, owner, state, thrown); } catch (Throwable ignored) {}
     }
 
