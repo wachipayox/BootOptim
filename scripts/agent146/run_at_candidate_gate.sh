@@ -20,7 +20,7 @@ git -C "$SRC" checkout -q FETCH_HEAD
 test "$(git -C "$SRC" rev-parse HEAD)" = "$UPSTREAM_COMMIT"
 test "$(git -C "$SRC" rev-parse HEAD:src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerList.java)" = "$EXPECTED_LIST_BLOB"
 test "$(git -C "$SRC" rev-parse HEAD:license.txt)" = "$EXPECTED_LICENSE_BLOB"
-grep -q '^MIT License$' "$SRC/license.txt"
+grep -q '^The MIT License (MIT)$' "$SRC/license.txt"
 
 python3 "$ROOT_DIR/scripts/agent146/apply_at_candidate.py" "$SRC"
 
@@ -31,7 +31,6 @@ package net.neoforged.accesstransformer.parser;
 import net.neoforged.accesstransformer.AccessTransformer;
 import org.antlr.v4.runtime.CharStreams;
 import org.junit.jupiter.api.Test;
-import org.objectweb.asm.Type;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -155,7 +154,9 @@ cp "$OUT/candidate.jar" "$repo/accesstransformers-$VERSION.jar"
 python3 - "$SRC/build/publications/mavenJava/pom-default.xml" "$repo/accesstransformers-$VERSION.pom" "$VERSION" <<'PY'
 from pathlib import Path
 import sys
-src, dst, version = map(Path, sys.argv[1:3]) + [None] if False else (Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3])
+src = Path(sys.argv[1])
+dst = Path(sys.argv[2])
+version = sys.argv[3]
 text = src.read_text()
 start = text.find('<version>')
 end = text.find('</version>', start)
