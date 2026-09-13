@@ -52,10 +52,12 @@ public final class BackgroundScanProfileAgent {
                 .type(named(BACKGROUND_SCAN))
                 .transform((builder, type, classLoader, module, protectionDomain) -> builder
                         .visit(Advice.to(SubmitAdvice.class).on(named("submitForScanning").and(takesArguments(1))))
+                        .visit(Advice.to(CompletedAdvice.class).on(named("addCompletedFile").and(takesArguments(3))))
                         .visit(Advice.to(WaitAdvice.class).on(named("waitForScanToComplete").and(takesArguments(1)))))
                 .type(named(MOD_FILE))
                 .transform((builder, type, classLoader, module, protectionDomain) -> builder
                         .visit(Advice.to(CompileAdvice.class).on(named("compileContent").and(takesArguments(0))))
+                        .visit(Advice.to(SetResultAdvice.class).on(named("setScanResult").and(takesArguments(2))))
                         .visit(Advice.to(GetResultAdvice.class).on(named("getScanResult").and(takesArguments(0)))))
                 .type(named(MOD_LOADER))
                 .transform((builder, type, classLoader, module, protectionDomain) -> builder
@@ -102,9 +104,17 @@ public final class BackgroundScanProfileAgent {
         @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("submit_for_scanning", owner); }
         @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("submit_for_scanning", owner, state, thrown); }
     }
+    public static final class CompletedAdvice {
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("add_completed_file", owner); }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("add_completed_file", owner, state, thrown); }
+    }
     public static final class CompileAdvice {
         @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("compile_content", owner); }
         @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("compile_content", owner, state, thrown); }
+    }
+    public static final class SetResultAdvice {
+        @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("set_scan_result", owner); }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Enter long[] state, @Advice.Thrown Throwable thrown) { end("set_scan_result", owner, state, thrown); }
     }
     public static final class GetResultAdvice {
         @Advice.OnMethodEnter public static long[] enter(@Advice.Origin Class<?> owner) { return begin("get_scan_result", owner); }
