@@ -1,0 +1,38 @@
+name: Agent145 AT topology oracle
+
+on:
+  push:
+    branches:
+      - agent145/at-inprocess-topology-oracle-20260913
+    paths:
+      - '.github/workflows/agent145-at-topology-oracle.yml'
+      - 'scripts/agent145/**'
+      - 'third_party/access-transformers-10.0.1-oracle/**'
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - '.github/workflows/agent145-at-topology-oracle.yml'
+      - 'scripts/agent145/**'
+      - 'third_party/access-transformers-10.0.1-oracle/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+      - name: Run exact-source shared-identity oracle
+        shell: bash
+        run: bash scripts/agent145/run_at_topology_oracle.sh
