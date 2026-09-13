@@ -78,7 +78,7 @@ jobs:
           git init .agent142-upstream
           git -C .agent142-upstream remote add origin https://github.com/neoforged/AccessTransformers.git
           git -C .agent142-upstream fetch --depth=1 origin "$AT_COMMIT"
-          git -C .agent142-upstream fetch --tags --force origin
+          git -C .agent142-upstream fetch --unshallow --tags --force origin 10.0.x
           git -C .agent142-upstream checkout --detach "$AT_COMMIT"
           test "$(git -C .agent142-upstream rev-parse HEAD)" = "$AT_COMMIT"
           cmp third_party/access-transformers-10.0.1/LICENSE.txt .agent142-upstream/license.txt
