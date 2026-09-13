@@ -399,6 +399,7 @@ jobs:
             hosted-runner.txt
             run-pack-benchmark/logs/latest.log
             run-pack-benchmark/logs/bootoptim-startup.log
+            run-pack-benchmark/logs/bootoptim-trace.jsonl
             run-pack-benchmark/config/boot_optim.properties
             run-pack-benchmark/config/fml.toml
             run-pack-benchmark/config/mcef/mcef.properties
