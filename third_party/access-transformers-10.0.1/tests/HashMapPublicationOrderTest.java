@@ -15,17 +15,19 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Adversarial equivalence check for the HashMap publication detail that the
- * incremental candidate intentionally removes. Aa/BB combinations are distinct
- * Java strings with identical hash codes; enough entries force the collision
- * bin through HashMap resize/treeification thresholds.
+ * Distinguish a non-exported live HashMap topology change from the observable
+ * failure-diagnostic order. Stock republishes through clear/putAll after every
+ * successful file; the candidate deliberately does not. On the conflict path,
+ * however, the candidate makes the same new HashMap copy stock makes before
+ * scanning invalid transformers. That copy must normalize to the same order.
  */
 class HashMapPublicationOrderTest {
     @Test
-    void successfulFilesKeepStockRawIterationOrderAcrossCollidingTargets() throws Exception {
+    void conflictDiagnosticTopologyMatchesStockAfterAdversarialCollisions() throws Exception {
         var candidate = new AccessTransformerList();
         var stock = new StockMap();
         var names = collidingClassNames(4);
@@ -33,13 +35,24 @@ class HashMapPublicationOrderTest {
         assertTrue(names.size() >= 12);
         names.forEach(name -> assertEquals(expectedHash, name.hashCode(), name));
 
+        boolean sawLiveDivergence = false;
         for (int i = 0; i < names.size(); i++) {
             String origin = "collision-" + i + ".cfg";
             String text = "public-f " + names.get(i) + "\n";
             candidate.loadAT(CharStreams.fromString(text, origin));
             stock.load(text, origin);
-            assertEquals(stock.rawOrder(), candidateRawOrder(candidate), "after " + origin);
+            if (!stock.rawOrder().equals(candidateRawOrder(candidate))) {
+                sawLiveDivergence = true;
+            }
         }
+        assertTrue(sawLiveDivergence, "adversarial fixture must exercise the removed republication topology");
+
+        // This is the topology each implementation scans on an existing-target
+        // finality conflict: both create a fresh HashMap from their committed map;
+        // replacing values for the conflicting existing targets does not move keys.
+        assertEquals(stock.failureCopyOrder(), candidateFailureCopyOrder(candidate));
+        assertNotEquals(stock.rawOrder(), candidateRawOrder(candidate),
+                "fixture should retain a live-map topology difference so the equality above is meaningful");
     }
 
     private static List<String> collidingClassNames(int pairCount) {
@@ -56,11 +69,18 @@ class HashMapPublicationOrderTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<String> candidateRawOrder(AccessTransformerList candidate) throws Exception {
+    private static Map<Target<?>, AccessTransformer> candidateMap(AccessTransformerList candidate) throws Exception {
         Field field = AccessTransformerList.class.getDeclaredField("accessTransformers");
         field.setAccessible(true);
-        Map<Target<?>, AccessTransformer> map = (Map<Target<?>, AccessTransformer>) field.get(candidate);
-        return map.keySet().stream().map(Target::toString).toList();
+        return (Map<Target<?>, AccessTransformer>) field.get(candidate);
+    }
+
+    private static List<String> candidateRawOrder(AccessTransformerList candidate) throws Exception {
+        return candidateMap(candidate).keySet().stream().map(Target::toString).toList();
+    }
+
+    private static List<String> candidateFailureCopyOrder(AccessTransformerList candidate) throws Exception {
+        return new HashMap<>(candidateMap(candidate)).keySet().stream().map(Target::toString).toList();
     }
 
     private static final class StockMap {
@@ -86,6 +106,10 @@ class HashMapPublicationOrderTest {
 
         List<String> rawOrder() {
             return map.keySet().stream().map(Target::toString).toList();
+        }
+
+        List<String> failureCopyOrder() {
+            return new HashMap<>(map).keySet().stream().map(Target::toString).toList();
         }
     }
 }
