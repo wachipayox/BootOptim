@@ -105,7 +105,10 @@ function Set-CfgKey([string]$text,[string]$key,[string]$value) {
 }
 function Qs([string]$v) {
     if($v.Contains("`r")-or$v.Contains("`n")-or$v.Contains([char]0)){Fail 'JvmArgs may not contain newline or NUL'}
-    $v.Replace('\','\\').Replace('"','\"')
+    # Prism stores a JVM argument list as one QSettings INI value.  It must be
+    # quoted as a whole: without delimiters Prism accepts the key but silently
+    # drops the list when it materializes the actual Java command line.
+    '"'+$v.Replace('\','\\').Replace('"','\"')+'"'
 }
 
 function Config {

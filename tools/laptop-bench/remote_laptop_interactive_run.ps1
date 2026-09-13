@@ -81,9 +81,13 @@ try{
 # it marks the transaction invalid, may close only Prism, and can then leave a
 # late Java process outside the transaction's identity record.  Keep this
 # launch grace separate from the measured-process timeout and cap it so a truly
-# failed Prism launch is still reported promptly.
+# failed Prism launch is still reported promptly.  The first launch after a
+# laptop reboot can spend more than five minutes in Prism metadata/auth/asset
+# materialization before it creates Java; do not classify that launcher work
+# as a game-process failure.  The separate run timeout still bounds Java once
+# it exists.
 $java=$null
-$appearanceTimeoutSeconds=[Math]::Min(300,[Math]::Max(90,[int]$s.timeoutSeconds-60))
+$appearanceTimeoutSeconds=[Math]::Min(600,[Math]::Max(180,[int]$s.timeoutSeconds-60))
 $deadline=[DateTime]::UtcNow.AddSeconds($appearanceTimeoutSeconds)
 do{
     Start-Sleep -Milliseconds 1000

@@ -33,12 +33,22 @@ This is why the transaction checks both `java.exe` and `javaw.exe` and refuses a
 
 `AGENTS.md`, PR #157 and the corrected P0.2 variance record establish the operational rule: stop Prism before editing `instance.cfg`, then verify the *effective* Java command line on the next launch. The first P0.2 launch was discarded because Prism rewrote the JVM options without the intended variance property. Only the corrected run is evidence.
 
-The slow laptop also exposed a separate detector hazard: Prism can take longer
-than the old 90-second Java-appearance grace to materialize the instance. The
-interactive runner now uses a bounded 90–300 second launch grace (300 seconds
-for the normal 900-second transaction) before declaring that no target Java
-appeared. This grace is outside the startup measurement and does not poll logs;
-it prevents a valid late Java child from becoming an orphaned, untracked run.
+The `JvmArgs` payload is one QSettings/INI value, not an unquoted sequence of
+fields. The transaction must write the fully escaped payload inside outer
+double quotes. A 2026-09-13 physical AppCDS attempt proved that an unquoted
+payload can leave a syntactically present `JvmArgs=` line while Prism silently
+omits the whole list from the Java command line. The runner's command-line
+validation rejected that launch. Therefore the staged-file hash is not proof
+of a JVM configuration: the effective process token check remains mandatory.
+
+The slow laptop also exposed a separate detector hazard: after a Windows reboot
+Prism can spend more than five minutes refreshing authentication, metadata and
+assets before it creates Java. The interactive runner therefore uses a bounded
+180–600 second Java-appearance grace (600 seconds for the normal 900-second
+transaction) before declaring that no target Java appeared. This launcher grace
+is outside the startup measurement and does not poll logs; it prevents a valid
+late Java child from becoming an orphaned, untracked run. The separate timeout
+still bounds the verified Java process once it exists.
 
 Correct sequence:
 
