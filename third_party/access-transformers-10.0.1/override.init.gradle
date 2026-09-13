@@ -1,0 +1,26 @@
+// Branch-only dependency bridge for the Agent 142 source candidate.
+// Normal BootOptim builds do not load this init script.
+
+def overrideRepo = System.getenv('BOOTOPTIM_AT_PARSER_OVERRIDE_REPO')
+def overrideVersion = System.getenv('BOOTOPTIM_AT_PARSER_OVERRIDE_VERSION')
+if (!overrideRepo || !overrideVersion) {
+    throw new GradleException('BOOTOPTIM_AT_PARSER_OVERRIDE_REPO and BOOTOPTIM_AT_PARSER_OVERRIDE_VERSION are required')
+}
+
+gradle.allprojects { p ->
+    p.repositories {
+        maven {
+            name = 'agent142AccessTransformersOverride'
+            url = p.uri(overrideRepo)
+            content {
+                includeGroup('dev.bootoptim.atfork')
+            }
+        }
+    }
+
+    p.configurations.configureEach { configuration ->
+        configuration.resolutionStrategy.dependencySubstitution {
+            substitute module('net.neoforged.accesstransformers:at-parser') using module("dev.bootoptim.atfork:at-parser:${overrideVersion}") because 'Agent 142 version-pinned single-module AccessTransformers parser replacement'
+        }
+    }
+}
