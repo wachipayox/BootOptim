@@ -30,9 +30,9 @@ python3 "$ROOT_DIR/scripts/agent146/apply_at_candidate.py" "$WORK/source"
   cd "$WORK/source"
   JAVA_HOME="$AT_JAVA_HOME" ./gradlew jar generatePomFileForMavenJavaPublication --no-daemon
 )
-mapfile -t jars < <(find "$WORK/source/build/libs" -maxdepth 1 -type f -name 'accesstransformers-*.jar' ! -name '*sources*' ! -name '*testsjar*' | sort)
-test "${#jars[@]}" -eq 1
-cp "${jars[0]}" "$OUT/candidate.jar"
+jar="$WORK/source/build/libs/AccessTransformers-10.0.1.jar"
+test -f "$jar"
+cp "$jar" "$OUT/candidate.jar"
 sha=$(sha256sum "$OUT/candidate.jar" | awk '{print $1}')
 jar --describe-module --file "$OUT/candidate.jar" > "$OUT/module.txt"
 grep -q '^net.neoforged.accesstransformer' "$OUT/module.txt"
