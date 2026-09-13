@@ -44,7 +44,8 @@ public final class RegistrateProbeAgent {
                         .on(net.bytebuddy.matcher.ElementMatchers.isTypeInitializer())))
                 .type(named("com.simibubi.create.foundation.data.CreateRegistrate"))
                 .transform((b, t, cl, m, pd) -> b
-                        .visit(Advice.to(BlockEntityAdvice.class).on(named("blockEntity")))
+                        .visit(Advice.to(BlockEntity2Advice.class).on(named("blockEntity").and(takesArguments(2))))
+                        .visit(Advice.to(BlockEntity3Advice.class).on(named("blockEntity").and(takesArguments(3))))
                         .visit(Advice.to(RegisterOpAdvice.class).on(named("accept"))))
                 .type(named("com.simibubi.create.foundation.data.CreateBlockEntityBuilder"))
                 .transform((b, t, cl, m, pd) -> b
@@ -81,51 +82,36 @@ public final class RegistrateProbeAgent {
 
     public static final class ClinitAdvice {
         @Advice.OnMethodEnter public static void enter() { Recorder.clinitBegin(); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Thrown Throwable thrown) {
-            Recorder.clinitEnd(thrown);
-        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Thrown Throwable thrown) { Recorder.clinitEnd(thrown); }
     }
-
-    public static final class BlockEntityAdvice {
-        @Advice.OnMethodEnter public static void enter(@Advice.Argument(1) String name) {
-            Recorder.entryBegin(name); Recorder.opEnter("creation");
-        }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Thrown Throwable thrown) {
-            Recorder.opExit("creation", thrown);
-        }
+    public static final class BlockEntity2Advice {
+        @Advice.OnMethodEnter public static void enter(@Advice.Argument(0) String name) { Recorder.entryBegin(name); Recorder.opEnter("creation"); }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Thrown Throwable thrown) { Recorder.opExit("creation", thrown); }
     }
-
+    public static final class BlockEntity3Advice {
+        @Advice.OnMethodEnter public static void enter(@Advice.Argument(1) String name) { Recorder.entryBegin(name); Recorder.opEnter("creation"); }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Thrown Throwable thrown) { Recorder.opExit("creation", thrown); }
+    }
     public static final class CreateBuilderAdvice {
         @Advice.OnMethodEnter public static void enter() { Recorder.opEnter("creation"); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Thrown Throwable thrown) {
-            Recorder.observeRegistrateClass(owner); Recorder.opExit("creation", thrown);
-        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Thrown Throwable thrown) { Recorder.opExit("creation", thrown); }
     }
-
     public static final class VisualAdvice {
         @Advice.OnMethodEnter public static void enter() { Recorder.opEnter("visual"); }
         @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Thrown Throwable thrown) { Recorder.opExit("visual", thrown); }
     }
-
     public static final class ValidAdvice {
         @Advice.OnMethodEnter public static void enter() { Recorder.opEnter("valid_blocks"); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Thrown Throwable thrown) {
-            Recorder.observeRegistrateClass(owner); Recorder.opExit("valid_blocks", thrown);
-        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Thrown Throwable thrown) { Recorder.observeRegistrateClass(owner); Recorder.opExit("valid_blocks", thrown); }
     }
-
     public static final class RendererAdvice {
         @Advice.OnMethodEnter public static void enter() { Recorder.opEnter("renderer"); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Thrown Throwable thrown) {
-            Recorder.observeRegistrateClass(owner); Recorder.opExit("renderer", thrown);
-        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Thrown Throwable thrown) { Recorder.observeRegistrateClass(owner); Recorder.opExit("renderer", thrown); }
     }
-
     public static final class RegisterOpAdvice {
         @Advice.OnMethodEnter public static void enter() { Recorder.opEnter("register_accept"); }
         @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Thrown Throwable thrown) { Recorder.opExit("register_accept", thrown); }
     }
-
     public static final class BlockEntityRegisterAdvice {
         @Advice.OnMethodEnter public static void enter() { Recorder.opEnter("register_accept"); }
         @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Origin Class<?> owner, @Advice.Thrown Throwable thrown) {
@@ -134,11 +120,8 @@ public final class RegistrateProbeAgent {
             Recorder.entryEnd(end, thrown);
         }
     }
-
     public static final class ListenerAdvice {
         @Advice.OnMethodEnter public static long enter() { return Recorder.listenerEnter(); }
-        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Enter long start, @Advice.Thrown Throwable thrown) {
-            Recorder.listenerExit(start, thrown);
-        }
+        @Advice.OnMethodExit(onThrowable = Throwable.class) public static void exit(@Advice.Enter long start, @Advice.Thrown Throwable thrown) { Recorder.listenerExit(start, thrown); }
     }
 }
