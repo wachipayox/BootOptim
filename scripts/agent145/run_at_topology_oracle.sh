@@ -15,6 +15,7 @@ git -C "$WORK_DIR" checkout -q FETCH_HEAD
 test "$(git -C "$WORK_DIR" rev-parse HEAD)" = "$UPSTREAM_COMMIT"
 test "$(git -C "$WORK_DIR" rev-parse HEAD:src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerList.java)" = "$EXPECTED_LIST_BLOB"
 
+mkdir -p "$WORK_DIR/src/test/java/net/neoforged/accesstransformer/parser"
 python3 "$ROOT_DIR/scripts/agent145/apply_at_oracle.py" "$WORK_DIR"
 
 (
