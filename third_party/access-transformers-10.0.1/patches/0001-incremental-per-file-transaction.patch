@@ -1,0 +1,276 @@
+diff --git a/parser/build.gradle b/parser/build.gradle
+index 9158915..1ef5a1a 100644
+--- a/parser/build.gradle
++++ b/parser/build.gradle
+@@ -4,3 +4,10 @@ java {
+ dependencies {
+     api(libs.slf4j)
+ }
++
++// Keep the upstream MIT notice inside any redistributed parser fork binary.
++tasks.named('jar', Jar).configure {
++    from(rootProject.file('license.txt')) {
++        into 'META-INF'
++        rename { 'LICENSE-neoforged-AccessTransformers.txt' }
++    }
++}
+diff --git a/parser/src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerFiles.java b/parser/src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerFiles.java
+index d2ca862..7a67774 100644
+--- a/parser/src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerFiles.java
++++ b/parser/src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerFiles.java
+@@ -10,8 +10,10 @@ import java.nio.file.Path;
+ import java.nio.file.Paths;
+ import java.util.Collections;
+ import java.util.HashMap;
++import java.util.HashSet;
++import java.util.LinkedHashMap;
+ import java.util.Map;
+ import java.util.Set;
+-import java.util.function.BiConsumer;
+ import java.util.stream.Collectors;
+ 
+ public class AccessTransformerFiles {
+@@ -20,6 +22,8 @@ public class AccessTransformerFiles {
+     private final Map<Target, Transformation> accessTransformers = new HashMap<>();
+     private final Map<Target, Transformation> accessTransformersExposed = Collections.unmodifiableMap(accessTransformers);
+     private Set<String> targetedClassCache = Collections.emptySet();
++    private boolean targetedClassCacheExposed;
++    private boolean targetedClassCacheMutable;
+ 
+     public void loadFromResource(final String resourceName) throws URISyntaxException, IOException {
+         final Path path = Paths.get(getClass().getClassLoader().getResource(resourceName).toURI());
+@@ -33,27 +37,67 @@ public class AccessTransformerFiles {
+     }
+ 
+     public void loadAT(Reader reader, String originName) throws IOException {
+-        final HashMap<Target, Transformation> localATCopy = new HashMap<>(accessTransformers);
+-        AtParser.parse(reader, originName, mergeAccessTransformers(localATCopy));
+-        final Map<Target, Transformation> invalidTransformers = invalidTransformers(localATCopy);
+-        if (!invalidTransformers.isEmpty()) {
+-            invalidTransformers.forEach((k, v) -> LOGGER.error(AXFORM_MARKER,"Invalid access transform final state for target {}. Referred in resources {}.",k, v.origins()));
++        // A committed state is always valid: a file is published only after its
++        // merged states pass validation. Stage only targets touched by this file
++        // so successful loads do not copy, rescan, clear and republish the full
++        // accumulated map on every file.
++        //
++        // LinkedHashMap preserves first encounter order. If the staged file is
++        // invalid, that lets the slow failure path reconstruct the exact stock
++        // HashMap insertion/replacement topology before emitting diagnostics.
++        final Map<Target, Transformation> stagedAccessTransformers = new LinkedHashMap<>();
++        AtParser.parse(reader, originName, (target, transformation) -> {
++            Transformation current = stagedAccessTransformers.get(target);
++            if (current == null) {
++                current = accessTransformers.get(target);
++            }
++            stagedAccessTransformers.put(
++                    target,
++                    current == null ? transformation : current.mergeStates(transformation)
++            );
++        });
++
++        if (stagedAccessTransformers.values().stream().anyMatch(transformation -> !transformation.isValid())) {
++            // Failure is not the hot path. Reconstruct the stock transaction only
++            // here so the invalid-target diagnostics retain stock HashMap order,
++            // while the globally committed map and target cache remain untouched.
++            final HashMap<Target, Transformation> failedATCopy = new HashMap<>(accessTransformers);
++            stagedAccessTransformers.forEach(failedATCopy::put);
++            final Map<Target, Transformation> invalidTransformers = invalidTransformers(failedATCopy);
++            invalidTransformers.forEach((k, v) -> LOGGER.error(AXFORM_MARKER,"Invalid access transform final state for target {}. Referred in resources {}.",k, v.origins()));
+             throw new IllegalArgumentException("Invalid AT final conflicts");
+         }
+-        this.accessTransformers.clear();
+-        this.accessTransformers.putAll(localATCopy);
+-        this.targetedClassCache = this.accessTransformers.keySet().stream().map(Target::className).collect(Collectors.toSet());
++
++        this.accessTransformers.putAll(stagedAccessTransformers);
++
++        if (this.targetedClassCacheExposed) {
++            // getTargets() intentionally exposes a mutable Set. Stock replaces it
++            // after every successful file, thereby detaching retained references
++            // and discarding caller mutations. Preserve that observable behavior
++            // only when a reference could actually have escaped.
++            this.targetedClassCache = this.accessTransformers.keySet().stream()
++                    .map(Target::className)
++                    .collect(Collectors.toSet());
++            this.targetedClassCacheMutable = true;
++        } else {
++            if (!this.targetedClassCacheMutable) {
++                // The initial Collections.emptySet() is immutable. Stock turns it
++                // into a mutable HashSet even after a successful empty AT file.
++                this.targetedClassCache = new HashSet<>(this.targetedClassCache);
++                this.targetedClassCacheMutable = true;
++            }
++            stagedAccessTransformers.keySet().stream()
++                    .map(Target::className)
++                    .forEach(this.targetedClassCache::add);
++        }
++        this.targetedClassCacheExposed = false;
+         LOGGER.debug(AXFORM_MARKER,"Loaded access transformer {}", originName);
+     }
+ 
+-    private BiConsumer<Target, Transformation> mergeAccessTransformers(final Map<Target, Transformation> accessTransformers) {
+-        return (k, v) -> {
+-            accessTransformers.merge(k, v, Transformation::mergeStates);
+-        };
+-    }
+-
+     private Map<Target, Transformation> invalidTransformers(final HashMap<Target, Transformation> accessTransformers) {
+         HashMap<Target, Transformation> invalid = new HashMap<>();
+         accessTransformers.forEach((target, transformation) -> {
+@@ -74,6 +118,7 @@ public class AccessTransformerFiles {
+     }
+ 
+     public Set<String> getTargets() {
++        this.targetedClassCacheExposed = true;
+         return targetedClassCache;
+     }
+ }
+diff --git a/src/test/java/net/neoforged/accesstransformer/IncrementalAccessTransformerFilesTest.java b/src/test/java/net/neoforged/accesstransformer/IncrementalAccessTransformerFilesTest.java
+new file mode 100644
+index 0000000..c20a181
+--- /dev/null
++++ b/src/test/java/net/neoforged/accesstransformer/IncrementalAccessTransformerFilesTest.java
+@@ -0,0 +1,153 @@
++package net.neoforged.accesstransformer;
++
++import net.neoforged.accesstransformer.parser.AccessTransformerFiles;
++import net.neoforged.accesstransformer.parser.AtParser;
++import net.neoforged.accesstransformer.parser.Target;
++import net.neoforged.accesstransformer.parser.Transformation;
++import org.junit.jupiter.api.Test;
++
++import java.io.IOException;
++import java.io.Reader;
++import java.io.StringReader;
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.Set;
++import java.util.stream.Collectors;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertFalse;
++import static org.junit.jupiter.api.Assertions.assertThrows;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++class IncrementalAccessTransformerFilesTest {
++    @Test
++    void sequentialFilesPreserveMergedStateOriginsAndTargets() throws Exception {
++        var candidate = new AccessTransformerFiles();
++        var reference = new StockReference();
++
++        loadBoth(candidate, reference, """
++                public-f example.Alpha
++                protected example.Alpha field
++                public example.Outer$Inner
++                """, "first.cfg");
++        loadBoth(candidate, reference, """
++                public example.Alpha field
++                protected example.Bravo method()V
++                public example.Alpha other
++                """, "second.cfg");
++
++        assertEquivalent(reference, candidate);
++    }
++
++    @Test
++    void finalConflictRollsBackTheWholeFile() throws Exception {
++        var candidate = new AccessTransformerFiles();
++        var reference = new StockReference();
++        loadBoth(candidate, reference, "public-f example.Alpha\n", "first.cfg");
++
++        var candidateBefore = snapshot(candidate.getAccessTransformers());
++        var candidateTargetsBefore = Set.copyOf(candidate.getTargets());
++        var referenceBefore = snapshot(reference.accessTransformers);
++        var referenceTargetsBefore = Set.copyOf(reference.targets);
++
++        var candidateFailure = assertThrows(IllegalArgumentException.class,
++                () -> candidate.loadAT(new StringReader("public+f example.Alpha\npublic example.NewTarget\n"), "conflict.cfg"));
++        var referenceFailure = assertThrows(IllegalArgumentException.class,
++                () -> reference.loadAT(new StringReader("public+f example.Alpha\npublic example.NewTarget\n"), "conflict.cfg"));
++
++        assertEquals(referenceFailure.getMessage(), candidateFailure.getMessage());
++        assertEquals(referenceBefore, snapshot(reference.accessTransformers));
++        assertEquals(candidateBefore, snapshot(candidate.getAccessTransformers()));
++        assertEquals(referenceTargetsBefore, reference.targets);
++        assertEquals(candidateTargetsBefore, candidate.getTargets());
++        assertFalse(candidate.getTargets().contains("example.NewTarget"));
++    }
++
++    @Test
++    void malformedFileKeepsPreviousTransactionAndExactParserFailure() throws Exception {
++        var candidate = new AccessTransformerFiles();
++        var reference = new StockReference();
++        loadBoth(candidate, reference, "public example.Alpha\n", "first.cfg");
++
++        var candidateBefore = snapshot(candidate.getAccessTransformers());
++        var referenceBefore = snapshot(reference.accessTransformers);
++        var malformed = "public example.Bravo\nnot-a-modifier example.Bad\n";
++
++        var candidateFailure = assertThrows(RuntimeException.class,
++                () -> candidate.loadAT(new StringReader(malformed), "malformed.cfg"));
++        var referenceFailure = assertThrows(RuntimeException.class,
++                () -> reference.loadAT(new StringReader(malformed), "malformed.cfg"));
++
++        assertEquals(referenceFailure.getClass(), candidateFailure.getClass());
++        assertEquals(referenceFailure.getMessage(), candidateFailure.getMessage());
++        assertEquals(referenceBefore, snapshot(reference.accessTransformers));
++        assertEquals(candidateBefore, snapshot(candidate.getAccessTransformers()));
++    }
++
++    @Test
++    void exposedMutableTargetSetIsDetachedAndCallerMutationIsDiscardedOnCommit() throws Exception {
++        var candidate = new AccessTransformerFiles();
++        var reference = new StockReference();
++        loadBoth(candidate, reference, "public example.Alpha\n", "first.cfg");
++
++        var escapedCandidate = candidate.getTargets();
++        var escapedReference = reference.targets;
++        escapedCandidate.add("external.Mutation");
++        escapedReference.add("external.Mutation");
++        assertTrue(candidate.containsClassTarget("external.Mutation"));
++
++        loadBoth(candidate, reference, "public example.Bravo\n", "second.cfg");
++
++        assertTrue(escapedCandidate.contains("external.Mutation"));
++        assertTrue(escapedReference.contains("external.Mutation"));
++        assertFalse(candidate.getTargets().contains("external.Mutation"));
++        assertFalse(reference.targets.contains("external.Mutation"));
++        assertEquivalent(reference, candidate);
++    }
++
++    private static void loadBoth(AccessTransformerFiles candidate, StockReference reference, String text, String origin) throws Exception {
++        candidate.loadAT(new StringReader(text), origin);
++        reference.loadAT(new StringReader(text), origin);
++        assertEquivalent(reference, candidate);
++    }
++
++    private static void assertEquivalent(StockReference reference, AccessTransformerFiles candidate) {
++        assertEquals(snapshot(reference.accessTransformers), snapshot(candidate.getAccessTransformers()));
++        assertEquals(reference.targets, candidate.getTargets());
++    }
++
++    private static Map<Target, String> snapshot(Map<Target, Transformation> source) {
++        var snapshot = new HashMap<Target, String>();
++        source.forEach((target, transformation) -> snapshot.put(target,
++                transformation.modifier() + "/" + transformation.finalState() + "/" + transformation.origins()));
++        return snapshot;
++    }
++
++    private static final class StockReference {
++        private final Map<Target, Transformation> accessTransformers = new HashMap<>();
++        private Set<String> targets = Collections.emptySet();
++
++        private void loadAT(Reader reader, String origin) throws IOException {
++            var localATCopy = new HashMap<>(accessTransformers);
++            AtParser.parse(reader, origin, (target, transformation) ->
++                    localATCopy.merge(target, transformation, Transformation::mergeStates));
++            if (localATCopy.values().stream().anyMatch(transformation -> !transformation.isValid())) {
++                throw new IllegalArgumentException("Invalid AT final conflicts");
++            }
++            accessTransformers.clear();
++            accessTransformers.putAll(localATCopy);
++            targets = accessTransformers.keySet().stream().map(Target::className).collect(Collectors.toSet());
++        }
++    }
++}
