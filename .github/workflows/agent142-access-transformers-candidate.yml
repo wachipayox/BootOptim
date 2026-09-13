@@ -83,6 +83,12 @@ jobs:
           test "$(git -C .agent142-upstream rev-parse HEAD)" = "$AT_COMMIT"
           cmp third_party/access-transformers-10.0.1/LICENSE.txt .agent142-upstream/license.txt
           git -C .agent142-upstream apply --recount "$GITHUB_WORKSPACE/third_party/access-transformers-10.0.1/patches/0001-incremental-per-file-transaction.patch"
+          # The historical source uses the dynamic test-only selector powermock-core:2.0+.
+          # Pin the latest 2.0.x release in the harness only so source tests are
+          # reproducible and do not require dynamic Maven metadata. Runtime code and
+          # the candidate patch are unchanged by this build-only substitution.
+          sed -i 's/org.powermock:powermock-core:2.0+/org.powermock:powermock-core:2.0.9/' .agent142-upstream/settings.gradle
+          grep -q "powermock-core:2.0.9" .agent142-upstream/settings.gradle
           (cd .agent142-upstream && ./gradlew test jar --no-daemon --console=plain)
           candidate=$(find .agent142-upstream/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' ! -name '*testsjar*' | head -n1)
           test -n "$candidate"
