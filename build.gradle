@@ -27,6 +27,51 @@ sourceSets.main.resources {
 }
 
 repositories {
+    // Agent 94 diagnostic-only launcher replacement. The workflow stages a Maven repository
+    // containing the exact upstream GAV cpw.mods:modlauncher:11.0.5 with the forked JAR and
+    // upstream-generated POM. exclusiveContent is important: when enabled, Gradle is forbidden
+    // from resolving that module from the normal NeoForge repositories, so stock and fork cannot
+    // coexist through repository fallback. No environment variable means normal production/dev resolution.
+    var forkRepo = providers.environmentVariable('BOOTOPTIM_ML_FORK_REPO')
+    if (forkRepo.isPresent()) {
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'bootOptimAgent94ModLauncherFork'
+                    url = uri(forkRepo.get())
+                    metadataSources {
+                        mavenPom()
+                        artifact()
+                    }
+                }
+            }
+            filter {
+                includeModule('cpw.mods', 'modlauncher')
+            }
+        }
+    }
+
+    // Agent 94 diagnostic-only Mixin replacement. Same principle as the ModLauncher lane:
+    // the exact Fabric Mixin GAV is resolved exclusively from the staged probe repository,
+    // so the diagnostic artifact replaces rather than coexists with the stock module/service JAR.
+    var mixinForkRepo = providers.environmentVariable('BOOTOPTIM_MIXIN_FORK_REPO')
+    if (mixinForkRepo.isPresent()) {
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'bootOptimAgent94MixinFork'
+                    url = uri(mixinForkRepo.get())
+                    metadataSources {
+                        mavenPom()
+                        artifact()
+                    }
+                }
+            }
+            filter {
+                includeModule('net.fabricmc', 'sponge-mixin')
+            }
+        }
+    }
 }
 
 var packBenchmarkDirectory = project.file('run-pack-benchmark')
@@ -37,9 +82,6 @@ var packBenchmarkBaseJvmArgs = providers.environmentVariable('BOOTOPTIM_PACK_BAS
 var packBenchmarkExtraJvmArgs = providers.environmentVariable('BOOTOPTIM_PACK_EXTRA_JVM_ARGS')
 var connectorCleanMinecraft = project.file('build/createCleanArtifact/minecraft-renamed.jar')
 
-// IntelliJ launches the root project but MOD_CLASSES also points at the bootstrap subproject outputs.
-// Keep the IDE before-run task in the root project (as ModDevGradle expects) and bridge to the
-// bootstrap compile from there. This also makes Gradle run tasks safe on a clean checkout.
 var prepareBootstrapRunOutputs = tasks.register('prepareBootstrapRunOutputs') {
     dependsOn ':bootstrap:classes'
 }
@@ -60,7 +102,6 @@ var preparePackBenchmark = tasks.register('preparePackBenchmark', Sync) {
         include 'mods/**'
         include 'config/**'
         include 'defaultconfigs/**'
-        // These locations can materially affect pre-ModLauncher or initial resource loading.
         include 'automodpack/**'
         include 'resourcepacks/**'
         include 'shaderpacks/**'
@@ -102,8 +143,6 @@ neoForge {
         minecraftVersion = project.parchment_minecraft_version
     }
 
-    // Sinytra Connector needs an unpatched/deobfuscated Minecraft artifact when it runs under ModDevGradle.
-    // This mirrors the minimal setup from Sinytra Adapter's userdev plugin without making BootOptim depend on it.
     additionalMinecraftArtifacts.put('vanillaDeobfuscated', connectorCleanMinecraft)
 
     runs {
@@ -153,15 +192,9 @@ neoForge {
         }
 
         configureEach {
-            // The bootstrap source set is passed to FML through MOD_CLASSES instead of the run source set's
-            // runtime classpath. On a clean checkout its output directories do not exist until this task runs.
             taskBefore prepareBootstrapRunOutputs
-
-            // Every ModDev/IDE run is a debug environment: keep the lightweight startup report on there.
             systemProperty 'boot_optim.debug', 'true'
             systemProperty 'boot_optim.version', project.mod_version
-
-            // Startup benchmarks must resemble production logging; DEBUG/registry logging can materially skew boot time.
             logLevel = org.slf4j.event.Level.INFO
         }
     }
@@ -170,7 +203,6 @@ neoForge {
         "${mod_id}" {
             sourceSet(sourceSets.main)
         }
-        // Keep the early transformation service on a distinct path in dev, mirroring the packaged wrapper.
         'boot_optim_bootstrap' {
             sourceSet(project(':bootstrap').sourceSets.main)
         }
