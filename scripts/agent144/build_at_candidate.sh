@@ -23,7 +23,9 @@ git -C .agent144-upstream fetch --unshallow --tags --force origin 10.0.x
 git -C .agent144-upstream checkout --detach "$AT_COMMIT"
 test "$(git -C .agent144-upstream rev-parse HEAD)" = "$AT_COMMIT"
 cmp third_party/access-transformers-10.0.1/LICENSE.txt .agent144-upstream/license.txt
-git -C .agent144-upstream apply --recount "$GITHUB_WORKSPACE/third_party/access-transformers-10.0.1/patches/0001-lazy-target-cache-touched-validation.patch"
+for patch in "$GITHUB_WORKSPACE"/third_party/access-transformers-10.0.1/patches/*.patch; do
+  git -C .agent144-upstream apply --recount "$patch"
+done
 sed -i 's/org.powermock:powermock-core:2.0+/org.powermock:powermock-core:2.0.9/' .agent144-upstream/settings.gradle
 cat >> .agent144-upstream/build.gradle <<'EOF'
 // Historical ModLauncher bootstrap integration test fails before AccessTransformerList is exercised.

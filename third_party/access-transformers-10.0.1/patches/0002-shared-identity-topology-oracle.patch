@@ -1,0 +1,105 @@
+diff --git a/src/test/java/net/neoforged/accesstransformer/parser/ExactTopologyMaintenanceTest.java b/src/test/java/net/neoforged/accesstransformer/parser/ExactTopologyMaintenanceTest.java
+index aa3cc01..b144001 100644
+--- a/src/test/java/net/neoforged/accesstransformer/parser/ExactTopologyMaintenanceTest.java
++++ b/src/test/java/net/neoforged/accesstransformer/parser/ExactTopologyMaintenanceTest.java
+@@ -13,6 +13,7 @@ import org.objectweb.asm.Type;
+ 
+ import java.util.ArrayList;
+ import java.util.Collections;
++import java.util.Comparator;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
+@@ -29,19 +30,32 @@ class ExactTopologyMaintenanceTest {
+     @Test
+     void publicIterationSurfacesMatchLiteralStockAcrossAaBbCollisionCorpus() {
+         var candidate = new AccessTransformerList();
+-        var stock = new StockReference();
++        Map<Target<?>, AccessTransformer> expectedStockMap = new HashMap<>();
+         var names = collidingNames(5);
+ 
+         for (int i = 0; i < names.size(); i++) {
+             String className = "example." + names.get(i);
++            String origin = "collision-" + i + ".cfg";
+             String text = "public-f " + className + "\n"
+                     + "protected " + className + " Aa\n"
+                     + "public " + className + " BB\n";
+-            loadBoth(candidate, stock, text, "collision-" + i + ".cfg");
+-            assertPublicSurfaces(stock, candidate, Type.getObjectType(className.replace('.', '/')));
++
++            // Build the stock next-generation map from the *same Target object identities*
++            // used by the candidate. HashMap tree-bin tie breaking may use identityHashCode,
++            // so independently parsing a collision corpus is not a valid order oracle.
++            HashMap<Target<?>, AccessTransformer> localStockCopy = new HashMap<>(expectedStockMap);
++            candidate.loadAT(CharStreams.fromString(text, origin));
++            Map<Target<?>, AccessTransformer> actual = rawMap(candidate);
++            List<Map.Entry<Target<?>, AccessTransformer>> additions = actual.entrySet().stream()
++                    .filter(e -> e.getValue().getOrigins().stream().anyMatch(o -> o.startsWith(origin + ":")))
++                    .sorted(Comparator.comparingInt(e -> originLine(e.getValue(), origin)))
++                    .toList();
++            assertEquals(3, additions.size());
++            additions.forEach(e -> localStockCopy.put(e.getKey(), e.getValue()));
++            expectedStockMap.clear();
++            expectedStockMap.putAll(localStockCopy);
++
++            assertEquals(orderedEntries(expectedStockMap), orderedEntries(actual));
++            assertEquals(orderedGroups(groupsFromRaw(expectedStockMap)), orderedGroups(candidate.getAccessTransformers()));
++            Type type = Type.getObjectType(className.replace('.', '/'));
++            assertEquals(orderedTargetGroups(groupsForTarget(expectedStockMap, type)), orderedTargetGroups(candidate.getTransformersForTarget(type)));
++            assertOrderedTypes(expectedStockMap.keySet().stream().map(Target::getASMType).collect(Collectors.toSet()), candidate.getTargets());
+         }
+     }
+@@ -63,7 +77,7 @@ class ExactTopologyMaintenanceTest {
+                 else text.append("public ").append(className).append(' ').append(random.nextBoolean() ? "Aa()V" : "BB()V").append('\n');
+             }
+             loadBoth(candidate, stock, text.toString(), "property-" + file + ".cfg");
+-            assertPublicSurfaces(stock, candidate, Type.getObjectType(classes.get(file % classes.size()).replace('.', '/')));
++            assertSemanticSurfaces(stock, candidate, Type.getObjectType(classes.get(file % classes.size()).replace('.', '/')));
+         }
+     }
+@@ -116,10 +130,53 @@ class ExactTopologyMaintenanceTest {
+         stock.load(text, origin);
+     }
+ 
+-    private static void assertPublicSurfaces(StockReference stock, AccessTransformerList candidate, Type type) {
+-        assertEquals(stock.accessTransformerGroups(), orderedGroups(candidate.getAccessTransformers()));
+-        assertEquals(stock.transformersFor(type), orderedTargetGroups(candidate.getTransformersForTarget(type)));
+-        assertOrderedTypes(stock.targets(), candidate.getTargets());
++    private static void assertSemanticSurfaces(StockReference stock, AccessTransformerList candidate, Type type) {
++        assertEquals(stock.accessTransformerGroups().stream().sorted().toList(), orderedGroups(candidate.getAccessTransformers()).stream().sorted().toList());
++        assertEquals(stock.transformersFor(type).stream().sorted().toList(), orderedTargetGroups(candidate.getTransformersForTarget(type)).stream().sorted().toList());
++        assertEquals(Set.copyOf(stock.targets()), Set.copyOf(candidate.getTargets()));
++    }
++
++    @SuppressWarnings("unchecked")
++    private static Map<Target<?>, AccessTransformer> rawMap(AccessTransformerList list) {
++        try {
++            var field = AccessTransformerList.class.getDeclaredField("accessTransformers");
++            field.setAccessible(true);
++            return (Map<Target<?>, AccessTransformer>) field.get(list);
++        } catch (ReflectiveOperationException e) {
++            throw new AssertionError(e);
++        }
++    }
++
++    private static int originLine(AccessTransformer at, String origin) {
++        String prefix = origin + ":";
++        return at.getOrigins().stream().filter(o -> o.startsWith(prefix)).mapToInt(o -> Integer.parseInt(o.substring(prefix.length()))).min().orElseThrow();
++    }
++
++    private static List<String> orderedEntries(Map<Target<?>, AccessTransformer> raw) {
++        return raw.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).toList();
++    }
++
++    private static Map<String, List<AccessTransformer>> groupsFromRaw(Map<Target<?>, AccessTransformer> raw) {
++        return raw.values().stream().collect(Collectors.groupingBy(
++                at -> at.getTarget().getClassName(), HashMap::new, Collectors.toList()));
++    }
++
++    private static Map<TargetType, Map<String, AccessTransformer>> groupsForTarget(Map<Target<?>, AccessTransformer> raw, Type type) {
++        return raw.entrySet().stream()
++                .filter(e -> type.equals(e.getKey().getASMType()))
++                .map(Map.Entry::getValue)
++                .collect(Collectors.groupingBy(o -> o.getTarget().getType(), HashMap::new,
++                        Collectors.toMap(at -> at.getTarget().targetName(), java.util.function.Function.identity())));
+     }
