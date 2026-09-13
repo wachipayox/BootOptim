@@ -69,7 +69,7 @@ public final class DependencyResolutionProfileAgent {
                 .transform((builder, type, classLoader, module, protectionDomain) -> builder
                         .visit(Advice.to(SorterTotalAdvice.class).on(named("sort").and(takesArguments(3))))
                         .visit(Advice.to(DependencyVersionsAdvice.class).on(named("verifyDependencyVersions").and(takesArguments(0))))
-                        .visit(Advice.to(GraphSortAdvice.class).on(named("sort").and(takesArguments(0)))))
+                        .visit(Advice.to(GraphSortAdvice.class).on(named("sort").and(takesArguments(1)))))
                 .type(named(TOPO_SORT))
                 .transform((builder, type, classLoader, module, protectionDomain) -> builder
                         .visit(Advice.to(TopoAdvice.class).on(named("topologicalSort"))))
