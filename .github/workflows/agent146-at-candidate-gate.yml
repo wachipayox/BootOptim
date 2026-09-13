@@ -112,7 +112,7 @@ jobs:
           GRADLE
           ./gradlew --init-script "$GITHUB_WORKSPACE/.agent146-at/init.gradle" \
             --init-script "$GITHUB_WORKSPACE/.agent146-at/verify-resolution.gradle" \
-            agent146VerifyAtResolution --no-daemon | tee .agent146-at/dependency-insight.txt
+            agent146VerifyAtResolution --no-daemon --no-configuration-cache | tee .agent146-at/dependency-insight.txt
           grep -q 'AGENT146_AT_RESOLUTION count=1' .agent146-at/dependency-insight.txt
           grep -q 'net.neoforged:accesstransformers:10.0.1-agent146' .agent146-at/dependency-insight.txt
 
