@@ -8,7 +8,10 @@ EXPECTED_LICENSE_BLOB="1be5e916bdd91e39196affbdf5d85bfe1f22a37d"
 WORK="${RUNNER_TEMP:-/tmp}/bootoptim-agent146-at-runtime"
 OUT="$ROOT_DIR/.agent146-at-runtime"
 VERSION="10.0.1-agent146"
-AT_JAVA_HOME="${BOOTOPTIM_JDK17:-${JAVA_HOME:-}}"
+AT_JAVA_HOME="${BOOTOPTIM_JDK17:-${JAVA_HOME_17_X64:-}}"
+
+test -n "$AT_JAVA_HOME" || { echo 'JDK 17 is required for the pinned AccessTransformers build.' >&2; exit 1; }
+test -x "$AT_JAVA_HOME/bin/java"
 
 rm -rf "$WORK" "$OUT"
 mkdir -p "$WORK" "$OUT"
