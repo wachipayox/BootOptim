@@ -29,7 +29,7 @@ class HashMapPublicationOrderTest {
         var candidate = new AccessTransformerList();
         var stock = new StockMap();
         var names = collidingClassNames(4);
-        int expectedHash = names.getFirst().hashCode();
+        int expectedHash = names.get(0).hashCode();
         assertTrue(names.size() >= 12);
         names.forEach(name -> assertEquals(expectedHash, name.hashCode(), name));
 
