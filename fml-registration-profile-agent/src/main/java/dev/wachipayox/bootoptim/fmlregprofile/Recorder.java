@@ -33,15 +33,10 @@ public final class Recorder {
         Runtime.getRuntime().addShutdownHook(new Thread(Recorder::flush, "bootoptim-fmlreg-profile-flush"));
     }
 
-    public static long[] beginFml(String kind, Class<?> owner, String detail) {
+    public static long[] beginFml(String kind, Class<?> owner, String ignoredDetail) {
         ensureFml(owner);
         if (!accepted) return null;
-        long now = System.nanoTime();
-        long cpu = currentThreadCpu();
-        long seq = next();
-        EVENTS.add(new Event(seq, kind + "_begin", ownerName(owner), moduleName(owner), moduleVersion(owner),
-                now - ORIGIN_NS, now - ORIGIN_NS, -1L, Thread.currentThread().getName(), Thread.currentThread().threadId(), detail));
-        return new long[] { now, cpu, Thread.currentThread().threadId(), seq };
+        return new long[] { System.nanoTime(), currentThreadCpu(), Thread.currentThread().threadId() };
     }
 
     private static void ensureFml(Class<?> owner) {
@@ -64,12 +59,11 @@ public final class Recorder {
     }
 
     public static void end(String kind, Class<?> owner, long[] state, Throwable thrown) {
-        if (!accepted || state == null || state.length < 4) return;
+        if (!accepted || state == null || state.length < 3) return;
         long end = System.nanoTime();
         long endCpu = currentThreadCpu();
         long cpuDelta = state[1] >= 0L && endCpu >= state[1] ? endCpu - state[1] : -1L;
-        String detail = thrown == null ? "begin_seq=" + state[3]
-                : "begin_seq=" + state[3] + ";throw=" + thrown.getClass().getName();
+        String detail = thrown == null ? null : "throw=" + thrown.getClass().getName();
         EVENTS.add(new Event(next(), kind, ownerName(owner), moduleName(owner), moduleVersion(owner),
                 state[0] - ORIGIN_NS, end - ORIGIN_NS, cpuDelta,
                 Thread.currentThread().getName(), state[2], detail));
