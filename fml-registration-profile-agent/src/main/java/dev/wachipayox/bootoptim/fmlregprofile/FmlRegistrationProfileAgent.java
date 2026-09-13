@@ -8,7 +8,6 @@ import java.io.InputStream;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
@@ -57,7 +56,7 @@ public final class FmlRegistrationProfileAgent {
                         .visit(Advice.to(QueueMixinAdvice.class).on(named("addMixinConfig").and(takesArguments(String.class, String.class)))))
                 .type(named(ENUM_EXTENDER))
                 .transform((builder, type, classLoader, module, protectionDomain) -> builder
-                        .visit(Advice.to(LoadEnumPrototypesAdvice.class).on(named("loadEnumPrototypes").and(takesArguments(Map.class)))))
+                        .visit(Advice.to(LoadEnumPrototypesAdvice.class).on(named("loadEnumPrototypes"))))
                 .type(named(ENUM_PROTOTYPE))
                 .transform((builder, type, classLoader, module, protectionDomain) -> builder
                         .visit(Advice.to(LoadEnumFileAdvice.class).on(named("load").and(takesArguments(2)))))
