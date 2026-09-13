@@ -1,0 +1,185 @@
+name: Agent142 AccessTransformers 10.0.1 candidate
+
+on:
+  push:
+    branches: [agent142/access-transformers-incremental-10.0.1]
+    paths:
+      - '.github/workflows/agent142-access-transformers-candidate.yml'
+      - 'third_party/access-transformers-10.0.1/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AT_COMMIT: 139da711070c67f7e62cc20ea43507aa216cc8c6
+  AT_FORK_VERSION: 10.0.1-agent142
+  EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+  EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+  EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+  MCEF_JAVA_CEF_COMMIT: a78e832f9f13c2c688caea3d04d8b84fcd238d94
+  MCEF_PLATFORM: linux_amd64
+  DISPLAY: ':99'
+  LIBGL_ALWAYS_SOFTWARE: 'true'
+  GALLIUM_DRIVER: llvmpipe
+  MESA_GL_VERSION_OVERRIDE: '4.6'
+  MESA_GLSL_VERSION_OVERRIDE: '460'
+  BOOTOPTIM_MCEF_MIRROR_PORT: '18765'
+  BOOTOPTIM_PACK_JAVA_VERSION: '25'
+  BOOTOPTIM_PACK_BASE_JVM_ARGS: |-
+    -Xmx6G
+    -XX:+UnlockExperimentalVMOptions
+    -XX:+UseG1GC
+    -XX:G1NewSizePercent=20
+    -XX:G1ReservePercent=20
+    -XX:MaxGCPauseMillis=50
+    -XX:G1HeapRegionSize=32M
+    -XX:ActiveProcessorCount=4
+    -Dmcef.java.cef.commit=a78e832f9f13c2c688caea3d04d8b84fcd238d94
+
+jobs:
+  source-build-and-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+      - name: Record JDK 17
+        run: echo "BOOTOPTIM_JDK17=$JAVA_HOME" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Verify exact published 10.0.1 source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .agent142-published
+          base='https://maven.neoforged.net/releases/net/neoforged/accesstransformers/10.0.1'
+          curl --fail --location --retry 5 --retry-all-errors "$base/accesstransformers-10.0.1.jar" -o .agent142-published/accesstransformers.jar
+          curl --fail --location --retry 5 --retry-all-errors "$base/accesstransformers-10.0.1.jar.sha256" -o .agent142-published/accesstransformers.jar.sha256
+          test "$(sha256sum .agent142-published/accesstransformers.jar | awk '{print $1}')" = "$(awk 'NR==1 {print $1}' .agent142-published/accesstransformers.jar.sha256)"
+          unzip -p .agent142-published/accesstransformers.jar META-INF/MANIFEST.MF | tr -d '\r' | tee published-at-manifest.txt
+          grep -q '^Implementation-Version: 10.0.1+139da711$' published-at-manifest.txt
+          grep -q '^Git-Commit: 139da711$' published-at-manifest.txt
+          unzip -l .agent142-published/accesstransformers.jar | grep -q 'net/neoforged/accesstransformer/parser/AccessTransformerList.class'
+
+      - name: Build exact-source fork and run upstream plus differential tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .agent142-upstream
+          git -C .agent142-upstream remote add origin https://github.com/neoforged/AccessTransformers.git
+          git -C .agent142-upstream fetch --depth=1 origin "$AT_COMMIT"
+          git -C .agent142-upstream checkout --detach FETCH_HEAD
+          test "$(git -C .agent142-upstream rev-parse HEAD)" = "$AT_COMMIT"
+          cmp third_party/access-transformers-10.0.1/LICENSE.txt .agent142-upstream/license.txt
+          git -C .agent142-upstream apply "$GITHUB_WORKSPACE/third_party/access-transformers-10.0.1/patches/0001-incremental-per-file-transaction.patch"
+          (cd .agent142-upstream && ./gradlew test jar --no-daemon --console=plain)
+          candidate=$(find .agent142-upstream/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' ! -name '*testsjar*' | head -n1)
+          test -n "$candidate"
+          unzip -l "$candidate" | grep -q 'META-INF/LICENSE-neoforged-AccessTransformers.txt'
+          unzip -l "$candidate" | grep -q 'net/neoforged/accesstransformer/parser/AccessTransformerList.class'
+          dest="$GITHUB_WORKSPACE/.agent142-maven/dev/bootoptim/atfork/accesstransformers/$AT_FORK_VERSION"
+          mkdir -p "$dest"
+          cp "$candidate" "$dest/accesstransformers-$AT_FORK_VERSION.jar"
+          cat > "$dest/accesstransformers-$AT_FORK_VERSION.pom" <<EOF
+          <project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+          <groupId>dev.bootoptim.atfork</groupId><artifactId>accesstransformers</artifactId><version>$AT_FORK_VERSION</version>
+          <dependencies>
+          <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-api</artifactId><version>2.0.9</version></dependency>
+          <dependency><groupId>org.ow2.asm</groupId><artifactId>asm</artifactId><version>9.4</version></dependency>
+          <dependency><groupId>org.ow2.asm</groupId><artifactId>asm-tree</artifactId><version>9.4</version></dependency>
+          <dependency><groupId>org.ow2.asm</groupId><artifactId>asm-commons</artifactId><version>9.4</version></dependency>
+          <dependency><groupId>org.antlr</groupId><artifactId>antlr4-runtime</artifactId><version>4.13.1</version></dependency>
+          </dependencies></project>
+          EOF
+          sha256sum "$dest/accesstransformers-$AT_FORK_VERSION.jar" | tee candidate-at.sha256
+          echo "BOOTOPTIM_AT_OVERRIDE_REPO=$GITHUB_WORKSPACE/.agent142-maven" >> "$GITHUB_ENV"
+          echo "BOOTOPTIM_AT_OVERRIDE_VERSION=$AT_FORK_VERSION" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+      - name: Activate exact-module replacement and build BootOptim
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.gradle/init.d"
+          cp third_party/access-transformers-10.0.1/override.init.gradle "$HOME/.gradle/init.d/agent142-at.gradle"
+          ./gradlew build --no-daemon --console=plain
+
+      - name: Install hosted graphics dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb mesa-utils libgl1-mesa-dri libglx-mesa0 libgtk-3-0 libnss3 libnspr4 libxss1 libasound2 libatk1.0-0 libatk-bridge2.0-0 libdrm2 libgbm1 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libxfixes3 libx11-xcb1 libxshmfence1 libcups2 libatspi2.0-0 libpango-1.0-0 libpangocairo-1.0-0 fonts-liberation unzip
+          Xvfb "$DISPLAY" -screen 0 1280x720x24 -nolisten tcp > xvfb.log 2>&1 &
+          for _ in $(seq 1 20); do if glxinfo -B > glxinfo.txt 2>&1; then break; fi; sleep .25; done
+          grep -qi llvmpipe glxinfo.txt
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '25.0.4'
+          distribution: oracle
+
+      - name: Materialize exact pack and pinned JCEF
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .exact-pack-cache .mcef-jcef
+          gh release download "$EXACT_PACK_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$EXACT_PACK_ASSET" --dir .exact-pack-cache --clobber
+          test "$(sha256sum .exact-pack-cache/$EXACT_PACK_ASSET | awk '{print $1}')" = "$EXACT_PACK_SHA256"
+          base="https://mcef-download.cinemamod.com/java-cef-builds/$MCEF_JAVA_CEF_COMMIT"
+          curl --fail --location --retry 5 --retry-all-errors "$base/${MCEF_PLATFORM}.tar.gz.sha256" -o ".mcef-jcef/${MCEF_PLATFORM}.tar.gz.sha256"
+          curl --fail --location --retry 5 --retry-all-errors "$base/${MCEF_PLATFORM}.tar.gz" -o ".mcef-jcef/${MCEF_PLATFORM}.tar.gz"
+          expected=$(awk 'NR==1 {print $1}' ".mcef-jcef/${MCEF_PLATFORM}.tar.gz.sha256")
+          test "$(sha256sum ".mcef-jcef/${MCEF_PLATFORM}.tar.gz" | awk '{print $1}')" = "$expected"
+          tar -xzf ".mcef-jcef/${MCEF_PLATFORM}.tar.gz" -C .mcef-jcef
+          rm ".mcef-jcef/${MCEF_PLATFORM}.tar.gz"
+          rm -rf build/mcef-libraries .mcef-mirror .exact-pack-run run-pack-benchmark
+          mkdir -p build/mcef-libraries
+          cp -a .mcef-jcef/. build/mcef-libraries/
+          chmod +x "build/mcef-libraries/$MCEF_PLATFORM/jcef_helper"
+          mirror_root="$PWD/.mcef-mirror"
+          mirror_dir="$mirror_root/java-cef-builds/$MCEF_JAVA_CEF_COMMIT"
+          mkdir -p "$mirror_dir"
+          cp ".mcef-jcef/${MCEF_PLATFORM}.tar.gz.sha256" "$mirror_dir/${MCEF_PLATFORM}.tar.gz.sha256"
+          echo "BOOTOPTIM_MCEF_MIRROR_ROOT=$mirror_root" >> "$GITHUB_ENV"
+          python scripts/exact-pack/prepare_fixture.py --zip ".exact-pack-cache/$EXACT_PACK_ASSET" --sha256 "$EXACT_PACK_SHA256" --extract .exact-pack-run --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
+
+      - name: Hosted exact-pack smoke only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/exact-pack/run_startup.py --variant agent142-at-incremental-smoke --iteration 1 --timeout 1200 --rerun-tasks
+          cat result.json
+          cat resource-selection-check.json
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent142-access-transformers-candidate
+          path: |
+            published-at-manifest.txt
+            candidate-at.sha256
+            result.json
+            resource-selection-check.json
+            exact-pack-console.log
+            run-pack-benchmark/logs/latest.log
+            run-pack-benchmark/logs/bootoptim-startup.log
+            glxinfo.txt
+          if-no-files-found: ignore
+          retention-days: 14
