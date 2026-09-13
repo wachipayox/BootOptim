@@ -14,8 +14,8 @@ rm -rf "$WORK_BASE" "$OUT"
 mkdir -p "$WORK_BASE" "$OUT"
 git init -q "$SRC"
 git -C "$SRC" remote add origin https://github.com/neoforged/AccessTransformers.git
-git -C "$SRC" fetch -q origin "$UPSTREAM_COMMIT"
-git -C "$SRC" checkout -q FETCH_HEAD
+git -C "$SRC" fetch -q --tags origin
+git -C "$SRC" checkout -q "$UPSTREAM_COMMIT"
 
 test "$(git -C "$SRC" rev-parse HEAD)" = "$UPSTREAM_COMMIT"
 test "$(git -C "$SRC" rev-parse HEAD:src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerList.java)" = "$EXPECTED_LIST_BLOB"
