@@ -188,7 +188,7 @@ index 0000000..88d50f0
 +        loadBoth(candidate, reference, "public example.Alpha\n", "first.cfg");
 +        var candidateBefore = snapshot(candidate);
 +        var referenceBefore = reference.snapshot();
-+        var malformed = "public example.Bravo\nnot-a-modifier example.Bad\n";
++        var malformed = "public example.Bravo\npublic example.Bad method(\n";
 +
 +        var candidateFailure = assertThrows(RuntimeException.class,
 +                () -> load(candidate, malformed, "malformed.cfg"));
