@@ -41,10 +41,6 @@ jobs:
         with:
           cache-read-only: true
 
-      - name: Build exact-source candidate and run direct Aa/BB/property gate
-        shell: bash
-        run: bash scripts/agent146/run_at_candidate_gate.sh
-
       - name: Fetch pinned oracle commits
         shell: bash
         run: |
@@ -54,27 +50,33 @@ jobs:
             agent143/at-incremental-contract-20260913
           git cat-file -e 08060b4594a36d906d90f7762cdbb517a7a2f41e^{commit}
           git cat-file -e 6517d469f7722b0ced64400bbc0b9c3404ec0a2f^{commit}
-
-      - name: Re-run PR 278 shared-identity topology oracle
-        shell: bash
-        run: |
-          set -euo pipefail
           git worktree add --detach "$RUNNER_TEMP/agent145-oracle" 08060b4594a36d906d90f7762cdbb517a7a2f41e
-          bash "$RUNNER_TEMP/agent145-oracle/scripts/agent145/run_at_topology_oracle.sh"
+          git worktree add --detach "$RUNNER_TEMP/agent143-contract" 6517d469f7722b0ced64400bbc0b9c3404ec0a2f
 
-      - name: Run PR 277 full contract against stock path in candidate module
+      - name: Gate 1a - PR 278 shared-identity topology oracle
+        shell: bash
+        run: bash "$RUNNER_TEMP/agent145-oracle/scripts/agent145/run_at_topology_oracle.sh"
+
+      - name: Gate 1b - shared-identity deterministic property corpus
+        shell: bash
+        run: bash scripts/agent146/run_at_shared_property_extension.sh
+
+      - name: Materialize exact candidate module for PR 277
+        shell: bash
+        run: bash scripts/agent146/materialize_at_candidate.sh
+
+      - name: Gate 1c - PR 277 contract against full-stock validation path
         shell: bash
         env:
           JAVA_TOOL_OPTIONS: -Dboot_optim.atTouchedValidation=false
         run: |
           set -euo pipefail
-          git worktree add --detach "$RUNNER_TEMP/agent143-contract" 6517d469f7722b0ced64400bbc0b9c3404ec0a2f
           "$RUNNER_TEMP/agent143-contract/gradlew" \
             -p "$RUNNER_TEMP/agent143-contract/at-incremental-contract" \
             --init-script "$GITHUB_WORKSPACE/.agent146-at/init.gradle" \
             test --no-daemon
 
-      - name: Run PR 277 full contract against touched-validation path
+      - name: Gate 1d - PR 277 contract against touched-validation path
         shell: bash
         env:
           JAVA_TOOL_OPTIONS: -Dboot_optim.atTouchedValidation=true
@@ -85,13 +87,33 @@ jobs:
             --init-script "$GITHUB_WORKSPACE/.agent146-at/init.gradle" \
             clean test --no-daemon
 
-      - name: Verify dependency substitution resolves candidate
+      - name: Gate 2a - verify reproducible pinned candidate
+        shell: bash
+        run: bash scripts/agent146/verify_at_candidate_provenance.sh
+
+      - name: Gate 2b - verify exactly one resolved AT module
         shell: bash
         run: |
           set -euo pipefail
+          cat > .agent146-at/verify-resolution.gradle <<'GRADLE'
+          gradle.projectsEvaluated {
+              def root = gradle.rootProject
+              root.tasks.register('agent146VerifyAtResolution') {
+                  doLast {
+                      def artifacts = root.configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.findAll {
+                          it.moduleVersion.id.group == 'net.neoforged' && it.name == 'accesstransformers'
+                      }
+                      println "AGENT146_AT_RESOLUTION count=${artifacts.size()} ids=${artifacts.collect { it.moduleVersion.id }} files=${artifacts.collect { it.file.name }}"
+                      if (artifacts.size() != 1) throw new GradleException("Expected exactly one AccessTransformers artifact, got ${artifacts.size()}")
+                      if (artifacts[0].moduleVersion.id.version != '10.0.1-agent146') throw new GradleException("Unexpected AT version ${artifacts[0].moduleVersion.id.version}")
+                  }
+              }
+          }
+          GRADLE
           ./gradlew --init-script "$GITHUB_WORKSPACE/.agent146-at/init.gradle" \
-            dependencyInsight --dependency accesstransformers --configuration runtimeClasspath \
-            --no-daemon | tee .agent146-at/dependency-insight.txt
+            --init-script "$GITHUB_WORKSPACE/.agent146-at/verify-resolution.gradle" \
+            agent146VerifyAtResolution --no-daemon | tee .agent146-at/dependency-insight.txt
+          grep -q 'AGENT146_AT_RESOLUTION count=1' .agent146-at/dependency-insight.txt
           grep -q 'net.neoforged:accesstransformers:10.0.1-agent146' .agent146-at/dependency-insight.txt
 
       - name: Upload semantic/provenance evidence
@@ -100,7 +122,7 @@ jobs:
         with:
           name: agent146-at-candidate-evidence
           path: |
-            .agent146-at/evidence.txt
+            .agent146-at/setup-evidence.txt
             .agent146-at/module.txt
             .agent146-at/manifest.txt
             .agent146-at/dependency-insight.txt
