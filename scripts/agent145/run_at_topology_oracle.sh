@@ -15,8 +15,7 @@ git -C "$WORK_DIR" checkout -q FETCH_HEAD
 test "$(git -C "$WORK_DIR" rev-parse HEAD)" = "$UPSTREAM_COMMIT"
 test "$(git -C "$WORK_DIR" rev-parse HEAD:src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerList.java)" = "$EXPECTED_LIST_BLOB"
 
-git -C "$WORK_DIR" apply --check "$ROOT_DIR/third_party/access-transformers-10.0.1-oracle/oracle.patch"
-git -C "$WORK_DIR" apply "$ROOT_DIR/third_party/access-transformers-10.0.1-oracle/oracle.patch"
+python3 "$ROOT_DIR/scripts/agent145/apply_at_oracle.py" "$WORK_DIR"
 
 (
   cd "$WORK_DIR"
