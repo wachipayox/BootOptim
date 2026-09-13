@@ -10,9 +10,9 @@ sha1=$(sha256sum "$first" | awk '{print $1}')
   cd "$SRC"
   ./gradlew clean jar --no-daemon
 )
-mapfile -t jars < <(find "$SRC/build/libs" -maxdepth 1 -type f -name 'accesstransformers-*.jar' ! -name '*sources*' ! -name '*testsjar*' | sort)
-test "${#jars[@]}" -eq 1
-cp "${jars[0]}" "$OUT/candidate-second.jar"
+jar="$SRC/build/libs/AccessTransformers-10.0.1.jar"
+test -f "$jar"
+cp "$jar" "$OUT/candidate-second.jar"
 sha2=$(sha256sum "$OUT/candidate-second.jar" | awk '{print $1}')
 test "$sha1" = "$sha2"
 jar --describe-module --file "$OUT/candidate-second.jar" > "$OUT/module.txt"
