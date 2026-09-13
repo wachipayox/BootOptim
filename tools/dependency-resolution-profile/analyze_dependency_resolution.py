@@ -32,7 +32,13 @@ def union_ns(events):
 
 
 def contained(children, parent):
-    return [e for e in children if parent["start_ns"] <= e["start_ns"] and e["end_ns"] <= parent["end_ns"]]
+    return [e for e in children if e is not parent and parent["tid"] == e["tid"]
+            and parent["start_ns"] <= e["start_ns"] and e["end_ns"] <= parent["end_ns"]]
+
+
+def is_sentinel(event):
+    owner = event.get("owner") or ""
+    return owner.endswith(START_SUFFIX) or owner.endswith(END_SUFFIX)
 
 
 def main():
@@ -59,30 +65,45 @@ def main():
         raise SystemExit(f"expected one dependency_discovery_end marker, got {len(dep_matches)}")
     dependency_wall_ms = float(dep_matches[0])
 
-    locators = sorted((e for e in measured if e["kind"] == "dependency_locator"), key=lambda e: e["start_ns"])
+    all_locators = sorted((e for e in measured if e["kind"] == "dependency_locator"), key=lambda e: (e["start_ns"], -e["end_ns"]))
+    locators = [e for e in all_locators if not is_sentinel(e)]
     if not locators:
-        raise SystemExit("no dependency locator events")
+        raise SystemExit("no real dependency locator events")
     tids = {e["tid"] for e in locators}
+
+    top_level = [e for e in locators if not any(e in contained(locators, parent) for parent in locators if parent is not e)]
+    top_level = sorted(top_level, key=lambda e: e["start_ns"])
     overlaps = []
-    for prev, cur in zip(locators, locators[1:]):
+    for prev, cur in zip(top_level, top_level[1:]):
         if prev["tid"] == cur["tid"] and cur["start_ns"] < prev["end_ns"]:
             overlaps.append((prev["owner"], cur["owner"]))
     if overlaps:
-        raise SystemExit(f"locator intervals overlap on one thread: {overlaps[:3]}")
+        raise SystemExit(f"top-level locator intervals overlap on one thread: {overlaps[:3]}")
+
+    nesting = []
+    event_exclusive_ns = {}
+    for e in locators:
+        children = contained(locators, e)
+        event_exclusive_ns[e["seq"]] = max(0, e["duration_ns"] - union_ns(children))
+        for child in children:
+            if not any(child in contained(locators, mid) for mid in children if mid is not child):
+                nesting.append({"parent": e["owner"], "child": child["owner"], "wall_ms": ms(child["duration_ns"])})
 
     by_owner = defaultdict(list)
     for e in locators:
         by_owner[e["owner"]].append(e)
     locator_rows = []
-    for owner, rows in sorted(by_owner.items(), key=lambda kv: -sum(e["duration_ns"] for e in kv[1])):
+    for owner, rows in sorted(by_owner.items(), key=lambda kv: -sum(event_exclusive_ns[e["seq"]] for e in kv[1])):
         wall_ns = sum(e["duration_ns"] for e in rows)
+        exclusive_wall_ns = sum(event_exclusive_ns[e["seq"]] for e in rows)
         cpu_values = [e["cpu_ns"] for e in rows if e["cpu_ns"] >= 0]
         locator_rows.append({
             "owner": owner,
             "module": rows[0].get("module_name"),
             "module_version": rows[0].get("module_version"),
             "calls": len(rows),
-            "wall_ms": ms(wall_ns),
+            "inclusive_wall_ms": ms(wall_ns),
+            "exclusive_wall_ms": ms(exclusive_wall_ns),
             "cpu_ms": ms(sum(cpu_values)) if len(cpu_values) == len(rows) else None,
         })
 
@@ -128,13 +149,14 @@ def main():
         exclusive[parent_kind] = max(0.0, ms(p["duration_ns"] - union_ns(children)))
 
     result = {
-        "schema": 1,
+        "schema": 2,
         "expected_fml": "4.0.43",
         "dependency_discovery_wall_ms": dependency_wall_ms,
         "dependency_locator_union_ms": locator_union_ms,
         "dependency_locator_loop_residual_ms": locator_loop_residual_ms,
         "locator_threads": sorted(tids),
         "locator_rows": locator_rows,
+        "locator_nesting": nesting,
         "scope_rows": scope_rows,
         "exclusive_wall_ms": exclusive,
         "event_count": len(measured),
@@ -145,19 +167,24 @@ def main():
     out.append("# Agent136 FML dependency-resolution profile")
     out.append("")
     out.append(f"- stock dependency-discovery inclusive wall: **{dependency_wall_ms:.3f} ms**")
-    out.append(f"- union of concrete dependency-locator callbacks: **{locator_union_ms:.3f} ms**")
+    out.append(f"- union of real dependency-locator callbacks: **{locator_union_ms:.3f} ms**")
     out.append(f"- loop/bookkeeping residual after locator union: **{locator_loop_residual_ms:.3f} ms**")
     out.append("")
-    out.append("## Non-overlapping dependency locator callbacks")
+    out.append("## Dependency locator scopes (nested-aware)")
     out.append("")
-    out.append("| owner | module | calls | wall ms | thread CPU ms |")
-    out.append("| --- | --- | ---: | ---: | ---: |")
+    out.append("| owner | module | calls | inclusive wall ms | exclusive wall ms | thread CPU ms |")
+    out.append("| --- | --- | ---: | ---: | ---: | ---: |")
     for r in locator_rows:
         cpu = "n/a" if r["cpu_ms"] is None else f"{r['cpu_ms']:.3f}"
         module = r["module"] or "unnamed"
         if r["module_version"]:
             module += "@" + r["module_version"]
-        out.append(f"| `{r['owner']}` | `{module}` | {r['calls']} | {r['wall_ms']:.3f} | {cpu} |")
+        out.append(f"| `{r['owner']}` | `{module}` | {r['calls']} | {r['inclusive_wall_ms']:.3f} | {r['exclusive_wall_ms']:.3f} | {cpu} |")
+    if nesting:
+        out.append("")
+        out.append("Observed nested locator calls (already included in parent wall):")
+        for n in nesting:
+            out.append(f"- `{n['parent']}` → `{n['child']}`: **{n['wall_ms']:.3f} ms**")
     out.append("")
     out.append("## FML validation / graph scopes")
     out.append("")
