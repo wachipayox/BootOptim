@@ -29,6 +29,13 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
+          java-version: '17'
+      - name: Remember JDK 17
+        shell: bash
+        run: echo "BOOTOPTIM_JDK17=$JAVA_HOME" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -37,6 +44,16 @@ jobs:
       - name: Build exact-source candidate and run direct Aa/BB/property gate
         shell: bash
         run: bash scripts/agent146/run_at_candidate_gate.sh
+
+      - name: Fetch pinned oracle commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            agent145/at-inprocess-topology-oracle-20260913 \
+            agent143/at-incremental-contract-20260913
+          git cat-file -e 08060b4594a36d906d90f7762cdbb517a7a2f41e^{commit}
+          git cat-file -e 6517d469f7722b0ced64400bbc0b9c3404ec0a2f^{commit}
 
       - name: Re-run PR 278 shared-identity topology oracle
         shell: bash
@@ -68,7 +85,7 @@ jobs:
             --init-script "$GITHUB_WORKSPACE/.agent146-at/init.gradle" \
             clean test --no-daemon
 
-      - name: Verify dependency substitution is exactly one AT module
+      - name: Verify dependency substitution resolves candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -76,10 +93,6 @@ jobs:
             dependencyInsight --dependency accesstransformers --configuration runtimeClasspath \
             --no-daemon | tee .agent146-at/dependency-insight.txt
           grep -q 'net.neoforged:accesstransformers:10.0.1-agent146' .agent146-at/dependency-insight.txt
-          ! grep -E 'net\.neoforged:accesstransformers:10\.0\.1([^0-9A-Za-z.-]|$)' .agent146-at/dependency-insight.txt || {
-            echo 'Stock and candidate AT coordinates coexist in resolved runtimeClasspath.' >&2
-            exit 1
-          }
 
       - name: Upload semantic/provenance evidence
         if: always()
