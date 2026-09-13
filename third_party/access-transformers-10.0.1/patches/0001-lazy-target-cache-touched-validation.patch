@@ -1,0 +1,270 @@
+diff --git a/build.gradle b/build.gradle
+index 113c7e9..942f15b 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -76,6 +76,14 @@ tasks.named('sourcesJar', Jar) {
+     dependsOn generateGrammarSource
+ }
+ 
++// Preserve the upstream MIT notice inside the rebuilt candidate binary.
++tasks.named('jar', Jar).configure {
++    from(rootProject.file('license.txt')) {
++        into 'META-INF'
++        rename { 'LICENSE-neoforged-AccessTransformers.txt' }
++    }
++}
++
+ changelog {
+     from '10.0'
+ }
+diff --git a/src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerList.java b/src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerList.java
+index 30706bd..89d65cb 100644
+--- a/src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerList.java
++++ b/src/main/java/net/neoforged/accesstransformer/parser/AccessTransformerList.java
+@@ -25,6 +25,7 @@ public class AccessTransformerList {
+     private static final Marker AXFORM_MARKER = MarkerFactory.getMarker("AXFORM");
+     private final Map<Target<?>, AccessTransformer> accessTransformers = new HashMap<>();
+     private Set<Type> targetedClassCache = Collections.emptySet();
++    private boolean targetedClassCacheDirty;
+ 
+     public void loadFromResource(final String resourceName) throws URISyntaxException, IOException {
+         final Path path = Paths.get(getClass().getClassLoader().getResource(resourceName).toURI());
+@@ -56,15 +57,25 @@ public class AccessTransformerList {
+         file.accept(accessTransformVisitor);
+         final HashMap<Target<?>, AccessTransformer> localATCopy = new HashMap<>(accessTransformers);
+         mergeAccessTransformers(accessTransformVisitor.getAccessTransformers(), localATCopy, stream.getSourceName());
+-        final List<AccessTransformer> invalidTransformers = invalidTransformers(localATCopy);
+-        if (!invalidTransformers.isEmpty()) {
++        // Every committed value was validated before publication and AccessTransformer's
++        // final-state fields are immutable. Therefore a newly-invalid final state can only
++        // belong to a target touched by this file. Check only those targets on the healthy
++        // path, but materialize the stock full-map traversal on failure so diagnostic order
++        // remains exactly HashMap iteration order.
++        final boolean hasInvalidTouchedTransformer = accessTransformVisitor.getAccessTransformers().stream()
++                .map(AccessTransformer::getTarget)
++                .map(localATCopy::get)
++                .anyMatch(at -> !at.isValid());
++        if (hasInvalidTouchedTransformer) {
++            final List<AccessTransformer> invalidTransformers = invalidTransformers(localATCopy);
+             invalidTransformers.forEach(at -> LOGGER.error(AXFORM_MARKER,"Invalid access transform final state for target {}. Referred in resources {}.",at.getTarget(), at.getOrigins()));
+             throw new IllegalArgumentException("Invalid AT final conflicts");
+         }
+         this.accessTransformers.clear();
+         this.accessTransformers.putAll(localATCopy);
+-        this.targetedClassCache = this.accessTransformers.keySet().stream().map(Target::getASMType).collect(Collectors.toSet());
++        // Keep the stock HashMap publication above unchanged: its topology feeds public
++        // grouping APIs and conflict diagnostic order. The target Set itself is only
++        // observable through getTargets()/containsClassTarget(), so defer rebuilding it
++        // until the first observation after a successful file. Assigning a new Set is not
++        // needed to detach an escaped old reference; simply never mutate that old Set again.
++        this.targetedClassCacheDirty = true;
+         LOGGER.debug(AXFORM_MARKER,"Loaded access transformer {}", stream.getSourceName());
+     }
+@@ -94,6 +105,11 @@ public class AccessTransformerList {
+     }
+ 
+     public Set<Type> getTargets() {
++        if (targetedClassCacheDirty) {
++            this.targetedClassCache = this.accessTransformers.keySet().stream()
++                    .map(Target::getASMType).collect(Collectors.toSet());
++            this.targetedClassCacheDirty = false;
++        }
+         return targetedClassCache;
+     }
+ 
+diff --git a/src/test/java/net/neoforged/accesstransformer/parser/ExactTopologyMaintenanceTest.java b/src/test/java/net/neoforged/accesstransformer/parser/ExactTopologyMaintenanceTest.java
+new file mode 100644
+index 0000000..aa3cc01
+--- /dev/null
++++ b/src/test/java/net/neoforged/accesstransformer/parser/ExactTopologyMaintenanceTest.java
+@@ -0,0 +1,244 @@
++package net.neoforged.accesstransformer.parser;
++
++import net.neoforged.accesstransformer.AccessTransformer;
++import net.neoforged.accesstransformer.Target;
++import net.neoforged.accesstransformer.TargetType;
++import net.neoforged.accesstransformer.generated.AtLexer;
++import net.neoforged.accesstransformer.generated.AtParser;
++import org.antlr.v4.runtime.CharStream;
++import org.antlr.v4.runtime.CharStreams;
++import org.antlr.v4.runtime.CommonTokenStream;
++import org.junit.jupiter.api.Test;
++import org.objectweb.asm.Type;
++
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.Random;
++import java.util.Set;
++import java.util.stream.Collectors;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertFalse;
++import static org.junit.jupiter.api.Assertions.assertNotSame;
++import static org.junit.jupiter.api.Assertions.assertSame;
++import static org.junit.jupiter.api.Assertions.assertThrows;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++/** Differential checks for the two maintenance passes removed from the healthy path. */
++class ExactTopologyMaintenanceTest {
++    @Test
++    void publicIterationSurfacesMatchLiteralStockAcrossAaBbCollisionCorpus() {
++        var candidate = new AccessTransformerList();
++        var stock = new StockReference();
++        var names = collidingNames(5);
++
++        for (int i = 0; i < names.size(); i++) {
++            String className = "example." + names.get(i);
++            String text = "public-f " + className + "\n"
++                    + "protected " + className + " Aa\n"
++                    + "public " + className + " BB\n";
++            loadBoth(candidate, stock, text, "collision-" + i + ".cfg");
++            assertPublicSurfaces(stock, candidate, Type.getObjectType(className.replace('.', '/')));
++        }
++    }
++
++    @Test
++    void deterministicPropertyCorpusMatchesAfterEverySuccessfulFile() {
++        var candidate = new AccessTransformerList();
++        var stock = new StockReference();
++        var random = new Random(0x144A71001L);
++        var classes = collidingNames(4).stream().map(name -> "property." + name).toList();
++
++        for (int file = 0; file < 160; file++) {
++            StringBuilder text = new StringBuilder();
++            int rules = 1 + random.nextInt(7);
++            for (int rule = 0; rule < rules; rule++) {
++                String className = classes.get(random.nextInt(classes.size()));
++                int shape = random.nextInt(3);
++                if (shape == 0) text.append("public ").append(className).append('\n');
++                else if (shape == 1) text.append("protected ").append(className).append(' ').append(random.nextBoolean() ? "Aa" : "BB").append('\n');
++                else text.append("public ").append(className).append(' ').append(random.nextBoolean() ? "Aa()V" : "BB()V").append('\n');
++            }
++            loadBoth(candidate, stock, text.toString(), "property-" + file + ".cfg");
++            assertPublicSurfaces(stock, candidate, Type.getObjectType(classes.get(file % classes.size()).replace('.', '/')));
++        }
++    }
++
++    @Test
++    void targetSetKeepsStockMutabilityIdentityAndFailureRollback() {
++        var candidate = new AccessTransformerList();
++        var stock = new StockReference();
++        Type mutation = Type.getObjectType("external/Mutation");
++
++        assertThrows(UnsupportedOperationException.class, () -> candidate.getTargets().add(mutation));
++        assertThrows(UnsupportedOperationException.class, () -> stock.targets().add(mutation));
++
++        loadBoth(candidate, stock, "public example.Alpha\n", "one.cfg");
++        Set<Type> escapedCandidate = candidate.getTargets();
++        Set<Type> escapedStock = stock.targets();
++        assertOrderedTypes(escapedStock, escapedCandidate);
++        escapedCandidate.add(mutation);
++        escapedStock.add(mutation);
++
++        assertThrows(IllegalArgumentException.class,
++                () -> candidate.loadAT(CharStreams.fromString("public+f example.Alpha\npublic-f example.Alpha\n", "conflict.cfg")));
++        assertThrows(IllegalArgumentException.class,
++                () -> stock.load("public+f example.Alpha\npublic-f example.Alpha\n", "conflict.cfg"));
++        assertSame(escapedCandidate, candidate.getTargets(), "failed file must not publish/detach target Set");
++        assertSame(escapedStock, stock.targets(), "literal stock sanity");
++        assertTrue(candidate.getTargets().contains(mutation));
++
++        loadBoth(candidate, stock, "public example.Bravo\n", "two.cfg");
++        Set<Type> currentCandidate = candidate.getTargets();
++        Set<Type> currentStock = stock.targets();
++        assertNotSame(escapedCandidate, currentCandidate);
++        assertNotSame(escapedStock, currentStock);
++        assertTrue(escapedCandidate.contains(mutation));
++        assertFalse(currentCandidate.contains(mutation));
++        assertOrderedTypes(currentStock, currentCandidate);
++    }
++
++    @Test
++    void emptySuccessfulFileStillPublishesMutableTargetSet() {
++        var candidate = new AccessTransformerList();
++        var stock = new StockReference();
++        loadBoth(candidate, stock, "", "empty.cfg");
++        Type mutation = Type.getObjectType("external/AfterEmpty");
++        assertTrue(candidate.getTargets().add(mutation));
++        assertTrue(stock.targets().add(mutation));
++    }
++
++    private static void loadBoth(AccessTransformerList candidate, StockReference stock, String text, String origin) {
++        candidate.loadAT(CharStreams.fromString(text, origin));
++        stock.load(text, origin);
++    }
++
++    private static void assertPublicSurfaces(StockReference stock, AccessTransformerList candidate, Type type) {
++        assertEquals(stock.accessTransformerGroups(), orderedGroups(candidate.getAccessTransformers()));
++        assertEquals(stock.transformersFor(type), orderedTargetGroups(candidate.getTransformersForTarget(type)));
++        assertOrderedTypes(stock.targets(), candidate.getTargets());
++    }
++
++    private static List<String> orderedGroups(Map<String, List<AccessTransformer>> groups) {
++        List<String> result = new ArrayList<>();
++        groups.forEach((name, values) -> result.add(name + "=" + values.stream().map(AccessTransformer::toString).toList()));
++        return result;
++    }
++
++    private static List<String> orderedTargetGroups(Map<TargetType, Map<String, AccessTransformer>> groups) {
++        List<String> result = new ArrayList<>();
++        groups.forEach((kind, values) -> values.forEach((name, at) -> result.add(kind + ":" + name + "=" + at)));
++        return result;
++    }
++
++    private static void assertOrderedTypes(Set<Type> expected, Set<Type> actual) {
++        assertEquals(new ArrayList<>(expected), new ArrayList<>(actual));
++    }
++
++    private static List<String> collidingNames(int depth) {
++        List<String> result = new ArrayList<>();
++        int count = 1 << depth;
++        for (int value = 0; value < count; value++) {
++            StringBuilder name = new StringBuilder();
++            for (int bit = depth - 1; bit >= 0; bit--) name.append(((value >>> bit) & 1) == 0 ? "Aa" : "BB");
++            result.add(name.toString());
++        }
++        int hash = result.get(0).hashCode();
++        assertTrue(result.stream().allMatch(name -> name.hashCode() == hash), "fixture must retain Java String hash collisions");
++        return result;
++    }
++
++    private static final class StockReference {
++        private final Map<Target<?>, AccessTransformer> accessTransformers = new HashMap<>();
++        private Set<Type> targetedClassCache = Collections.emptySet();
++
++        void load(String text, String origin) {
++            CharStream stream = CharStreams.fromString(text, origin);
++            AtParser parser = new AtParser(new CommonTokenStream(new AtLexer(stream)));
++            parser.addErrorListener(new AtParserErrorListener());
++            AccessTransformVisitor visitor = new AccessTransformVisitor(stream.getSourceName());
++            parser.file().accept(visitor);
++            HashMap<Target<?>, AccessTransformer> local = new HashMap<>(accessTransformers);
++            visitor.getAccessTransformers().forEach(at -> local.merge(at.getTarget(), at,
++                    (left, right) -> left.mergeStates(right, stream.getSourceName())));
++            List<AccessTransformer> invalid = local.values().stream().filter(at -> !at.isValid()).collect(Collectors.toList());
++            if (!invalid.isEmpty()) throw new IllegalArgumentException("Invalid AT final conflicts");
++            accessTransformers.clear();
++            accessTransformers.putAll(local);
++            targetedClassCache = accessTransformers.keySet().stream().map(Target::getASMType).collect(Collectors.toSet());
++        }
++
++        Set<Type> targets() { return targetedClassCache; }
++
++        List<String> accessTransformerGroups() {
++            return orderedGroups(accessTransformers.entrySet().stream().collect(Collectors.groupingBy(
++                    e -> e.getValue().getTarget().getClassName(), HashMap::new,
++                    Collectors.mapping(Map.Entry::getValue, Collectors.toList()))));
++        }
++
++        List<String> transformersFor(Type type) {
++            return orderedTargetGroups(accessTransformers.entrySet().stream()
++                    .filter(e -> type.equals(e.getKey().getASMType()))
++                    .map(Map.Entry::getValue)
++                    .collect(Collectors.groupingBy(o -> o.getTarget().getType(), HashMap::new,
++                            Collectors.toMap(at -> at.getTarget().targetName(), java.util.function.Function.identity()))));
++        }
++    }
++}
