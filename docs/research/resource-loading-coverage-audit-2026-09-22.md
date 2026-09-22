@@ -139,6 +139,25 @@ after reviewing/reconciling its changes with the integrated transaction.
 
 ## Bounded next measurement campaign
 
+### User decision superseding PC-first order
+
+On 2026-09-22 the user explicitly selected the physical HDD laptop as the
+primary diagnostic target because its amplified loading costs are the actual
+question. This overrides the PC-first order below: perform workload preflight
+and the bounded generation session on the laptop; use this PC for building
+and offline analysis. Historical small hosted effects do not close this lane.
+Keep instrumentation coarse and distinguish slow CPU, storage and scheduling
+using evidence rather than elapsed-time amplification alone.
+
+Operational discovery recovered a historical Prism root
+`C:/BootOptimBench/prism` and an instance named `BootOptimBench`. A saved
+pre-#272 config selects Oracle JDK 21, whereas the original fixture baseline
+documents Java 25. This is historical configuration, not current laptop state:
+verify the live instance and effective executable before choosing a baseline.
+Do not silently restore old flags or change Java to match an older document.
+Current SSH address/availability is pending user input; no remote launch or
+measurement has occurred.
+
 1. **Freeze PC workload first.** Locate the intended portable Prism/instance or
    create an isolated exact-pack instance. Pin launcher binary/version, Java,
    packaged BootOptim hash, mod/fork versions, ordered resource selection,
