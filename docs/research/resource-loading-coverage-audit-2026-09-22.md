@@ -199,6 +199,36 @@ first; keep model preparation as the leading optimization suspect.** The
 next deliverable is a diagnostic capability and valid PC evidence, not a
 generic cache, executor cap, or claim that all old NO-GOs are permanent.
 
+## Initial physical diagnostic dispatch preparation
+
+Run ID: `resource-initial-20260922a`. User requests ending the turn immediately
+after dispatch and will report completion; no agent polling/sleeps during the run.
+This first run intentionally captures **initial reload only**, not G2–G4.
+Ported #166's existing diagnostic diff from base `493cdb4e` onto current
+integration instead of installing its older runtime artifact. Production
+CIT warning suppression and other current mechanisms remain present.
+Local `gradlew build` succeeds and all 32 Python harness tests pass. The
+rebased artifact has not yet passed a new runtime smoke; this physical run
+is diagnostic/health evidence, not a speed comparison.
+
+Packaged bootstrap SHA-256:
+`412da6737fe8bb38f94f7dc8efa5c074c65c8f6a51792bbb4f5c36aea714fffc`.
+Remote run directory: `C:/BootOptimBench/resource-audit-20260922`.
+Uses reviewed #268 transaction/interactive scripts with quoted QSettings args;
+original config and wrapper are transactionally backed up. Existing JVM flags
+are preserved with only `-Dboot_optim.profileStartupVariance=true` added.
+Java configuration is Oracle 21.0.9 / 6144 MiB; not Java 25 historical baseline.
+Exit-on-title is retained: the probe delays that exit until its first display
+update marker and writes the listener table then. Its legacy
+`main_menu_presented` label means first display after TitleScreen opening;
+it does not certify a navigable TitleScreen if a modal replaces it.
+
+After user notification: collect transaction state and logs offline, validate
+effective JVM identity/flags, current resource selection and complete scopes,
+then Postflight restores the exact original config and wrapper once both
+Java and Prism have stopped. Missing scopes/errors invalidate attribution;
+do not treat timeout or instrumentation cost as startup improvement.
+
 ## Evidence links
 
 Read PR bodies and result/correction comments, not titles alone:
