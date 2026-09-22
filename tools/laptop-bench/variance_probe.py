@@ -40,6 +40,13 @@ REQUIRED = {
     ("main_menu_opening", "point"),
     ("main_menu_presented", "point"),
 }
+RESOURCE_SPLIT_REQUIRED = (REQUIRED - {("fancymenu_preload", "end")}) | {
+    (phase, event)
+    for phase in ("cit_active_load", "bakery_blockstate_registration", "bakery_parent_resolution",
+                  "bakery_additional_model_event", "entity_provider_create", "player_provider_create",
+                  "entity_add_layers_post")
+    for event in ("start", "end")
+}
 
 
 def _parse_payload(payload: str, int_fields, float_fields):
@@ -128,7 +135,8 @@ def _scope_summaries(records):
     return summaries, warnings
 
 
-def summarize(records, max_early_uptime_ms=60_000, listeners=None):
+def summarize(records, max_early_uptime_ms=60_000, listeners=None, profile="legacy"):
+    required = RESOURCE_SPLIT_REQUIRED if profile == "resource_split" else REQUIRED
     records = sorted(records, key=lambda row: (row.get("mono_ns") is None, row.get("mono_ns") or 0))
     invalid = []
     warnings = []
@@ -149,7 +157,7 @@ def summarize(records, max_early_uptime_ms=60_000, listeners=None):
             invalid.append("jvm_start_wall_uptime_inconsistent")
 
     present = {(row.get("phase"), row.get("event")) for row in records}
-    missing = sorted(REQUIRED - present)
+    missing = sorted(required - present)
     invalid.extend(f"missing:{phase}:{event}" for phase, event in missing)
 
     menu_mono = next((row.get("mono_ns") for row in records
@@ -188,6 +196,7 @@ def summarize(records, max_early_uptime_ms=60_000, listeners=None):
     } for row in records]
 
     return {
+        "profile": profile,
         "valid": not invalid,
         "invalid_reasons": invalid,
         "warnings": warnings,
@@ -210,12 +219,13 @@ def summarize(records, max_early_uptime_ms=60_000, listeners=None):
     }
 
 
-def analyze_file(path: Path, max_early_uptime_ms=60_000):
+def analyze_file(path: Path, max_early_uptime_ms=60_000, profile="legacy"):
     lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
     return summarize(
         parse_lines(lines),
         max_early_uptime_ms=max_early_uptime_ms,
         listeners=parse_listener_lines(lines),
+        profile=profile,
     )
 
 
@@ -223,8 +233,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("logs", nargs="+", type=Path, help="completed console/latest.log files; read only after Java exits")
     parser.add_argument("--max-early-uptime-ms", type=int, default=60_000)
+    parser.add_argument("--profile", choices=("legacy", "resource_split"), default="legacy",
+                        help="resource_split requires the seven new scopes; legacy FancyMenu hook is not its endpoint")
     args = parser.parse_args()
-    output = {str(path): analyze_file(path, args.max_early_uptime_ms) for path in args.logs}
+    output = {str(path): analyze_file(path, args.max_early_uptime_ms, args.profile) for path in args.logs}
     print(json.dumps(output, indent=2, sort_keys=True))
 
 

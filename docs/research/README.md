@@ -37,6 +37,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Physical model/renderer split — 2026-09-22](resource-split-laptop-2026-09-22.md) — diagnostic extension of established constructor/renderer callsites, bounded shutdown persistence for early markers, and explicit seven-scope validation profile; runtime evidence pending.
+
 - [Initial laptop resource diagnostic — 2026-09-22](resource-initial-laptop-2026-09-22.md) — invalid startup provenance due to Java detection failure; partial 189.547 s reload/70-listener evidence, current model/renderer priorities, and slash-normalized Prism detector repair.
 
 - [Resource loading coverage audit — 2026-09-22](resource-loading-coverage-audit-2026-09-22.md) — current integration and unmerged diagnostic history reconciled; prioritizes per-generation physical reload evidence, request-to-listener timing, and changed-pack validation while preserving established model/resource findings.

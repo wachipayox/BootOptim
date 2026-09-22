@@ -18,6 +18,23 @@ final class BootstrapVarianceProbe {
     private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
     private static final MemoryMXBean MEMORY = ManagementFactory.getMemoryMXBean();
     private static final long JVM_START_EPOCH_MS = ManagementFactory.getRuntimeMXBean().getStartTime();
+    private static final VarianceBootstrapBuffer OUTPUT = new VarianceBootstrapBuffer();
+
+    static {
+        String output = System.getProperty("boot_optim.varianceBootstrapOutput");
+        if (ENABLED && output != null && !output.isBlank()) {
+            try {
+                java.nio.file.Path path = java.nio.file.Path.of(output);
+                if (!path.isAbsolute()) throw new IllegalArgumentException("absolute output path required");
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    try { OUTPUT.write(path); }
+                    catch (Exception failure) { System.err.println("BOOTOPTIM_VARIANCE_BUFFER write_failed=" + failure.getClass().getSimpleName()); }
+                }, "BootOptim-variance-output"));
+            } catch (RuntimeException failure) {
+                System.err.println("BOOTOPTIM_VARIANCE_BUFFER setup_failed=" + failure.getClass().getSimpleName());
+            }
+        }
+    }
 
     private BootstrapVarianceProbe() {}
 
@@ -98,7 +115,7 @@ final class BootstrapVarianceProbe {
         long availableDelta = before == null || now.availableMemoryBytes < 0L || before.availableMemoryBytes < 0L
                 ? Long.MIN_VALUE
                 : now.availableMemoryBytes - before.availableMemoryBytes;
-        System.out.printf(
+        String row = String.format(
                 Locale.ROOT,
                 "BOOTOPTIM_VARIANCE seq=%d scope=%d event=%s phase=%s subject=- mono_ns=%d wall_epoch_ms=%d jvm_start_epoch_ms=%d uptime_ms=%d process_cpu_ms=%s thread_cpu_ms=%s thread_id=%d gc_count=%d gc_time_ms=%d heap_used_mib=%s heap_committed_mib=%s heap_max_mib=%s available_memory_mib=%s elapsed_ms=%s process_cpu_delta_ms=%s owner_thread_cpu_delta_ms=%s gc_count_delta=%d gc_time_delta_ms=%d heap_used_delta_mib=%s available_memory_delta_mib=%s%n",
                 seq,
@@ -125,6 +142,8 @@ final class BootstrapVarianceProbe {
                 gcTimeDelta,
                 bytesDeltaToMiB(heapDelta),
                 bytesDeltaToMiB(availableDelta));
+        OUTPUT.add(row.stripTrailing());
+        System.out.print(row);
     }
 
     private static long delta(long after, long before) {

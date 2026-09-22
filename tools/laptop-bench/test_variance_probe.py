@@ -4,6 +4,18 @@ from variance_probe import parse_line, parse_listener_line, summarize
 
 
 class VarianceProbeParserTests(unittest.TestCase):
+    def test_resource_split_profile_does_not_accept_missing_new_hooks(self):
+        from variance_probe import RESOURCE_SPLIT_REQUIRED
+        rows = [r for r in self.valid_records() if r["phase"] != "fancymenu_preload"]
+        failed = summarize(rows, profile="resource_split")
+        self.assertIn("missing:cit_active_load:end", failed["invalid_reasons"])
+        self.assertNotIn("missing:fancymenu_preload:end", failed["invalid_reasons"])
+        existing = {(r["phase"], r["event"]) for r in rows}
+        for index, (phase, event) in enumerate(sorted(RESOURCE_SPLIT_REQUIRED - existing)):
+            rows.append(self.record(phase, event, 1000 + index, 2000 + index))
+        self.assertTrue(summarize(rows, profile="resource_split")["valid"])
+        self.assertIn("missing:fancymenu_preload:end", summarize(rows)["invalid_reasons"])
+
     def test_parse_structured_marker_from_prefixed_log_line(self):
         row = parse_line(
             "[12:00:00] [Render thread/INFO] BOOTOPTIM_VARIANCE seq=7 scope=3 event=end "
