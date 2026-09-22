@@ -155,7 +155,15 @@ pre-#272 config selects Oracle JDK 21, whereas the original fixture baseline
 documents Java 25. This is historical configuration, not current laptop state:
 verify the live instance and effective executable before choosing a baseline.
 Do not silently restore old flags or change Java to match an older document.
-Current SSH address/availability is pending user input; no remote launch or
+SSH connection was recovered from the referenced task and verified read-only
+on 2026-09-22. Connection details are saved outside Git at
+`C:/BootOptimBench/local/laptop-resource-loading-connection.json`.
+Live Prism is 11.1.0.0, Minecraft 1.21.1, NeoForge 21.1.248; the instance
+currently configures Oracle JDK 21, 6144 MiB maximum heap and 14 ordered
+resource selections. No Java/Prism/Pandora process was present at inspection.
+The existing arguments still include `benchmark.exitOnTitle=true`, which
+must be staged off for a multi-reload session and restored afterward.
+Configured Java is not yet launch-verified; no remote game launch or new
 measurement has occurred.
 
 1. **Freeze PC workload first.** Locate the intended portable Prism/instance or
