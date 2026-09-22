@@ -37,6 +37,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Initial laptop resource diagnostic — 2026-09-22](resource-initial-laptop-2026-09-22.md) — invalid startup provenance due to Java detection failure; partial 189.547 s reload/70-listener evidence, current model/renderer priorities, and slash-normalized Prism detector repair.
+
 - [Resource loading coverage audit — 2026-09-22](resource-loading-coverage-audit-2026-09-22.md) — current integration and unmerged diagnostic history reconciled; prioritizes per-generation physical reload evidence, request-to-listener timing, and changed-pack validation while preserving established model/resource findings.
 
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
