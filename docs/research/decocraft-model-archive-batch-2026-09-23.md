@@ -145,7 +145,10 @@ The candidate's time-to-menu must not be compared to the control or cited
 as a win. The isolated reload intervals and phase scopes use monotonic clocks
 and are still useful diagnostic observations, but this is not a valid
 end-to-end A/B. The physical run also had a longer pre-marker/JFR-start
-interval than the control, so uncontrolled machine state is plausible.
+interval than the control, so uncontrolled machine state is plausible. In
+the recorded pre-marker window, JFR shows ForgeWrapper installer activity
+and rolling-log compression. These belong to the launcher/boot prefix, not
+the resource candidate; they do not explain the entire origin discrepancy.
 
 | Phase, seconds | Control g1/g2/g3 | Candidate g1/g2/g3 |
 |---|---:|---:|
