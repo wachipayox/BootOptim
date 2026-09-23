@@ -37,7 +37,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
-- [Physical constructor and first-frame follow-up — 2026-09-23](resource-next-diagnostic-2026-09-23.md) — prepared diagnostic split of physical ModelBakery residual and first startup frame; not launched at user request.
+- [Physical constructor and first-frame follow-up — 2026-09-23](resource-next-diagnostic-2026-09-23.md) — diagnostic design and hosted validation; the physical run is complete.
+- [Physical constructor and first-frame result — 2026-09-23](resource-next-physical-result-2026-09-23.md) — valid 177.440 s initial reload; seven disjoint ModelBakery children leave 0.173 s, and first-render tail owns 5.239 s of the 5.405 s TitleScreen-to-display interval. Laptop restored.
 
 - [Physical model/renderer split — 2026-09-22](resource-split-laptop-2026-09-22.md) — physical 142.333 s initial reload; CIT 17.450 s, constructor residual 13.549 s, entity providers 16.802 s, presentation tail 19.104 s. All seven scopes/70 listeners present; total startup rejected for clock inconsistency; instance restored.
 

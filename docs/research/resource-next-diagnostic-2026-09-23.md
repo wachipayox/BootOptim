@@ -1,7 +1,9 @@
 # Physical constructor and first-frame follow-up — 2026-09-23
 
-Status: **PREPARED, NOT LAUNCHED**. The user explicitly requested preparation
-without launching on the laptop. This branch remains diagnostic-only.
+Status: **PHYSICAL PHASE ATTRIBUTION COMPLETE; diagnostic-only**. The user first
+requested preparation without a laptop launch, then authorized the launch
+after providing the laptop's new IP address. The completed result is recorded
+in [the physical result](resource-next-physical-result-2026-09-23.md).
 
 Authority: `agent/integration-current` refreshed at `b3f0c5f`. The prior
 physical run `resource-split-20260922b` had 142.333 s initial reload,
@@ -104,16 +106,17 @@ and original wrapper SHA-256
 Recheck both during future Preflight; these historical hashes are not a fresh
 remote status.
 
-No remote transaction
-Stage or Run action is authorized by this preparation request; Prism instance
-configuration and original BootOptim JAR must stay untouched until a later
-explicit launch instruction.
+The initial preparation request did not authorize a remote Stage or Run.
+The user subsequently supplied `192.168.1.139` and explicitly authorized
+launch; the completed transaction and restoration are recorded in the
+physical-result document linked above.
 
-For a later launch, repeat remote Preflight immediately before Stage; preserve
+For the subsequent launch, remote Preflight was repeated immediately before
+Stage, preserving
 the existing Prism instance's original flags, Oracle Java 21 / 6144 MiB,
 selected 14 packs, and `exitOnTitle=true`. Stage via the reviewed transaction,
 then dispatch Run and end the turn immediately without polling. After the user
 reports exit, collect both early and game logs, finished state and options,
 run `variance_probe.py --profile resource_next`, then Postflight restores exact
-original config/JAR bytes. Only one initial resource reload is in this run;
+original config/JAR bytes. Only one initial resource reload was measured;
 generation 2+ changed-pack behavior remains a separate coverage gap.
