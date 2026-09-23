@@ -69,8 +69,20 @@ same-process monotonic attribution can still be reported separately.
 
 Local Gradle `build --offline` passed and 34 Python tests passed. The packaged
 standalone wrapper is built from `bootstrap/build/libs/`, not root `build/libs`.
-Artifact SHA-256, source commit, remote staging paths and final preflight
-result will be filled below after the files are copied. No remote transaction
+Source commit `d53fa80f51c5035b4c08e1b50763c83e369887f9`.
+Local packaged artifact:
+`C:/BootOptimBench/artifacts/resource-next-20260923/bootoptim-resource-next-20260923.jar`,
+SHA-256 `c90083e867e9d9e3430807f4cd9cff126acb3295975a9d24c68b50da7c82206b`.
+Attempted remote transfer on 2026-09-23 failed at SSH connection timeout to
+`192.168.1.218:22`; no files reached the laptop and no transaction was staged.
+The previous run's verified restored state had config SHA-256
+`a9744bf7a4c5660f6b58a6fe1fe9309a91ecacc2ac2189bf099dd2a145aa1ecc`
+and original wrapper SHA-256
+`379bc509efd43a0d2edf7cfb6bc1e2f99dd1601b3d8e3ab43b00c70f6dea4989`.
+Recheck both during future Preflight; these historical hashes are not a fresh
+remote status.
+
+No remote transaction
 Stage or Run action is authorized by this preparation request; Prism instance
 configuration and original BootOptim JAR must stay untouched until a later
 explicit launch instruction.
