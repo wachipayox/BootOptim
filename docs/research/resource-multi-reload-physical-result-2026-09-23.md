@@ -90,6 +90,17 @@ current-generation pack precedence and invalidation; the older first-load
 mechanisms were deliberately scoped to generation one. One interactive run
 cannot establish a stable repeat-run trend or a performance win.
 
+The mapped 1.21.1 `ModelManager.loadBlockModels` implementation first runs
+`MODEL_LISTER.listMatchingResources(resourceManager)`, then schedules one
+`BlockModel.fromStream(reader)` task per discovered model and joins them with
+`Util.sequence`. The present `block_models` scope encloses all three steps,
+so this run cannot decide whether repeated pack enumeration, JSON reads and
+parsing, or join/scheduling accounts for its growth. A targeted next probe
+should split those boundaries before attempting a cross-generation reuse
+design. The effective pack change was only a font ZIP, but pack precedence
+still has to be evaluated per generation; the observed identical blocks-atlas
+size is not proof that the model or sprite contents are identical.
+
 After evidence capture, the remote transaction restored the original Prism
 configuration SHA-256
 `A9744BF7A4C5660F6B58A6FE1FE9309A91ECACC2AC2189BF099DD2A145AA1ECC`
