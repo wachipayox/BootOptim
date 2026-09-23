@@ -53,6 +53,71 @@ verification. A small hosted gain remains physically unresolved because this
 is a storage-order mechanism. The laptop must not be accessed until the user
 explicitly signals it.
 
+Hosted exact-pack [smoke #35882066158](https://github.com/wachipayox/BootOptim/actions/runs/35882066158)
+passed on commit `7bacb3f`: build/startup reached menu, resource selection
+check was valid with exactly one reload, block atlas remained 8192×8192×2,
+and the result reported zero BootOptim Mixin errors. The runtime batch marker
+reported `status=ready entries=10809 bytes=3129313`, then
+`success=true hits=10809 fallbacks=0 verified=10809`. This proves that the
+current exact-pack winning resources matched stock decoded text for the whole
+guarded corpus. The smoke's 89.757 s menu time is **not** performance evidence:
+verification deliberately reads the original resource as well as the batch.
+The next gate is same-branch hosted A/B with verification disabled.
+
+Fresh-VM [A/B #35886235877](https://github.com/wachipayox/BootOptim/actions/runs/35886235877)
+finished all six exact-pack runs with valid pack selection, the expected
+8192×8192×2 block atlas, zero BootOptim Mixin errors and main-menu endpoints.
+Each candidate activated the batch with exactly 10,809 hits, zero fallbacks,
+verification off and 3,129,313 retained bytes. Per-iteration results are:
+
+| Iteration | Control menu ms | Candidate menu ms | Candidate-control ms | Control reload→FancyMenu ms | Candidate reload→FancyMenu ms |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 87,985 | 95,630 | +7,645 | 40,735 | 43,555 |
+| 2 | 90,101 | 84,656 | -5,445 | 41,143 | 39,316 |
+| 3 | 90,319 | 59,783 | -30,536 | 41,593 | 27,013 |
+
+The median candidate-control delta is -5.445 s to menu and -1.827 s over
+reload→FancyMenu, but the signs are mixed and candidate #3 is a large
+outlier. Its mod-entrypoint occurs at 20.606 s versus control #3 at
+30.364 s, so about 9.758 s of its apparent TTMM advantage precedes this
+resource mechanism. Across the three candidate runs, both menu and reload
+times span far more than the median delta. This fresh-VM A/B is **inconclusive**
+for performance; its green status establishes runtime health, not a win. A
+same-VM alternating-order paired diagnostic is the next variance gate. Its
+warm second process is not a cold-start result and cannot replace the
+physical HDD gate.
+
+The alternating-order [paired run #35899353203](https://github.com/wachipayox/BootOptim/actions/runs/35899353203)
+completed on the same unchanged candidate head. Every process reached menu
+with valid pack selection, block atlas 8192×8192×2 and zero BootOptim Mixin
+errors; every candidate again recorded 10,809 batch hits and zero fallbacks.
+Within-VM candidate-minus-control deltas were:
+
+| Pair | Order | Menu ms | Post-entrypoint ms | Reload→FancyMenu ms |
+|---:|---|---:|---:|---:|
+| 1 | control→candidate | -488 | -940 | -583 |
+| 2 | candidate→control | -2,226 | -1,265 | -1,138 |
+| 3 | control→candidate | -667 | -733 | -328 |
+
+All three reload intervals move in the expected direction, including the
+pair where the candidate ran first and the control inherited the warm VM/page
+cache. Paired median reload movement is -583 ms, post-entrypoint -940 ms and
+menu -667 ms. This is a **small coherent hosted signal**, not evidence of a
+5.445 s cold-start gain from the mixed fresh-VM median. The first physical
+laptop generation's Decocraft model/state open task sums were only 1.305/
+0.896 s; a large first-load speedup is not established. The much larger
+second/third physical reload open sums make manual reload the main hardware
+hypothesis, but task sums still cannot be converted into savings.
+
+Decision: keep the experiment default-off and unpromoted. A controlled
+physical laptop candidate run with the exact original resource-pack selection
+and two manual pack reloads is justified only when the user makes the laptop
+available. Compare against the valid earlier diagnostic with matching origin,
+endpoint and phase markers, and request a new physical control if the delta
+is within normal run variation. Record both reload critical-path wall and
+late-bake GC; a faster archive input with worse GC or no menu/reload wall
+gain is a reject. No laptop use is authorized yet.
+
 This branch is not mergeable as production solely because it builds or
 passes smoke. A material ModelManager barrier or time-to-menu win, no
 late-bake GC regression and final physical validation are required.
