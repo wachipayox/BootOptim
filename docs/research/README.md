@@ -37,6 +37,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Deep resource-reload diagnostic — 2026-09-23](resource-deep-final-diagnostic-2026-09-23.md) — prepared per-generation model input, source-pack and overlay frame attribution for one physical multi-reload run; hosted and laptop gates pending.
+
 - [Physical constructor and first-frame follow-up — 2026-09-23](resource-next-diagnostic-2026-09-23.md) — diagnostic design and hosted validation; the physical run is complete.
 - [Manual resource-pack reload diagnostic — 2026-09-23](resource-multi-reload-diagnostic-2026-09-23.md) — three-generation interactive probe design, overlay-to-frame endpoint, and restored pack-selection gate.
 - [Physical manual resource-pack reload result — 2026-09-23](resource-multi-reload-physical-result-2026-09-23.md) — valid 317/358 s changed/restored reloads; ModelManager preparation is the gate, block-model loading and GC-sensitive bake grow, and 36–50 s overlay tail remains unattributed. Laptop restored.

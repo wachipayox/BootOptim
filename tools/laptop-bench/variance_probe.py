@@ -10,6 +10,9 @@ from typing import Iterable
 MARKER = "BOOTOPTIM_VARIANCE "
 LISTENER_MARKER = "BOOTOPTIM_VARIANCE_LISTENER "
 RELOAD_MARKER = "BOOTOPTIM_VARIANCE_RELOAD "
+MODEL_DEEP_MARKER = "BOOTOPTIM_MODEL_DEEP "
+MODEL_PACK_MARKER = "BOOTOPTIM_MODEL_PACK "
+OVERLAY_DEEP_MARKER = "BOOTOPTIM_OVERLAY_DEEP "
 INT_FIELDS = {
     "seq", "scope", "mono_ns", "wall_epoch_ms", "jvm_start_epoch_ms", "uptime_ms",
     "thread_id", "gc_count", "gc_time_ms", "gc_count_delta", "gc_time_delta_ms",
@@ -25,6 +28,15 @@ LISTENER_FLOAT_FIELDS = {
 }
 RELOAD_INT_FIELDS = {"reload_id", "expected_listeners", "observed_listeners"}
 RELOAD_FLOAT_FIELDS = {"all_preparations_ms", "all_done_ms"}
+MODEL_DEEP_INT_FIELDS = {"reload_id", "model_keys", "model_tasks", "model_failures", "state_keys",
+                         "state_resources", "state_tasks", "state_failures", "pack_rows"}
+MODEL_DEEP_FLOAT_FIELDS = {"model_task_ms_sum", "model_max_task_ms", "state_task_ms_sum", "state_max_task_ms"}
+MODEL_PACK_INT_FIELDS = {"reload_id", "tasks", "opens", "parses", "failures"}
+MODEL_PACK_FLOAT_FIELDS = {"task_ms_sum", "open_ms_sum", "max_open_ms", "parse_ms_sum", "max_parse_ms"}
+OVERLAY_DEEP_INT_FIELDS = {"overlay_id", "frames"}
+OVERLAY_DEEP_FLOAT_FIELDS = {"gap_ms_sum", "gap_ms_max", "overlay_render_ms_sum", "overlay_render_ms_max",
+                             "game_render_ms_sum", "game_render_ms_max", "blit_ms_sum", "blit_ms_max",
+                             "display_ms_sum", "display_ms_max"}
 REQUIRED = {
     ("transformation_service_construct", "point"),
     ("root_mod_discovery", "end"),
@@ -64,6 +76,16 @@ MULTI_RELOAD_REQUIRED = RESOURCE_NEXT_REQUIRED | {
     ("manual_resource_pack_reload", "end"),
     ("reload_frame_presented", "point"),
     ("loading_overlay_exit_call", "point"),
+}
+DEEP_REQUIRED = {
+    (phase, event)
+    for phase in ("model_resource_listing", "model_resource_enqueue", "model_resource_collect",
+                  "state_resource_listing", "state_resource_enqueue", "state_resource_collect")
+    for event in ("start", "end")
+}
+DEEP_SMOKE_REQUIRED = RESOURCE_NEXT_REQUIRED | DEEP_REQUIRED
+MULTI_RELOAD_DEEP_REQUIRED = MULTI_RELOAD_REQUIRED | DEEP_REQUIRED | {
+    ("overlay_reload_done_seen", "point"), ("overlay_fade_begin_seen", "point")
 }
 
 
@@ -123,6 +145,11 @@ def parse_listener_lines(lines: Iterable[str]):
 
 def parse_reload_lines(lines: Iterable[str]):
     return [record for line in lines if (record := parse_reload_line(line)) is not None]
+
+
+def _parse_tagged_lines(lines: Iterable[str], marker: str, int_fields, float_fields=frozenset()):
+    return [_parse_payload(line[line.find(marker) + len(marker):], int_fields, float_fields)
+            for line in lines if marker in line]
 
 
 def _scope_summaries(records):
@@ -260,10 +287,57 @@ def _validate_multi_reload(records, listeners, reload_summaries, scope_warnings)
     return invalid
 
 
-def summarize(records, max_early_uptime_ms=60_000, listeners=None, profile="legacy", reload_summaries=None):
+def _validate_deep(records, model_deep, model_packs, overlay_deep, manual):
+    invalid = []
+    reload_ids = sorted({_reload_id(r.get("subject")) for r in records
+                         if r.get("phase") == "resource_reload" and r.get("event") == "start"})
+    summaries = {}
+    for row in model_deep:
+        rid = row.get("reload_id")
+        if rid in summaries:
+            invalid.append(f"duplicate_model_deep:{rid}")
+        summaries[rid] = row
+    if set(summaries) != set(reload_ids):
+        invalid.append("model_deep_ids_differ")
+    packs_by_id = {}
+    for row in model_packs:
+        packs_by_id.setdefault(row.get("reload_id"), []).append(row)
+    for rid in reload_ids:
+        row = summaries.get(rid)
+        if not row:
+            continue
+        if row.get("result") != "success" or row.get("overlap") != "false":
+            invalid.append(f"model_deep_failed_or_overlapped:{rid}")
+        if row.get("model_keys", -1) < 1 or row.get("model_tasks") != row.get("model_keys"):
+            invalid.append(f"model_deep_model_count:{rid}")
+        if row.get("state_keys", -1) < 1 or row.get("state_tasks") != row.get("state_keys"):
+            invalid.append(f"model_deep_state_count:{rid}")
+        rows = packs_by_id.get(rid, [])
+        if row.get("pack_rows") != len(rows) or not rows:
+            invalid.append(f"model_deep_pack_rows:{rid}")
+        if sum(p.get("opens", 0) for p in rows if p.get("domain") == "model") < 1 or \
+                sum(p.get("parses", 0) for p in rows if p.get("domain") == "state") < 1:
+            invalid.append(f"model_deep_open_parse_missing:{rid}")
+        phases = {r.get("phase") for r in records if r.get("subject") == f"deep_{rid}"}
+        if len(phases & {p for p, _ in DEEP_REQUIRED}) != 6:
+            invalid.append(f"model_deep_phase_missing:{rid}")
+    if manual:
+        rows = [r for r in overlay_deep if r.get("frames", 0) > 0 and r.get("done_seen") == "true"
+                and r.get("fade_seen") == "true"]
+        if len(rows) < 2:
+            invalid.append("manual_overlay_summaries_missing")
+        if any(r.get("gap_ms_max") is None or r.get("game_render_ms_max") is None
+               or r.get("display_ms_max") is None for r in rows):
+            invalid.append("manual_overlay_stage_data_missing")
+    return invalid
+
+
+def summarize(records, max_early_uptime_ms=60_000, listeners=None, profile="legacy", reload_summaries=None,
+              model_deep=None, model_packs=None, overlay_deep=None):
     required = {"legacy": REQUIRED, "resource_split": RESOURCE_SPLIT_REQUIRED,
                 "resource_next": RESOURCE_NEXT_REQUIRED,
-                "multi_reload": MULTI_RELOAD_REQUIRED}[profile]
+                "multi_reload": MULTI_RELOAD_REQUIRED, "deep_smoke": DEEP_SMOKE_REQUIRED,
+                "multi_reload_deep": MULTI_RELOAD_DEEP_REQUIRED}[profile]
     records = sorted(records, key=lambda row: (row.get("mono_ns") is None, row.get("mono_ns") or 0))
     invalid = []
     warnings = []
@@ -300,8 +374,11 @@ def summarize(records, max_early_uptime_ms=60_000, listeners=None, profile="lega
 
     scopes, scope_warnings = _scope_summaries(records)
     warnings.extend(scope_warnings)
-    if profile == "multi_reload":
+    if profile in ("multi_reload", "multi_reload_deep"):
         invalid.extend(_validate_multi_reload(records, listeners or [], reload_summaries or [], scope_warnings))
+    if profile in ("deep_smoke", "multi_reload_deep"):
+        invalid.extend(_validate_deep(records, model_deep or [], model_packs or [], overlay_deep or [],
+                                      profile == "multi_reload_deep"))
 
     previous_mono = None
     for row in records:
@@ -339,6 +416,9 @@ def summarize(records, max_early_uptime_ms=60_000, listeners=None, profile="lega
         "markers": markers,
         "listeners": [] if listeners is None else listeners,
         "reload_summaries": [] if reload_summaries is None else reload_summaries,
+        "model_deep": [] if model_deep is None else model_deep,
+        "model_packs": [] if model_packs is None else model_packs,
+        "overlay_deep": [] if overlay_deep is None else overlay_deep,
         "semantics": {
             "wall": "scope elapsed from System.nanoTime; async/inclusive scopes may overlap and must not be summed",
             "process_cpu": "cumulative Minecraft JVM CPU across all JVM threads; not decoder or listener-exclusive CPU",
@@ -356,6 +436,10 @@ def analyze_file(path: Path, max_early_uptime_ms=60_000, profile="legacy"):
         max_early_uptime_ms=max_early_uptime_ms,
         listeners=parse_listener_lines(lines),
         reload_summaries=parse_reload_lines(lines),
+        model_deep=_parse_tagged_lines(lines, MODEL_DEEP_MARKER, MODEL_DEEP_INT_FIELDS, MODEL_DEEP_FLOAT_FIELDS),
+        model_packs=_parse_tagged_lines(lines, MODEL_PACK_MARKER, MODEL_PACK_INT_FIELDS, MODEL_PACK_FLOAT_FIELDS),
+        overlay_deep=_parse_tagged_lines(lines, OVERLAY_DEEP_MARKER, OVERLAY_DEEP_INT_FIELDS,
+                                         OVERLAY_DEEP_FLOAT_FIELDS),
         profile=profile,
     )
 
@@ -364,7 +448,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("logs", nargs="+", type=Path, help="completed console/latest.log files; read only after Java exits")
     parser.add_argument("--max-early-uptime-ms", type=int, default=60_000)
-    parser.add_argument("--profile", choices=("legacy", "resource_split", "resource_next", "multi_reload"), default="legacy",
+    parser.add_argument("--profile", choices=("legacy", "resource_split", "resource_next", "multi_reload",
+                                              "deep_smoke", "multi_reload_deep"), default="legacy",
                         help="resource_next also requires constructor and first-frame splits")
     args = parser.parse_args()
     output = {str(path): analyze_file(path, args.max_early_uptime_ms, args.profile) for path in args.logs}

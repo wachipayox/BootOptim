@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.profiling.VarianceProbe;
 import dev.wachipayox.bootoptim.profiling.client.ResourceReloadBoundaryProfiler;
+import dev.wachipayox.bootoptim.profiling.client.ModelInputDeepProfiler;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.resources.model.ModelManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,9 +22,12 @@ abstract class ModelManagerVarianceBoundaryMixin {
     private VarianceProbe.Stamp bootoptim$reloadStart;
     @Unique
     private VarianceProbe.Stamp bootoptim$loadModelsStart;
+    @Unique
+    private ModelInputDeepProfiler.Trace bootoptim$deepTrace;
 
     @Inject(method = "reload", at = @At("HEAD"))
     private void bootoptim$reloadStart(CallbackInfoReturnable<?> cir) {
+        bootoptim$deepTrace = ModelInputDeepProfiler.begin();
         bootoptim$reloadStart = ResourceReloadBoundaryProfiler.start("model_manager_reload");
     }
 
@@ -32,6 +36,8 @@ abstract class ModelManagerVarianceBoundaryMixin {
         VarianceProbe.Stamp started = bootoptim$reloadStart;
         bootoptim$reloadStart = null;
         if (cir.getReturnValue() instanceof CompletableFuture<?> future) {
+            ModelInputDeepProfiler.observe(bootoptim$deepTrace, future);
+            bootoptim$deepTrace = null;
             ResourceReloadBoundaryProfiler.observeFuture("model_manager_reload", started, future);
         }
     }

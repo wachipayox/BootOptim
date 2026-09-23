@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.profiling.VarianceProbe;
 import dev.wachipayox.bootoptim.profiling.client.ResourceReloadBoundaryProfiler;
+import dev.wachipayox.bootoptim.profiling.client.LoadingOverlayDeepProfiler;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LoadingOverlay;
@@ -36,6 +37,7 @@ abstract class MinecraftManualReloadVarianceMixin {
     private void bootoptim$loadingOverlayExit(Overlay next, CallbackInfo ci) {
         if (VarianceProbe.enabled() && overlay instanceof LoadingOverlay && !(next instanceof LoadingOverlay)) {
             VarianceProbe.point("loading_overlay_exit_call", next == null ? "none" : next.getClass().getName());
+            LoadingOverlayDeepProfiler.exit(overlay);
         }
     }
 }
