@@ -77,4 +77,28 @@ ModelManager generation. The run reached main menu at 92.483 s with valid
 resource selection, block atlas 8192×8192×2 and zero BootOptim Mixin errors.
 Its verification mode deliberately opened the original supplier as well, so
 the 92.483 s is a semantic-health observation, **not** performance evidence.
-The next gate is same-branch A/B with verification off.
+The next gate was same-branch A/B with verification off.
+
+Hosted exact-pack [A/B #35912720180](https://github.com/wachipayox/BootOptim/actions/runs/35912720180)
+passed its six fresh-VM jobs and aggregate on `ab626ea`. Candidate and
+control used the same process-start/BootOptim origin and main-menu endpoint;
+each selected the expected resource packs exactly once, reached menu with
+8192×8192×2 block atlas and zero BootOptim Mixin errors. Each candidate
+reported `status=ready` for all 5,773 PNGs and `status=complete` with
+5,771 hits, zero fallbacks, verification off and 20,700,997 retained bytes.
+
+| Run | Control menu | Candidate menu | Candidate − control | Control reload→FancyMenu | Candidate reload→FancyMenu | Delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 89.867 s | 76.822 s | −13.045 s | 40.931 s | 35.966 s | −4.965 s |
+| 2 | 92.253 s | 87.632 s | −4.621 s | 41.188 s | 40.227 s | −0.961 s |
+| 3 | 88.504 s | 94.773 s | +6.269 s | 40.444 s | 42.826 s | +2.382 s |
+
+The difference of group medians is −2.235 s (−2.49%) to menu and −0.704 s
+(−1.72%) from reload to FancyMenu finish. These are critical-wall intervals,
+not sums of overlapping sprite tasks. The candidate's menu range is 17.951 s
+and its reload interval range is 6.860 s; both effects reverse in run 3.
+The hosted result therefore establishes compatibility and correct activation,
+but **does not establish a reproducible end-to-end win**. Keep the feature
+default-off and the PR unmerged. There is no justification yet to spend a
+manual laptop run on this candidate; reopen if a revised mechanism or more
+controlled paired evidence yields a consistent critical-wall improvement.
