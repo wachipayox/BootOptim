@@ -39,12 +39,13 @@ animation handling and the authoritative NeoForge
 are not replaced, though a loader reading the same guarded Decocraft PNG
 also sees equivalent encoded bytes.
 
-On first eligible open, one worker reads the exact PNG corpus in physical
-archive order. Snapshot construction requires the expected physical JAR size,
+The first iteration synchronously read the exact PNG corpus in physical
+archive order on the first eligible open. Snapshot construction requires the expected physical JAR size,
 entry count, uncompressed/compressed totals, per-entry size bound, no
-duplicate names and SHA-256 corpus digest. A changed archive fingerprint
-invalidates it at reload start. The retained encoded-byte ceiling is 20.7 MB
-plus maps/objects, across reload generations; decoded pixels and GL textures
+duplicate names and SHA-256 corpus digest. The original implementation
+invalidated a retained snapshot when the archive fingerprint changed. In
+that iteration, the retained encoded-byte ceiling was 20.7 MB
+plus maps/objects across reload generations; decoded pixels and GL textures
 are **not** cached. This is a measured memory/GC tradeoff on the 6 GiB HDD
 laptop, not automatically safe because the prior third bake had severe G1
 pressure. Any guard failure retains the original `IoSupplier` and its
@@ -138,3 +139,27 @@ but it does not meet the critical-path/physical evidence gate for a
 20.7 MB retained cache. A future design should measure the atlas preparation
 barrier directly or produce a larger, stable critical-wall effect before
 another laptop run.
+
+## Revision: asynchronous, generation-scoped preparation
+
+The next default-off revision starts a single daemon preparation worker at
+`ModelManager.reload` entry rather than blocking the first eligible PNG open.
+It still reads and validates the same exact 5,773-entry corpus and publishes
+the immutable snapshot only after all guards pass. Until then, every eligible
+open uses its original stock supplier; readiness is never a reload barrier.
+The snapshot is cleared at completion of that ModelManager future, so its
+20.7 MB encoded-byte map is bounded to the generation instead of retained
+across manual reloads. Open streams hold their own byte-array references and
+remain valid after the map is cleared. A later reload rebuilds the snapshot.
+The one-worker queue cancels stale preparation on a new generation or on
+completion, and the archive scan checks interruption between entries.
+
+This changes the premise from synchronous first-use batching to overlapping
+preparation plus fail-open stock reads. The tradeoff is that the worker may
+compete for HDD bandwidth or CPU with stock reload workers, and early PNGs
+may miss the snapshot. New markers include `prepare_ms` and
+`pending_fallbacks`; both are essential to determine whether the preparation
+finishes before useful sprite opens. The next hosted gates must verify menu,
+pack selection, atlas, errors, snapshot readiness, hit/fallback counts and
+critical-wall deltas. A hosted win alone will not establish a physical HDD
+benefit. This revision is still **not production**.

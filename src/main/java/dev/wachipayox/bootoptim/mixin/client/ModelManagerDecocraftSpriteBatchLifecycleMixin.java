@@ -19,7 +19,9 @@ abstract class ModelManagerDecocraftSpriteBatchLifecycleMixin {
     @Inject(method = "reload", at = @At("RETURN"))
     private void bootoptim$reportSpriteArchiveGeneration(CallbackInfoReturnable<?> cir) {
         if (cir.getReturnValue() instanceof CompletableFuture<?> future) {
-            future.whenComplete((ignored, failure) -> DecocraftSpriteArchiveBatch.finishReload(failure == null));
+            DecocraftSpriteArchiveBatch.attachFinish(future);
+        } else {
+            DecocraftSpriteArchiveBatch.attachFinish(null);
         }
     }
 }

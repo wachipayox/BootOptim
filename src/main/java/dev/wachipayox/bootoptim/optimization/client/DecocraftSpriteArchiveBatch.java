@@ -15,6 +15,10 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -44,11 +48,20 @@ public final class DecocraftSpriteArchiveBatch {
     private static final int MAX_ENTRY_BYTES = 131_072;
     private static final String EXPECTED_DIGEST = "82abe8adc40ee92d8d917c81d7db701db937cc0f26c597d511ea76508c7b4c0d";
     private static final Object LOCK = new Object();
+    private static final ExecutorService PREPARE = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "BootOptim-DecocraftSpritePrepare");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private static final ThreadLocal<Integer> STARTING_GENERATION = new ThreadLocal<>();
     private static volatile Snapshot snapshot;
     private static volatile Target target;
     private static volatile boolean failed;
+    private static volatile int activeGeneration;
+    private static Future<?> preparation;
     private static final LongAdder hits = new LongAdder();
     private static final LongAdder fallbacks = new LongAdder();
+    private static final LongAdder pendingFallbacks = new LongAdder();
     private static final LongAdder verified = new LongAdder();
     private static int reloads;
 
@@ -57,32 +70,66 @@ public final class DecocraftSpriteArchiveBatch {
     public static void beginReload() {
         if (!ENABLED) return;
         synchronized (LOCK) {
+            if (preparation != null) preparation.cancel(true);
+            snapshot = null;
+            failed = false;
             target = findTarget();
-            reloads++;
-            LOGGER.info("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=enabled generation={} archive_present={} verify={}",
-                    reloads, target != null, VERIFY);
-            Snapshot current = snapshot;
-            if (current != null) {
-                try {
-                    if (target == null || !current.fingerprint().equals(fingerprint(target.physicalPath()))) {
-                        snapshot = null;
-                        failed = false;
-                        LOGGER.info("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=invalidated reason=archive_changed");
-                    }
-                } catch (IOException exception) {
-                    snapshot = null;
-                    failed = true;
-                    LOGGER.info("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=disabled reason=archive_unavailable");
-                }
+            int generation = ++reloads;
+            activeGeneration = generation;
+            STARTING_GENERATION.set(generation);
+            LOGGER.info("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=enabled generation={} archive_present={} verify={} mode=async_generation_scoped",
+                    generation, target != null, VERIFY);
+            if (target != null) {
+                Path physicalPath = target.physicalPath();
+                preparation = PREPARE.submit(() -> prepare(generation, physicalPath));
+            } else {
+                preparation = null;
             }
         }
     }
 
-    public static void finishReload(boolean success) {
+    public static void attachFinish(CompletableFuture<?> future) {
         if (!ENABLED) return;
-        LOGGER.info("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=complete generation={} success={} hits={} fallbacks={} verified={} retained_bytes={}",
-                reloads, success, hits.sumThenReset(), fallbacks.sumThenReset(), verified.sumThenReset(),
-                snapshot == null ? 0 : EXPECTED_PNG_BYTES);
+        Integer generation = STARTING_GENERATION.get();
+        STARTING_GENERATION.remove();
+        if (generation == null) return;
+        if (future == null) finishReload(generation, false);
+        else future.whenComplete((ignored, failure) -> finishReload(generation, failure == null));
+    }
+
+    private static void finishReload(int generation, boolean success) {
+        synchronized (LOCK) {
+            if (generation != activeGeneration) return;
+            if (preparation != null) preparation.cancel(true);
+            preparation = null;
+            snapshot = null;
+            target = null;
+            activeGeneration = 0;
+            LOGGER.info("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=complete generation={} success={} hits={} fallbacks={} pending_fallbacks={} verified={} retained_bytes=0",
+                    generation, success, hits.sumThenReset(), fallbacks.sumThenReset(),
+                    pendingFallbacks.sumThenReset(), verified.sumThenReset());
+        }
+    }
+
+    private static void prepare(int generation, Path physicalPath) {
+        long started = System.nanoTime();
+        try {
+            Snapshot loaded = load(physicalPath);
+            synchronized (LOCK) {
+                if (generation != activeGeneration || Thread.currentThread().isInterrupted()) return;
+                snapshot = loaded;
+                LOGGER.info("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=ready generation={} entries={} bytes={} prepare_ms={} digest={}",
+                        generation, EXPECTED_ENTRIES, EXPECTED_PNG_BYTES,
+                        (System.nanoTime() - started) / 1_000_000, EXPECTED_DIGEST);
+            }
+        } catch (IOException | RuntimeException exception) {
+            synchronized (LOCK) {
+                if (generation != activeGeneration || Thread.currentThread().isInterrupted()) return;
+                failed = true;
+                LOGGER.warn("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=disabled generation={} reason=archive_validation_failed",
+                        generation, exception);
+            }
+        }
     }
 
     public static IoSupplier<InputStream> wrap(Path path, IoSupplier<InputStream> stock) {
@@ -92,27 +139,20 @@ public final class DecocraftSpriteArchiveBatch {
                 || !path.startsWith(currentTarget.secureRoot())) return stock;
         String name = currentTarget.secureRoot().relativize(path).toString().replace('\\', '/');
         if (!name.startsWith("assets/decocraft/textures/") || !name.endsWith(".png")) return stock;
-        return () -> open(name, currentTarget.physicalPath(), stock::get);
+        int generation = activeGeneration;
+        return () -> open(name, generation, stock::get);
     }
 
-    private static InputStream open(String name, Path physicalPath, StockOpen stock) throws IOException {
-        if (failed) return stock.open();
+    private static InputStream open(String name, int generation, StockOpen stock) throws IOException {
+        if (generation != activeGeneration || failed) {
+            fallbacks.increment();
+            return stock.open();
+        }
         Snapshot current = snapshot;
         if (current == null) {
-            synchronized (LOCK) {
-                current = snapshot;
-                if (current == null && !failed) {
-                    try {
-                        current = load(physicalPath);
-                        snapshot = current;
-                        LOGGER.info("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=ready entries={} bytes={} digest={}",
-                                EXPECTED_ENTRIES, EXPECTED_PNG_BYTES, EXPECTED_DIGEST);
-                    } catch (IOException | RuntimeException exception) {
-                        failed = true;
-                        LOGGER.warn("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=disabled reason=archive_validation_failed", exception);
-                    }
-                }
-            }
+            pendingFallbacks.increment();
+            fallbacks.increment();
+            return stock.open();
         }
         if (current != null) {
             byte[] bytes = current.entries().get(name);
@@ -172,6 +212,7 @@ public final class DecocraftSpriteArchiveBatch {
         try (ZipFile zip = new ZipFile(path.toFile())) {
             Enumeration<? extends ZipEntry> iterator = zip.entries();
             while (iterator.hasMoreElements()) {
+                if (Thread.currentThread().isInterrupted()) throw new IOException("archive preparation interrupted");
                 ZipEntry entry = iterator.nextElement();
                 String name = entry.getName();
                 if (!name.startsWith("assets/decocraft/textures/") || !name.endsWith(".png")) continue;
