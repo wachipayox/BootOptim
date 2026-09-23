@@ -77,11 +77,21 @@ same-process monotonic attribution can still be reported separately.
 Local Gradle `build --offline` passed and 34 Python tests passed. The first
 hosted exact-pack smoke reached the menu with 14 packs, 8192x8192x2 atlas and
 zero Mixin errors, but proved the initial render-entry probe missed an opening
-inside `GameRenderer.render`. The corrected artifact needs a new hosted smoke.
+inside `GameRenderer.render`. The corrected hosted smoke
+[run 35835262819](https://github.com/wachipayox/BootOptim/actions/runs/35835262819)
+passed. Its artifact `exact-pack-result-smoke-1` contains the three new
+constructor pairs, `title_first_frame_render_return`, blit and display-update
+pairs, and screen identity. Offline `resource_next` validation on unique early
+markers plus latest.log passed with 25 balanced scopes, 72 successful listener
+rows, no warnings, one initial reload, first probe uptime 1.766 s and matching
+clock origin. The hosted first screen is
+`com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen`. The hosted
+constructor gaps measured 1.523 s, 0.100 s and 0.006 s; blit 0.004 s and
+display update 0.088 s. These Linux/Oracle 25 values validate hook behavior,
+not Windows laptop performance or visual/menu usability.
 The packaged
 standalone wrapper is built from `bootstrap/build/libs/`, not root `build/libs`.
-Source commit: see current branch head; the corrected first-frame probe
-supersedes `d53fa80f51c5035b4c08e1b50763c83e369887f9`.
+Corrected runtime source commit `2bd70eca1c702a16a9617cceae5d9903b38a6a89`.
 Local packaged artifact:
 `C:/BootOptimBench/artifacts/resource-next-20260923/bootoptim-resource-next-20260923.jar`,
 SHA-256 `53b774844e4dccb8ce28a6d1f4acac52e63646b78b2fd4bde509c21c9432d5dd`.
