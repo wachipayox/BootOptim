@@ -80,6 +80,14 @@ a separate memory/GC mechanism that an I/O-only change will not fix. JFR
 `GarbageCollection` event durations can include concurrent work and must not
 be substituted for stop-the-world pause overlap.
 
+JFR allocation samples in the three bake windows repeatedly weight int arrays,
+`Matrix4f`, object/float arrays and `BakedQuad` among the largest allocation
+classes. The sampled volume is broadly similar across generations, so the
+third pause surge is not explained by a clearly larger sampled bake workload.
+Sample weights are estimates of allocation, not exact bytes retained or proof
+of a particular cache lifetime; a memory redesign needs a live-set/ownership
+analysis before claiming a remedy.
+
 ## Reload completion and the overlay
 
 The manual public requests take 283.123 and 433.488 s to their returned

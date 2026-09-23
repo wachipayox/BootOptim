@@ -18,6 +18,7 @@ public final class JfrReloadSummary {
         double milliseconds;
         double maxMilliseconds;
         final Map<String, Double> paths = new HashMap<>();
+        final Map<String, Double> classes = new HashMap<>();
         final Map<String, Double> frames = new HashMap<>();
         final Map<String, Double> families = new HashMap<>();
         void add(RecordedEvent event, String type, double windowMilliseconds) {
@@ -25,10 +26,15 @@ public final class JfrReloadSummary {
             double ms = event.hasField("duration") ? windowMilliseconds : 0;
             milliseconds += ms;
             maxMilliseconds = Math.max(maxMilliseconds, ms);
-            double weight = type.equals("jdk.FileRead") ? ms : 1;
+            double weight = type.equals("jdk.FileRead") ? ms :
+                    type.equals("jdk.ObjectAllocationSample") && event.hasField("weight") ? event.getLong("weight") : 1;
             if (type.equals("jdk.FileRead") && event.hasField("path")) {
                 String path = event.getString("path");
                 paths.merge(path == null ? "<unknown>" : path, ms, Double::sum);
+            }
+            if (type.equals("jdk.ObjectAllocationSample") && event.hasField("objectClass")) {
+                String allocated = event.getClass("objectClass").getName();
+                classes.merge(allocated, weight, Double::sum);
             }
             RecordedStackTrace trace = event.getStackTrace();
             if (trace != null) {
@@ -103,6 +109,8 @@ public final class JfrReloadSummary {
                 if (type.equals("jdk.FileRead")) top("PATH_MS", counts.paths, 12);
                 if (type.equals("jdk.FileRead")) top("FAMILY_MS", counts.families, 12);
                 if (type.equals("jdk.FileRead") || type.equals("jdk.ExecutionSample")) top("FRAME_WEIGHT", counts.frames, 12);
+                if (type.equals("jdk.ObjectAllocationSample")) top("CLASS_BYTES", counts.classes, 12);
+                if (type.equals("jdk.ObjectAllocationSample")) top("FRAME_BYTES", counts.frames, 12);
             }
         }
     }
