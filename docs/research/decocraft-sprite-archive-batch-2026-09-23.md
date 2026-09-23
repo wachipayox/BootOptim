@@ -68,3 +68,13 @@ coherent critical-wall signal justifies another physical run. A faster
 earlier full-93-MB read-ahead [PR #76](https://github.com/wachipayox/BootOptim/pull/76)
 failed its end-to-end gate, so the smaller encoded corpus is a distinct
 premise, not a reason to assume a win.
+
+Hosted exact-pack [smoke #35911955908](https://github.com/wachipayox/BootOptim/actions/runs/35911955908)
+passed on commit `3505010`: the path-bound snapshot reached `status=ready`
+with 5,773 entries/20,700,997 bytes. The stock supplier verified **5,771 of
+5,771 runtime hits byte for byte**, with zero fallbacks and a successful
+ModelManager generation. The run reached main menu at 92.483 s with valid
+resource selection, block atlas 8192×8192×2 and zero BootOptim Mixin errors.
+Its verification mode deliberately opened the original supplier as well, so
+the 92.483 s is a semantic-health observation, **not** performance evidence.
+The next gate is same-branch A/B with verification off.
