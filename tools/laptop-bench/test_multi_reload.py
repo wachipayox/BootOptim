@@ -66,6 +66,7 @@ class MultiReloadTests(unittest.TestCase):
             variance = {"valid": True, "profile": "multi_reload",
                         "reload_summaries": [{"reload_id": n} for n in (1, 2, 3)]}
             self.assertTrue(check(before, after, log, variance)["valid"])
+            self.assertTrue(check(before, after, log, {**variance, "profile": "multi_reload_deep"})["valid"])
             log.write_text("Reloading ResourceManager: vanilla, file/A.zip, file/B.zip\n" * 3)
             self.assertIn("no_changed_intermediate_effective_reload",
                           check(before, after, log, variance)["issues"])

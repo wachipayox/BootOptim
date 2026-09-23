@@ -37,7 +37,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
-- [Deep resource-reload diagnostic — 2026-09-23](resource-deep-final-diagnostic-2026-09-23.md) — prepared per-generation model input, source-pack and overlay frame attribution for one physical multi-reload run; hosted and laptop gates pending.
+- [Physical deep model-input and overlay reload result — 2026-09-23](resource-deep-physical-result-2026-09-23.md) — valid three-generation HDD/JFR attribution: model and blockstate resource opening amplifies sharply despite identical source fingerprints; third bake is GC-pause heavy, and overlay tail is separately bounded.
+- [Deep resource-reload diagnostic — 2026-09-23](resource-deep-final-diagnostic-2026-09-23.md) — per-generation model input, source-pack and overlay frame probe design, hosted gates, and physical-run contract.
 
 - [Physical constructor and first-frame follow-up — 2026-09-23](resource-next-diagnostic-2026-09-23.md) — diagnostic design and hosted validation; the physical run is complete.
 - [Manual resource-pack reload diagnostic — 2026-09-23](resource-multi-reload-diagnostic-2026-09-23.md) — three-generation interactive probe design, overlay-to-frame endpoint, and restored pack-selection gate.

@@ -32,7 +32,7 @@ def check(before: Path, after: Path, log: Path, variance: dict):
         issues.append("reference_external_pack_contract_invalid")
     if final != expected or final_incompatible != expected_incompatible:
         issues.append("final_pack_selection_or_compatibility_differs_from_before")
-    if not variance.get("valid") or variance.get("profile") != "multi_reload":
+    if not variance.get("valid") or variance.get("profile") not in ("multi_reload", "multi_reload_deep"):
         issues.append("multi_reload_variance_invalid")
 
     text = log.read_text(encoding="utf-8-sig", errors="replace")

@@ -1,6 +1,8 @@
 # One-run deep resource reload diagnostic — 2026-09-23
 
-Status: **FINAL HOSTED FIRST-GENERATION GATE PASSED; physical validation pending**. This extends
+Status: **PHYSICAL DIAGNOSTIC COMPLETE**. See the
+[three-generation physical result](resource-deep-physical-result-2026-09-23.md).
+This extends
 diagnostic PR #282 from integration `b3f0c5f` after the valid three-generation
 physical result. The previous run proved that ModelManager's preparation is
 the barrier and that `block_models` grew 21.906 → 81.103 → 133.518 s despite
@@ -96,5 +98,6 @@ paired scopes attributed to `deep_1`. Its 89.815 s menu result is not an A/B
 comparison to the previous 72.778 s smoke: fresh hosted VM and diagnostic
 overhead differ. The Windows distributable from `bootstrap/build/libs/` has
 SHA-256 `9E0EF52F31281A9672077F712BAF1B66DD236C92D421242E406CC3A96C2FCADD`.
-The physical launch and collection scripts are prepared locally, but no
-connection or staging on the laptop has been made for this diagnostic.
+The physical `b` run was collected after two manual Done commits and the
+laptop was restored. The earlier `a` run contains only initial loading and is
+invalid for a multi-reload conclusion; both are kept separately.
