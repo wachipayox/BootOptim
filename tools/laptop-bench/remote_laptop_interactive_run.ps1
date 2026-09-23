@@ -38,7 +38,9 @@ function Assert-ExpectedSession([object]$s){
 }
 function Target-Java([string]$game,[string]$root){
     $all=@(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'")
-    @($all|Where-Object{$c=[string]$_.CommandLine;$c -and (($c.IndexOf($game,[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge0))})
+    # Prism emits forward slashes even when transaction paths use Windows backslashes.
+    $paths=@($game,$root)|Where-Object{$_}|ForEach-Object{[regex]::Escape($_.Replace('\','/').TrimEnd('/'))+'(?=$|[/";\s])'}
+    @($all|Where-Object{$c=([string]$_.CommandLine).Replace('\','/');$matched=$false;foreach($pattern in $paths){if($c -match $pattern){$matched=$true;break}};$matched})
 }
 function Prism-Procs([string]$exe){$n=@('prismlauncher.exe','PrismLauncher.exe',[IO.Path]::GetFileName($exe))|Select-Object -Unique;@(Get-CimInstance Win32_Process|Where-Object{$n -contains $_.Name})}
 function Quote-Arg([string]$v){
@@ -81,9 +83,13 @@ try{
 # it marks the transaction invalid, may close only Prism, and can then leave a
 # late Java process outside the transaction's identity record.  Keep this
 # launch grace separate from the measured-process timeout and cap it so a truly
-# failed Prism launch is still reported promptly.
+# failed Prism launch is still reported promptly.  The first launch after a
+# laptop reboot can spend more than five minutes in Prism metadata/auth/asset
+# materialization before it creates Java; do not classify that launcher work
+# as a game-process failure.  The separate run timeout still bounds Java once
+# it exists.
 $java=$null
-$appearanceTimeoutSeconds=[Math]::Min(300,[Math]::Max(90,[int]$s.timeoutSeconds-60))
+$appearanceTimeoutSeconds=[Math]::Min(600,[Math]::Max(180,[int]$s.timeoutSeconds-60))
 $deadline=[DateTime]::UtcNow.AddSeconds($appearanceTimeoutSeconds)
 do{
     Start-Sleep -Milliseconds 1000

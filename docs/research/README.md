@@ -37,6 +37,20 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Physical deep model-input and overlay reload result — 2026-09-23](resource-deep-physical-result-2026-09-23.md) — valid three-generation HDD/JFR attribution: model and blockstate resource opening amplifies sharply despite identical source fingerprints; third bake is GC-pause heavy, and overlay tail is separately bounded.
+- [Deep resource-reload diagnostic — 2026-09-23](resource-deep-final-diagnostic-2026-09-23.md) — per-generation model input, source-pack and overlay frame probe design, hosted gates, and physical-run contract.
+
+- [Physical constructor and first-frame follow-up — 2026-09-23](resource-next-diagnostic-2026-09-23.md) — diagnostic design and hosted validation; the physical run is complete.
+- [Manual resource-pack reload diagnostic — 2026-09-23](resource-multi-reload-diagnostic-2026-09-23.md) — three-generation interactive probe design, overlay-to-frame endpoint, and restored pack-selection gate.
+- [Physical manual resource-pack reload result — 2026-09-23](resource-multi-reload-physical-result-2026-09-23.md) — valid 317/358 s changed/restored reloads; ModelManager preparation is the gate, block-model loading and GC-sensitive bake grow, and 36–50 s overlay tail remains unattributed. Laptop restored.
+- [Physical constructor and first-frame result — 2026-09-23](resource-next-physical-result-2026-09-23.md) — valid 177.440 s initial reload; seven disjoint ModelBakery children leave 0.173 s, and first-render tail owns 5.239 s of the 5.405 s TitleScreen-to-display interval. Laptop restored.
+
+- [Physical model/renderer split — 2026-09-22](resource-split-laptop-2026-09-22.md) — physical 142.333 s initial reload; CIT 17.450 s, constructor residual 13.549 s, entity providers 16.802 s, presentation tail 19.104 s. All seven scopes/70 listeners present; total startup rejected for clock inconsistency; instance restored.
+
+- [Initial laptop resource diagnostic — 2026-09-22](resource-initial-laptop-2026-09-22.md) — invalid startup provenance due to Java detection failure; partial 189.547 s reload/70-listener evidence, current model/renderer priorities, and slash-normalized Prism detector repair.
+
+- [Resource loading coverage audit — 2026-09-22](resource-loading-coverage-audit-2026-09-22.md) — current integration and unmerged diagnostic history reconciled; prioritizes per-generation physical reload evidence, request-to-listener timing, and changed-pack validation while preserving established model/resource findings.
+
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
 - [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
@@ -61,6 +75,7 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 - [ModernFix reload parallelism lease audit — 2026-09-06](modernfix-reload-lease-audit-2026-09-06.md) — **REJECTED AS PRODUCTION**: #126's -242 ms reload median is not stable per sample, the reversed laptop pair did not reproduce it, TTMM is dominated by unrelated drift, no CPU metric proves contention relief, and no safe adaptive controller is justified; retain only as inconclusive hardware-sensitive evidence.
 - [Client model / ModelManager pipeline](model-pipeline.md) — historical #13/#14/#35/#36/#37/#47 evidence, the validated #55 blockstate matcher, and rejected shallow approaches.
 - [ModelManager physical variance / critical reload audit — 2026-09-06](modelmanager-physical-variance-2026-09-06.md) — corrected laptop evidence places the current critical branch in ModelBakery/load/bake, rejects another generic executor/cache patch, and defines the minimum three-run attribution gate.
+- [Decocraft model archive batch — 2026-09-23](decocraft-model-archive-batch-2026-09-23.md) — default-off exact-pack experiment to batch 10,809 mod-JAR JSON inputs in archive order with strict source/content guards and a hosted semantic gate before A/B.
 - [Deep ModelManager follow-up — 2026-08-31](model-pipeline-deep-2026-08-31.md) — 97.60% recursive bake-cache hit rate, exclusive bake-cost attribution, 10.86M blockstate variant tests, and the indexed-matching architectural hypothesis.
 - [Post-promotion ModelManager residuals](modelmanager-post56-residuals.md) — PR #57 exact-pack gate/cost distribution after production promotions, rejected generated-item span-topology cache, and the short-scope material-resolution hypothesis.
 - [Decocraft 3D item / item-sprite elision — 2026-09-02](decocraft-3d-item-sprite-elision-2026-09-02.md) — rejected #79 experiment: 3,192 verified model/sprite removals, laptop end-to-end tie, hosted 3×3 regression, atlas-environment boundary, and reopening criteria.
