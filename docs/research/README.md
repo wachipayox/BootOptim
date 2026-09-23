@@ -37,6 +37,10 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Physical deep model-input and overlay reload result — 2026-09-23](resource-deep-physical-result-2026-09-23.md) — valid three-generation HDD/JFR attribution: resource opening amplifies with identical model-source fingerprints; third bake has a separate GC-pause surge.
+- [Deep resource-reload diagnostic design — 2026-09-23](resource-deep-final-diagnostic-2026-09-23.md) — opt-in per-generation input/overlay probe, hosted gates and physical-run contract; instrumentation remains in diagnostic PR #282.
+- [ModelManager input-open I/O lane — 2026-09-23](model-input-io-lane-2026-09-23.md) — **REJECTED** two-permit experiment: physical task/phase ratios average about one active model task, and hosted permit wait was only 21 ms across 56,311 opens.
+
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
 - [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
