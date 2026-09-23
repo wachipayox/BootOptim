@@ -72,6 +72,13 @@ different threads and overlapping windows are **not** a disk-busy timeline
 or an additive savings ceiling. `UnionFileSystem.byteChannel` dominates the
 recorded slow file-read stack family.
 
+The thresholded slow `FileRead` events attributed to model input report only
+28,852 → 230,703 → 272,574 bytes read across those same generations, despite
+their 6.3 → 68.1 → 164.6 s overlapping duration sums. This is consistent with
+small, costly archive reads/page faults during entry opening, but it is **not**
+the complete JSON input volume: JFR does not capture fast reads under its
+threshold, and ZipFS can materialize an entry before returning a byte channel.
+
 The third `bake_models` span includes about 60.2 s of JFR `GCPhasePause`
 overlap within its 74.2 s window (the JVM aggregate GC-time counter increases
 57.6 s across the scope). The first/second bakes show about 2.1/5.8 s of
@@ -106,13 +113,18 @@ There is no basis here to move OpenGL work or to claim a display optimization.
 
 ## Next experiment
 
-The first isolated candidate should target the model/blockstate resource-open
-path, with the exact original reader/parse/error contract preserved and an
-opt-out property. A model-specific I/O schedule is a different premise from
-the rejected global two-worker reload executor (#126): it must keep the
-existing prepare/barrier/ordered-apply lifecycle and leave other listeners
-alone. Hosted exact-pack correctness and same-branch A/B must precede a
-physical comparison; hosted Linux is not proof of HDD benefit. The separate
-late-bake GC amplification needs its own allocation/lifetime design after the
-I/O mechanism is isolated. No physical optimization test is authorized by
-this result alone.
+The isolated two-permit model-input lane in [PR #283](https://github.com/wachipayox/BootOptim/pull/283)
+was rejected before A/B: physical model-task sum divided by `block_models`
+wall is only 0.804, 0.999 and 0.960 average active tasks, and hosted smoke
+recorded just 21 ms total permit wait across 56,311 opens. It reached menu,
+but the expected transfer function was absent. No speedup is claimed.
+
+The next distinct premise is to avoid repeat opens for strictly identified,
+immutable mod-JAR JSON inputs across reload generations. See
+[the bounded-input-cache design](model-input-cache-design-2026-09-23.md).
+It requires source identity, resource-pack precedence, reload invalidation,
+memory bounds and fail-open behavior; a pack ID or unchanged resource listing
+alone is insufficient. Hosted semantic validation and same-branch A/B must
+precede any physical comparison. The separate late-bake GC amplification
+needs its own allocation/lifetime design. No physical optimization test is
+authorized by this result alone.
