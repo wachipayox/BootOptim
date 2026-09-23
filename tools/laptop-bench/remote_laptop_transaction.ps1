@@ -69,7 +69,9 @@ function Prism-Procs([string]$exe) {
 }
 function Target-Java([string]$game,[string]$root) {
     $all=@(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'")
-    @($all|Where-Object{$c=[string]$_.CommandLine;$c -and (($c.IndexOf($game,[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge0))})
+    # Prism emits forward slashes even when transaction paths use Windows backslashes.
+    $paths=@($game,$root)|Where-Object{$_}|ForEach-Object{[regex]::Escape($_.Replace('\','/').TrimEnd('/'))+'(?=$|[/";\s])'}
+    @($all|Where-Object{$c=([string]$_.CommandLine).Replace('\','/');$matched=$false;foreach($pattern in $paths){if($c -match $pattern){$matched=$true;break}};$matched})
 }
 
 function Ensure-Wts {
@@ -105,7 +107,10 @@ function Set-CfgKey([string]$text,[string]$key,[string]$value) {
 }
 function Qs([string]$v) {
     if($v.Contains("`r")-or$v.Contains("`n")-or$v.Contains([char]0)){Fail 'JvmArgs may not contain newline or NUL'}
-    $v.Replace('\','\\').Replace('"','\"')
+    # Prism stores a JVM argument list as one QSettings INI value.  It must be
+    # quoted as a whole: without delimiters Prism accepts the key but silently
+    # drops the list when it materializes the actual Java command line.
+    '"'+$v.Replace('\','\\').Replace('"','\"')+'"'
 }
 
 function Config {

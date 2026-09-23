@@ -1,0 +1,137 @@
+package dev.wachipayox.bootoptim.mixin.client;
+
+import dev.wachipayox.bootoptim.profiling.StartupProfiler;
+import dev.wachipayox.bootoptim.profiling.VarianceProbe;
+import dev.wachipayox.bootoptim.profiling.client.ReloadListenerVarianceProfiler;
+import dev.wachipayox.bootoptim.profiling.client.ModelInputDeepProfiler;
+import dev.wachipayox.bootoptim.profiling.client.LoadingOverlayDeepProfiler;
+import java.util.concurrent.atomic.AtomicBoolean;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.LoadingOverlay;
+import net.minecraft.client.gui.screens.Overlay;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+/**
+ * Marks the first Window.updateDisplay completion after TitleScreen opening.
+ *
+ * <p>The exact pack may replace TitleScreen later in the same tick (for example with a first-run welcome
+ * screen), so checking Minecraft.screen at runTick RETURN can miss a frame that was already presented.
+ * This probe is armed by StartupProfiler.markMainMenu() and consumes that state at the actual display-update
+ * boundary instead. No render or swap call is redirected or reordered.</p>
+ */
+@Mixin(Minecraft.class)
+abstract class MinecraftTitlePresentVarianceMixin {
+    @Shadow private Overlay overlay;
+    private static final AtomicBoolean BOOTOPTIM$PRESENT_REPORTED = new AtomicBoolean();
+    @Unique private boolean bootoptim$firstTitleFrame;
+    @Unique private VarianceProbe.Stamp bootoptim$renderStamp;
+    @Unique private VarianceProbe.Stamp bootoptim$blitStamp;
+    @Unique private VarianceProbe.Stamp bootoptim$displayStamp;
+    @Unique private Overlay bootoptim$activeOverlayFrame;
+    @Unique private long bootoptim$overlayRenderStart;
+    @Unique private long bootoptim$overlayBlitStart;
+    @Unique private long bootoptim$overlayDisplayStart;
+
+    @Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GameRenderer;render(Lnet/minecraft/client/DeltaTracker;Z)V"))
+    private void bootoptim$beforeTitleRender(boolean renderLevel, CallbackInfo ci) {
+        bootoptim$activeOverlayFrame = VarianceProbe.enabled() && overlay instanceof LoadingOverlay ? overlay : null;
+        if (bootoptim$activeOverlayFrame != null) bootoptim$overlayRenderStart = System.nanoTime();
+        if (!VarianceProbe.enabled() || !StartupProfiler.hasMainMenuOpened() || BOOTOPTIM$PRESENT_REPORTED.get()) {
+            return;
+        }
+        bootoptim$firstTitleFrame = true;
+        bootoptim$renderStamp = VarianceProbe.start("title_first_frame_render");
+    }
+
+    @Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GameRenderer;render(Lnet/minecraft/client/DeltaTracker;Z)V", shift = At.Shift.AFTER))
+    private void bootoptim$afterTitleRender(boolean renderLevel, CallbackInfo ci) {
+        if (bootoptim$activeOverlayFrame != null && bootoptim$overlayRenderStart != 0) {
+            LoadingOverlayDeepProfiler.stage(bootoptim$activeOverlayFrame, "game_render", System.nanoTime() - bootoptim$overlayRenderStart);
+            bootoptim$overlayRenderStart = 0;
+        }
+        if (!VarianceProbe.enabled() || !StartupProfiler.hasMainMenuOpened() || BOOTOPTIM$PRESENT_REPORTED.get()) {
+            return;
+        }
+        if (bootoptim$renderStamp != null) {
+            VarianceProbe.finish("title_first_frame_render", bootoptim$renderStamp);
+            bootoptim$renderStamp = null;
+        }
+        // TitleScreen can open inside GameRenderer.render. In that case the render
+        // entry predates opening, so no full render scope can be claimed.
+        bootoptim$firstTitleFrame = true;
+        VarianceProbe.point("title_first_frame_render_return");
+    }
+
+    @Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/pipeline/RenderTarget;blitToScreen(II)V"))
+    private void bootoptim$beforeTitleBlit(boolean renderLevel, CallbackInfo ci) {
+        if (bootoptim$activeOverlayFrame != null) bootoptim$overlayBlitStart = System.nanoTime();
+        if (bootoptim$firstTitleFrame) {
+            bootoptim$blitStamp = VarianceProbe.start("title_first_frame_blit");
+        }
+    }
+
+    @Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/pipeline/RenderTarget;blitToScreen(II)V", shift = At.Shift.AFTER))
+    private void bootoptim$afterTitleBlit(boolean renderLevel, CallbackInfo ci) {
+        if (bootoptim$activeOverlayFrame != null && bootoptim$overlayBlitStart != 0) {
+            LoadingOverlayDeepProfiler.stage(bootoptim$activeOverlayFrame, "blit", System.nanoTime() - bootoptim$overlayBlitStart);
+            bootoptim$overlayBlitStart = 0;
+        }
+        if (bootoptim$firstTitleFrame) {
+            VarianceProbe.finish("title_first_frame_blit", bootoptim$blitStamp);
+            bootoptim$blitStamp = null;
+        }
+    }
+
+    @Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/Window;updateDisplay()V"))
+    private void bootoptim$beforeDisplayUpdate(boolean renderLevel, CallbackInfo ci) {
+        if (bootoptim$activeOverlayFrame != null) bootoptim$overlayDisplayStart = System.nanoTime();
+        if (bootoptim$firstTitleFrame) {
+            bootoptim$displayStamp = VarianceProbe.start("title_first_frame_display_update");
+        }
+    }
+
+    @Inject(
+            method = "runTick",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/mojang/blaze3d/platform/Window;updateDisplay()V",
+                    shift = At.Shift.AFTER))
+    private void bootoptim$afterDisplayUpdate(boolean renderLevel, CallbackInfo ci) {
+        if (bootoptim$activeOverlayFrame != null && bootoptim$overlayDisplayStart != 0) {
+            LoadingOverlayDeepProfiler.stage(bootoptim$activeOverlayFrame, "display", System.nanoTime() - bootoptim$overlayDisplayStart);
+            bootoptim$overlayDisplayStart = 0;
+        }
+        bootoptim$activeOverlayFrame = null;
+        if (bootoptim$firstTitleFrame) {
+            VarianceProbe.finish("title_first_frame_display_update", bootoptim$displayStamp);
+            bootoptim$displayStamp = null;
+            bootoptim$firstTitleFrame = false;
+        }
+        if (!VarianceProbe.enabled() || !StartupProfiler.hasMainMenuOpened()) {
+            return;
+        }
+        Minecraft game = (Minecraft) (Object) this;
+        String screenClass = game.screen == null ? "none" : game.screen.getClass().getName();
+        if (!BOOTOPTIM$PRESENT_REPORTED.compareAndSet(false, true)) {
+            if (!(overlay instanceof LoadingOverlay)) {
+                ReloadListenerVarianceProfiler.emitCompletedAfterFrame(screenClass);
+                ModelInputDeepProfiler.emitCompletedAfterFrame();
+                LoadingOverlayDeepProfiler.emitCompletedAfterFrame();
+            }
+            return;
+        }
+        VarianceProbe.point("main_menu_presented");
+        VarianceProbe.point("startup_presented_screen", screenClass);
+        ReloadListenerVarianceProfiler.emitAfterTitle(screenClass);
+        ModelInputDeepProfiler.emitCompletedAfterFrame();
+        LoadingOverlayDeepProfiler.emitCompletedAfterFrame();
+        if (StartupProfiler.shouldExitAfterPresentedTitle()) {
+            ((Minecraft) (Object) this).stop();
+        }
+    }
+}
