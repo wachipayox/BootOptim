@@ -121,3 +121,65 @@ gain is a reject. No laptop use is authorized yet.
 This branch is not mergeable as production solely because it builds or
 passes smoke. A material ModelManager barrier or time-to-menu win, no
 late-bake GC regression and final physical validation are required.
+
+## First physical combined diagnostic — 2026-09-23
+
+The user performed the initial menu and two manual pack reloads with the
+combined diagnostic/candidate JAR from [PR #286](https://github.com/wachipayox/BootOptim/pull/286),
+removing only `Ashen_Custom_Font (1).zip` and then restoring its original
+priority. The transaction recorded a fresh Java process (Oracle 21.0.9,
+6 GiB G1), the expected candidate SHA, and a clean exit. It copied the logs
+and 42.6 MB JFR to `C:/BootOptimBench/results/resource-batch-physical-20260923/`
+and restored the original Prism configuration and BootOptim wrapper. All
+three reloads completed 70/70, 71/71 and 71/71 listeners; the effective
+external-pack lists were initial / font removed / initial again. All three
+batch generations reported 10,809 hits, zero fallbacks, verification off,
+and the exact 3,129,313-byte corpus. Model/state source fingerprints stayed
+identical to the earlier physical control across all generations.
+
+**Overall startup validity is rejected.** The first transformation-service
+marker occurs at JVM uptime 109.134 s, above the 60 s stale-prefix limit,
+and `(wall_epoch_ms - jvm_start_epoch_ms)` disagrees with recorded uptime by
+about 9.015 s. The previous valid control's first marker was at 41.617 s.
+The candidate's time-to-menu must not be compared to the control or cited
+as a win. The isolated reload intervals and phase scopes use monotonic clocks
+and are still useful diagnostic observations, but this is not a valid
+end-to-end A/B. The physical run also had a longer pre-marker/JFR-start
+interval than the control, so uncontrolled machine state is plausible.
+
+| Phase, seconds | Control g1/g2/g3 | Candidate g1/g2/g3 |
+|---|---:|---:|
+| `resource_reload` wall | 164.950 / 281.209 / 428.399 | 163.047 / 332.537 / 518.459 |
+| `block_models` future wall | 26.427 / 84.138 / 191.037 | 23.301 / 61.786 / 183.143 |
+| `block_states` future wall | 8.441 / 21.072 / 93.639 | 8.045 / 16.336 / 85.197 |
+| `atlas_schedule_load` wall | 39.6 / 110.9 / 218.9 | 46.8 / 108.9 / 283.4 |
+| `bake_models` wall | 32.502 / 42.203 / 74.216 | 25.842 / 44.494 / 65.464 |
+
+Within the exact guarded Decocraft pack, model `openAsReader` task-sum fell
+from 1.305 / 27.011 / 55.846 s to 0.084 / 0.084 / 0.295 s. State open
+task-sum went from 0.896 / 8.351 / 32.097 s to 1.837 / 0.052 / 0.053 s;
+the candidate first generation includes the one-time corpus load. These
+task-sums overlap and **must not** be subtracted from reload wall. They prove
+the intended input-open mechanism works, but the two manual reloads were
+51.328 and 90.060 s slower in this run. Model futures were shorter by
+22.352 and 7.894 s, while the third atlas schedule was about 64.5 s longer.
+At third generation the atlas ends at the bake start and is a likely gate;
+this is an observation, not proof that the batch caused the atlas delay.
+
+The candidate JFR has about 43.1 s and 78.3 s of clipped `GCPhasePause`
+event-duration sums inside manual reload 2/3, versus about 21.3 s and
+89.6 s in the control. The candidate second bake has about 22.4 s of pause
+overlap (control about 5.8 s); the third has about 48.3 s (control about
+60.2 s). Thus GC pressure moved between generations; it did not vanish.
+Candidate slow `FileRead` events remain dominated by texture input and many
+other archives. Their duration sums include overlap and are not disk-busy
+time or additive savings.
+
+Decision: **do not promote or claim a physical end-to-end win**. The batch
+is a successful narrow mechanism with no demonstrated reduction in reload
+completion time under this physical run. A matched repeat with a valid early
+origin and comparable machine conditions would be needed to distinguish a
+small positive effect from the large storage/GC/atlas variability. The
+longer-term architectural target is broader resource-input locality and the
+atlas/late-bake critical path, not multiplying pack-specific caches on the
+basis of overlapping `openAsReader` task sums.
