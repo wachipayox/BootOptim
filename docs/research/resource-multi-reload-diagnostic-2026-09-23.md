@@ -52,9 +52,13 @@ in-world equivalence follows from the selection check alone.
 
 ## Validation and remaining gate
 
-Local `./gradlew.bat build --offline` and 47 Python tests pass. The next
-runtime gate is a hosted exact-pack smoke for the new Mixin targeting before
-the interactive laptop launch. The laptop result must record the physical
+Local `./gradlew.bat build --offline` and 47 Python tests pass. Hosted exact-pack
+[smoke #35841952398](https://github.com/wachipayox/BootOptim/actions/runs/35841952398)
+reached its first UI in 89.447 s with zero BootOptim Mixin errors. Offline
+`resource_next` parsing of its full console passed: one initial reload, one
+post-frame marker, and 72/72 successful listener rows. Hosted smoke does not
+exercise the Resource Packs UI or establish laptop timing; those remain the
+interactive gate. The laptop result must record the physical
 hardware, pack state, actual JVM start marker and menu/reload endpoints. It
 should compare generation-specific critical-path wall and CPU within the
 same JVM; a single run is attribution evidence, not an A/B speedup.
