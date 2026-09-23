@@ -25,15 +25,19 @@ This proves local source-byte parity, not that every entry wins pack selection
 or is needed by the atlas; the previous physical runtime loaded 5,771
 Decocraft sprites.
 
-The candidate hooks only the stock NeoForge 1.21.1
-`SpriteResourceLoader.create` lambda at its `Resource.open()` call. It first
-lets stock `Resource.metadata()` run; the stock loader then receives a fresh
-`ByteArrayInputStream` and still calls stock `NativeImage.read`, animation
-handling and the authoritative `SpriteContentsConstructor`. Custom sprite
-loaders are untouched. The guard requires the already-selected resource to
-report `mod/decocraft`, its `PathPackResources` root to equal the loaded
-Decocraft SecureJar root, and a Decocraft sprite ID resolving to an archive
-PNG entry. External overlays, edited packs and unknown resources use stock.
+The candidate wraps only the lazy `IoSupplier.create(Path)` produced by
+`PathPackResources` for an exact Decocraft texture PNG path. It retains the
+**actual selected path** rather than reconstructing one from a sprite ID;
+custom atlas aliases therefore still receive the bytes of their selected
+PNG. The guard requires the path to reside on the loaded Decocraft SecureJar
+filesystem under `assets/decocraft/textures/`. Stock resource-pack
+precedence, resource listing, metadata and atlas source callbacks still
+choose the resource. External overlays, edited packs, other mod roots and
+unknown resources keep their stock suppliers. Stock `NativeImage.read`,
+animation handling and the authoritative NeoForge
+`SpriteContentsConstructor` still consume the stream; custom sprite loaders
+are not replaced, though a loader reading the same guarded Decocraft PNG
+also sees equivalent encoded bytes.
 
 On first eligible open, one worker reads the exact PNG corpus in physical
 archive order. Snapshot construction requires the expected physical JAR size,
@@ -43,13 +47,14 @@ invalidates it at reload start. The retained encoded-byte ceiling is 20.7 MB
 plus maps/objects, across reload generations; decoded pixels and GL textures
 are **not** cached. This is a measured memory/GC tradeoff on the 6 GiB HDD
 laptop, not automatically safe because the prior third bake had severe G1
-pressure. Any guard failure falls back to the original `Resource.open()`.
+pressure. Any guard failure retains the original `IoSupplier` and its
+`Resource.open()` behavior.
 
 The feature requires
 `-Dboot_optim.experimentDecocraftSpriteArchiveBatch=true`.
 `-Dboot_optim.experimentDecocraftSpriteArchiveBatchVerify=true` is a
-semantic smoke mode: it opens each eligible winning resource through stock,
-compares exact bytes, then gives those stock bytes to the parser. This must
+semantic smoke mode: it opens each eligible original path supplier through
+stock, compares exact bytes, then gives those stock bytes to the consumer. This must
 be **off for timed A/B** because it duplicates the read. The marker
 `BOOTOPTIM_DECOCRAFT_SPRITE_BATCH` reports snapshot readiness, per-generation
 hits/fallbacks/verification and retained bytes.

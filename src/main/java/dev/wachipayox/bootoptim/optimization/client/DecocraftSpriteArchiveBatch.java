@@ -1,7 +1,6 @@
 package dev.wachipayox.bootoptim.optimization.client;
 
 import com.mojang.logging.LogUtils;
-import dev.wachipayox.bootoptim.mixin.client.PathPackResourcesRootAccessor;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,9 +18,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.packs.PathPackResources;
-import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.IoSupplier;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforgespi.language.IModFileInfo;
 import org.slf4j.Logger;
@@ -88,25 +85,25 @@ public final class DecocraftSpriteArchiveBatch {
                 snapshot == null ? 0 : EXPECTED_PNG_BYTES);
     }
 
-    public static InputStream open(Resource resource, ResourceLocation spriteId, StockOpen stock) throws IOException {
-        if (!ENABLED || failed || resource.source() == null
-                || !"mod/decocraft".equals(resource.sourcePackId())
-                || !"decocraft".equals(spriteId.getNamespace())) {
-            return stock.open();
-        }
+    public static IoSupplier<InputStream> wrap(Path path, IoSupplier<InputStream> stock) {
+        if (!ENABLED || stock == null || failed) return stock;
         Target currentTarget = target;
-        if (currentTarget == null || !sourceRootMatches(resource, currentTarget.secureRoot())) {
-            fallbacks.increment();
-            return stock.open();
-        }
+        if (currentTarget == null || !path.getFileSystem().equals(currentTarget.secureRoot().getFileSystem())
+                || !path.startsWith(currentTarget.secureRoot())) return stock;
+        String name = currentTarget.secureRoot().relativize(path).toString().replace('\\', '/');
+        if (!name.startsWith("assets/decocraft/textures/") || !name.endsWith(".png")) return stock;
+        return () -> open(name, currentTarget.physicalPath(), stock::get);
+    }
 
+    private static InputStream open(String name, Path physicalPath, StockOpen stock) throws IOException {
+        if (failed) return stock.open();
         Snapshot current = snapshot;
         if (current == null) {
             synchronized (LOCK) {
                 current = snapshot;
                 if (current == null && !failed) {
                     try {
-                        current = load(currentTarget.physicalPath());
+                        current = load(physicalPath);
                         snapshot = current;
                         LOGGER.info("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=ready entries={} bytes={} digest={}",
                                 EXPECTED_ENTRIES, EXPECTED_PNG_BYTES, EXPECTED_DIGEST);
@@ -118,7 +115,6 @@ public final class DecocraftSpriteArchiveBatch {
             }
         }
         if (current != null) {
-            String name = "assets/decocraft/textures/" + spriteId.getPath() + ".png";
             byte[] bytes = current.entries().get(name);
             if (bytes != null) {
                 hits.increment();
@@ -129,7 +125,7 @@ public final class DecocraftSpriteArchiveBatch {
                     }
                     if (!java.util.Arrays.equals(bytes, stockBytes)) {
                         failed = true;
-                        LOGGER.error("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=disabled reason=resource_byte_mismatch id={}", spriteId);
+                        LOGGER.error("BOOTOPTIM_DECOCRAFT_SPRITE_BATCH status=disabled reason=resource_byte_mismatch path={}", name);
                     } else {
                         verified.increment();
                     }
@@ -140,15 +136,6 @@ public final class DecocraftSpriteArchiveBatch {
         }
         fallbacks.increment();
         return stock.open();
-    }
-
-    private static boolean sourceRootMatches(Resource resource, Path secureRoot) {
-        try {
-            return resource.source() instanceof PathPackResources pathPack
-                    && secureRoot.equals(((PathPackResourcesRootAccessor) pathPack).bootoptim$getRoot());
-        } catch (RuntimeException exception) {
-            return false;
-        }
     }
 
     private static Target findTarget() {
