@@ -102,3 +102,39 @@ but **does not establish a reproducible end-to-end win**. Keep the feature
 default-off and the PR unmerged. There is no justification yet to spend a
 manual laptop run on this candidate; reopen if a revised mechanism or more
 controlled paired evidence yields a consistent critical-wall improvement.
+
+Hosted exact-pack [same-VM paired run #35928516325](https://github.com/wachipayox/BootOptim/actions/runs/35928516325)
+then completed four control/candidate pairs on `61fcfcd`. Odd pairs ran
+control first, even pairs candidate first. This shares each pair's VM and OS
+cache, but makes the second process warm; the order alternation exposes that
+bias. All eight processes reached menu with the expected pack selection, one
+initial reload, block atlas 8192×8192×2 and zero BootOptim Mixin errors.
+All four candidates reported 5,771 hits, zero fallbacks, verification off
+and 20,700,997 retained bytes. BootOptim's startup report supplied the
+process-uptime origin and main-menu endpoint for each process.
+
+| Pair | Order | Candidate − control to menu | Reload→FancyMenu | FancyMenu panorama |
+| --- | --- | ---: | ---: | ---: |
+| 1 | control→candidate | −1.413 s | −1.808 s | −0.528 s |
+| 2 | candidate→control | −3.378 s | −0.854 s | +0.031 s |
+| 3 | control→candidate | +0.037 s | −0.527 s | −0.415 s |
+| 4 | candidate→control | −1.904 s | −0.258 s | −0.437 s |
+
+The median within-pair delta is −1.659 s to menu and −0.691 s from initial
+reload start to FancyMenu finish. All four reload intervals favor the
+candidate, in both orders, giving a **small directional hosted signal**.
+However, the FancyMenu panorama interval accounts for much of that median:
+subtracting its duration from the inclusive reload→FancyMenu interval leaves
+within-pair deltas of −1.280, −0.885, −0.112 and +0.179 s (median −0.499 s).
+That subtraction is an approximate disjoint-stage comparison, not a direct
+atlas measurement. Menu time also includes large unrelated pre-entrypoint
+variation; the four entrypoint deltas are +0.389, −1.602, −0.283 and
+−2.073 s. Thus neither the −1.659 s menu median nor the −0.691 s reload
+median can be attributed confidently to the encoded-sprite mechanism.
+
+Decision remains **default-off, unmerged**. The paired run makes the
+compatibility case stronger and suggests a subsecond hosted reload effect,
+but it does not meet the critical-path/physical evidence gate for a
+20.7 MB retained cache. A future design should measure the atlas preparation
+barrier directly or produce a larger, stable critical-wall effect before
+another laptop run.
