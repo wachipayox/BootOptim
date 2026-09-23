@@ -163,3 +163,13 @@ finishes before useful sprite opens. The next hosted gates must verify menu,
 pack selection, atlas, errors, snapshot readiness, hit/fallback counts and
 critical-wall deltas. A hosted win alone will not establish a physical HDD
 benefit. This revision is still **not production**.
+
+The hosted exact-pack [verification smoke #35933021406](https://github.com/wachipayox/BootOptim/actions/runs/35933021406)
+passed on `720db03`. Preparation reached `status=ready` in 216 ms, before
+any eligible sprite opened; the generation finished with 5,771 hits, zero
+fallbacks (including zero pending fallbacks), 5,771 stock-byte matches and
+zero retained bytes. The expected selected packs, one initial reload,
+8192×8192×2 block atlas, main menu and zero BootOptim Mixin errors were
+observed. Its 91.449 s menu result is **not a timed candidate** because
+verification opens the stock stream for every hit. The next gate is an
+alternating-order hosted A/B with verification off.
