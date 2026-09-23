@@ -42,7 +42,7 @@ abstract class ModelManagerDeepInputMixin {
         if (cir.getReturnValue() instanceof Map<?, ?> map) {
             ModelInputDeepProfiler.modelsListed((Map<ResourceLocation, Resource>) map);
         }
-        VarianceProbe.finish("model_resource_listing", BOOTOPTIM$MODEL_LIST.get());
+        VarianceProbe.finish("model_resource_listing", "deep_" + ModelInputDeepProfiler.activeId(), BOOTOPTIM$MODEL_LIST.get());
         BOOTOPTIM$MODEL_LIST.remove();
     }
 
@@ -57,7 +57,7 @@ abstract class ModelManagerDeepInputMixin {
         if (cir.getReturnValue() instanceof Map<?, ?> map) {
             ModelInputDeepProfiler.statesListed((Map<ResourceLocation, List<Resource>>) map);
         }
-        VarianceProbe.finish("state_resource_listing", BOOTOPTIM$STATE_LIST.get());
+        VarianceProbe.finish("state_resource_listing", "deep_" + ModelInputDeepProfiler.activeId(), BOOTOPTIM$STATE_LIST.get());
         BOOTOPTIM$STATE_LIST.remove();
     }
 
@@ -68,7 +68,7 @@ abstract class ModelManagerDeepInputMixin {
 
     @Inject(method = "lambda$loadBlockModels$10", at = @At("RETURN"), remap = false)
     private static void bootoptim$modelEnqueueEnd(Executor executor, Map<?, ?> entries, CallbackInfoReturnable<?> cir) {
-        VarianceProbe.finish("model_resource_enqueue", BOOTOPTIM$MODEL_ENQUEUE.get());
+        VarianceProbe.finish("model_resource_enqueue", "deep_" + ModelInputDeepProfiler.activeId(), BOOTOPTIM$MODEL_ENQUEUE.get());
         BOOTOPTIM$MODEL_ENQUEUE.remove();
     }
 
@@ -79,7 +79,7 @@ abstract class ModelManagerDeepInputMixin {
 
     @Inject(method = "lambda$loadBlockStates$14", at = @At("RETURN"), remap = false)
     private static void bootoptim$stateEnqueueEnd(Executor executor, Map<?, ?> entries, CallbackInfoReturnable<?> cir) {
-        VarianceProbe.finish("state_resource_enqueue", BOOTOPTIM$STATE_ENQUEUE.get());
+        VarianceProbe.finish("state_resource_enqueue", "deep_" + ModelInputDeepProfiler.activeId(), BOOTOPTIM$STATE_ENQUEUE.get());
         BOOTOPTIM$STATE_ENQUEUE.remove();
     }
 
@@ -90,7 +90,7 @@ abstract class ModelManagerDeepInputMixin {
 
     @Inject(method = "lambda$loadBlockModels$9", at = @At("RETURN"), remap = false)
     private static void bootoptim$modelCollectEnd(List<?> values, CallbackInfoReturnable<?> cir) {
-        VarianceProbe.finish("model_resource_collect", BOOTOPTIM$MODEL_COLLECT.get());
+        VarianceProbe.finish("model_resource_collect", "deep_" + ModelInputDeepProfiler.activeId(), BOOTOPTIM$MODEL_COLLECT.get());
         BOOTOPTIM$MODEL_COLLECT.remove();
     }
 
@@ -101,7 +101,7 @@ abstract class ModelManagerDeepInputMixin {
 
     @Inject(method = "lambda$loadBlockStates$13", at = @At("RETURN"), remap = false)
     private static void bootoptim$stateCollectEnd(List<?> values, CallbackInfoReturnable<?> cir) {
-        VarianceProbe.finish("state_resource_collect", BOOTOPTIM$STATE_COLLECT.get());
+        VarianceProbe.finish("state_resource_collect", "deep_" + ModelInputDeepProfiler.activeId(), BOOTOPTIM$STATE_COLLECT.get());
         BOOTOPTIM$STATE_COLLECT.remove();
     }
 

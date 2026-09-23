@@ -318,8 +318,9 @@ def _validate_deep(records, model_deep, model_packs, overlay_deep, manual):
         if sum(p.get("opens", 0) for p in rows if p.get("domain") == "model") < 1 or \
                 sum(p.get("parses", 0) for p in rows if p.get("domain") == "state") < 1:
             invalid.append(f"model_deep_open_parse_missing:{rid}")
-        phases = {r.get("phase") for r in records if r.get("subject") == f"deep_{rid}"}
-        if len(phases & {p for p, _ in DEEP_REQUIRED}) != 6:
+        phases = {(r.get("phase"), r.get("event")) for r in records
+                  if r.get("subject") == f"deep_{rid}"}
+        if not DEEP_REQUIRED.issubset(phases):
             invalid.append(f"model_deep_phase_missing:{rid}")
     if manual:
         rows = [r for r in overlay_deep if r.get("frames", 0) > 0 and r.get("done_seen") == "true"

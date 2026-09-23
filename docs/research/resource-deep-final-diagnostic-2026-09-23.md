@@ -1,6 +1,6 @@
 # One-run deep resource reload diagnostic — 2026-09-23
 
-Status: **PREPARED; hosted and physical validation pending**. This extends
+Status: **HOSTED FIRST-GENERATION GATE PASSED; physical validation pending**. This extends
 diagnostic PR #282 from integration `b3f0c5f` after the valid three-generation
 physical result. The previous run proved that ModelManager's preparation is
 the barrier and that `block_models` grew 21.906 → 81.103 → 133.518 s despite
@@ -73,3 +73,19 @@ blocked in render or display; it does not grant permission to move GL work.
 The run should make the *first* architecture choice concrete, but no single
 profile can guarantee that a later behavior-changing candidate passes hosted
 A/B, visual and physical regression gates.
+
+## Hosted first-generation gate
+
+[Exact-pack smoke #35855584589](https://github.com/wachipayox/BootOptim/actions/runs/35855584589)
+on diagnostic commit `45d431b` reached the main menu in 72.778 s with zero
+BootOptim/Mixin errors. The full console, including the bootstrap prefix,
+passed `deep_smoke` with no invalid reasons or warnings. All six new scopes
+fired, and the completed ModelManager generation reported 44,708 model keys
+and tasks, 11,484 blockstate keys and tasks, 11,603 blockstate resource
+entries, and 95 pack rows. One model parse failed under the stock catch path;
+the probe counted it rather than hiding it. This confirms the mapped synthetic
+lambda targets and exact resource-open/parse wrappers execute on the pinned
+pack. It is not a manual-reload or physical-HDD result. After this smoke, the
+six end markers were corrected to retain their generation subject, and the
+offline gate now requires both start and end in each generation; the correction
+needs its own hosted smoke before the physical run.
