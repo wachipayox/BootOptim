@@ -37,7 +37,7 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
-- [ModelManager input-open I/O lane — 2026-09-23](model-input-io-lane-2026-09-23.md) — opt-in two-permit model/blockstate resource-open experiment based on physical HDD/JFR attribution; runtime and performance gates pending.
+- [ModelManager input-open I/O lane — 2026-09-23](model-input-io-lane-2026-09-23.md) — **REJECTED** two-permit experiment: the physical phase averaged at most about one active model task and hosted permit wait was only 21 ms across 56,311 opens; A/B cancelled before completion.
 
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 

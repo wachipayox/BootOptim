@@ -1,6 +1,6 @@
 # ModelManager input-open I/O lane — 2026-09-23
 
-Status: **OPT-IN EXPERIMENT; NOT PRODUCTION**. Base is
+Status: **REJECTED BEFORE A/B; DO NOT PROMOTE**. Base is
 `agent/integration-current` at `b3f0c5f`. The premise comes from the valid
 [physical three-generation diagnostic](https://github.com/wachipayox/BootOptim/blob/codex/resource-loading-audit-20260922/docs/research/resource-deep-physical-result-2026-09-23.md):
 44,708 models and 11,484 blockstates are reopened in every generation; model
@@ -33,12 +33,28 @@ time-to-menu estimate. Unknown/custom supplier callbacks still need runtime
 validation. The target is a narrow bytecode callsite; if upstream lambda
 shape changes, the guarded experiment must be disabled rather than guessed.
 
-Gates: build and startup CI, hosted exact-pack smoke with the property on,
-then hosted 3×3 same-branch A/B with matching JVM origin and endpoint. A
-hosted null/small/regression result cannot settle the HDD premise by itself.
-Any physical comparison requires a separate user signal, identical pack and
-JVM conditions, effective-property verification, and the restored-laptop
-transaction. A real retained optimization would need coherent physical
-critical-path movement and semantic/visual checks; it would also need to
-address the separate late-bake GC amplification instead of claiming to solve
-it through I/O scheduling.
+Local build and standard startup CI passed. Hosted exact-pack
+[smoke #35876917490](https://github.com/wachipayox/BootOptim/actions/runs/35876917490)
+reached the menu with zero BootOptim/Mixin errors and exact pack/atlas
+behavior. Its runtime marker showed `attempted=56311 bounded=56311
+fallback=0 wait_ms_sum=21`: the implementation covered every expected model
+and blockstate resource open, but all 56,311 opens together waited only 21 ms
+for a permit. The smoke's single menu time is not performance evidence.
+
+Reviewing the already-collected physical task-sum against each future's wall
+revealed the flaw in the premise. Model-task sum / `block_models` wall is
+21.252/26.427 = 0.804, 84.079/84.138 = 0.999, and 183.319/191.037 =
+0.960 across the three generations. Blockstate-task sum / `block_states`
+wall is 0.524, 0.899 and 0.939. These are **average active tasks over the
+phase**; they do not prove a strict peak of one, but they show a two-permit
+cap cannot materially constrain the sustained measured model-input path.
+The hosted 21 ms wait confirms negligible contention in the surrogate.
+
+The hosted 3×3 A/B was requested but cancelled before completion once this
+arithmetic exposed the weak transfer function. There is no completed A/B or
+physical candidate measurement and no speedup claim. The mechanism remains
+default-off on this branch only. A later design must reduce/reorganize actual
+resource opens or alter the underlying pack I/O path with preserved semantics;
+repeating an executor/permit cap would require new evidence of sustained
+concurrent-open contention. The separate late-bake GC amplification is also
+outside this candidate.
