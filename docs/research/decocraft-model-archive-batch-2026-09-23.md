@@ -168,6 +168,14 @@ the intended input-open mechanism works, but the two manual reloads were
 22.352 and 7.894 s, while the third atlas schedule was about 64.5 s longer.
 At third generation the atlas ends at the bake start and is a likely gate;
 this is an observation, not proof that the batch caused the atlas delay.
+The third reload accumulated almost the same JVM process CPU as control
+(884.5 vs 892.5 s) over substantially more wall time (518.5 vs 428.4 s),
+so average process CPU utilization fell from about 2.08 to 1.71 cores.
+OS available-memory snapshots fell from 4,655 to 879 MiB during that
+candidate reload, while used JVM heap changed only from 5,183 to 5,292 MiB
+and committed heap stayed at 6,144 MiB. Those snapshots cannot identify the
+owner of non-JVM memory or page-cache changes, but they further constrain any
+claim that the Decocraft JSON mechanism caused the whole reload delta.
 
 The candidate JFR has about 43.1 s and 78.3 s of clipped `GCPhasePause`
 event-duration sums inside manual reload 2/3, versus about 21.3 s and
