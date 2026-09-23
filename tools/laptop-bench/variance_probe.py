@@ -50,10 +50,11 @@ RESOURCE_SPLIT_REQUIRED = (REQUIRED - {("fancymenu_preload", "end")}) | {
 RESOURCE_NEXT_REQUIRED = RESOURCE_SPLIT_REQUIRED | {
     (phase, event)
     for phase in ("bakery_post_blockstates_to_items", "bakery_vanilla_item_loop",
-                  "bakery_additional_models_loop", "title_first_frame_render",
-                  "title_first_frame_blit", "title_first_frame_display_update")
+                  "bakery_additional_models_loop", "title_first_frame_blit",
+                  "title_first_frame_display_update")
     for event in ("start", "end")
-} | {("startup_presented_screen", "point")}
+} | {("title_first_frame_render_return", "point"),
+     ("startup_presented_screen", "point")}
 
 
 def _parse_payload(payload: str, int_fields, float_fields):

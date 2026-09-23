@@ -11,6 +11,9 @@ class VarianceProbeParserTests(unittest.TestCase):
         for index, (phase, event) in enumerate(sorted(RESOURCE_NEXT_REQUIRED - existing)):
             rows.append(self.record(phase, event, 1000 + index, 2000 + index))
         self.assertTrue(summarize(rows, profile="resource_next")["valid"])
+        no_return = [row for row in rows if row["phase"] != "title_first_frame_render_return"]
+        self.assertIn("missing:title_first_frame_render_return:point",
+                      summarize(no_return, profile="resource_next")["invalid_reasons"])
         missing = [row for row in rows if row["phase"] != "title_first_frame_display_update"]
         self.assertIn("missing:title_first_frame_display_update:end",
                       summarize(missing, profile="resource_next")["invalid_reasons"])

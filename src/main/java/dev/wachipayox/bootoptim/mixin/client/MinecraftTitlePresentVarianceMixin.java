@@ -38,10 +38,17 @@ abstract class MinecraftTitlePresentVarianceMixin {
 
     @Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GameRenderer;render(Lnet/minecraft/client/DeltaTracker;Z)V", shift = At.Shift.AFTER))
     private void bootoptim$afterTitleRender(boolean renderLevel, CallbackInfo ci) {
-        if (bootoptim$firstTitleFrame) {
+        if (!VarianceProbe.enabled() || !StartupProfiler.hasMainMenuOpened() || BOOTOPTIM$PRESENT_REPORTED.get()) {
+            return;
+        }
+        if (bootoptim$renderStamp != null) {
             VarianceProbe.finish("title_first_frame_render", bootoptim$renderStamp);
             bootoptim$renderStamp = null;
         }
+        // TitleScreen can open inside GameRenderer.render. In that case the render
+        // entry predates opening, so no full render scope can be claimed.
+        bootoptim$firstTitleFrame = true;
+        VarianceProbe.point("title_first_frame_render_return");
     }
 
     @Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/pipeline/RenderTarget;blitToScreen(II)V"))

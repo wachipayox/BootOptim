@@ -50,9 +50,14 @@ successful duration. In the current mapped 1.21.1 bytecode, constructor
 once in `Minecraft.runTick` (`GameRenderer.render`, `RenderTarget.blitToScreen`,
 `Window.updateDisplay`); these targets were confirmed with `javap -private -c`.
 
-On the first frame after TitleScreen opening, three disjoint call intervals
-measure `title_first_frame_render`, `title_first_frame_blit` and
-`title_first_frame_display_update`. The existing `main_menu_presented` marker
+The first hosted smoke exposed that TitleScreen may open *inside*
+`GameRenderer.render`; a render-entry probe armed after opening therefore
+missed that frame even though the menu was reached. The corrected probe
+always records `title_first_frame_render_return` after opening. It records a
+full `title_first_frame_render` scope only when opening preceded render entry;
+otherwise that scope is intentionally absent. The disjoint
+`title_first_frame_blit` and `title_first_frame_display_update` calls are
+measured on the actual first frame. The existing `main_menu_presented` marker
 still fires after stock display update; a `startup_presented_screen` point
 records the screen class then. Opening to render entry and gaps between calls
 are calculated from monotonic marker timestamps; do not label wall-minus-CPU
@@ -60,19 +65,26 @@ as I/O, GPU or driver without a separate boundary. A modal screen remains
 possible, and `getClass().getName()` is identity only, not visual validation.
 
 The `resource_next` parser profile requires all prior seven split scopes,
-these six new interval pairs, and screen identity. Missing hooks or unmatched
+the three new constructor pairs, blit/display pairs, render-return point and
+screen identity. The full render scope is optional because opening may occur
+after render entry. Missing required hooks or unmatched
 scopes invalidate this profile. It retains the 5 s clock consistency check;
 if the laptop repeats the clock discrepancy, total startup stays invalid while
 same-process monotonic attribution can still be reported separately.
 
 ## Preparation and handoff
 
-Local Gradle `build --offline` passed and 34 Python tests passed. The packaged
+Local Gradle `build --offline` passed and 34 Python tests passed. The first
+hosted exact-pack smoke reached the menu with 14 packs, 8192x8192x2 atlas and
+zero Mixin errors, but proved the initial render-entry probe missed an opening
+inside `GameRenderer.render`. The corrected artifact needs a new hosted smoke.
+The packaged
 standalone wrapper is built from `bootstrap/build/libs/`, not root `build/libs`.
-Source commit `d53fa80f51c5035b4c08e1b50763c83e369887f9`.
+Source commit: see current branch head; the corrected first-frame probe
+supersedes `d53fa80f51c5035b4c08e1b50763c83e369887f9`.
 Local packaged artifact:
 `C:/BootOptimBench/artifacts/resource-next-20260923/bootoptim-resource-next-20260923.jar`,
-SHA-256 `c90083e867e9d9e3430807f4cd9cff126acb3295975a9d24c68b50da7c82206b`.
+SHA-256 `53b774844e4dccb8ce28a6d1f4acac52e63646b78b2fd4bde509c21c9432d5dd`.
 Attempted remote transfer on 2026-09-23 failed at SSH connection timeout to
 `192.168.1.218:22`; no files reached the laptop and no transaction was staged.
 The previous run's verified restored state had config SHA-256
