@@ -95,6 +95,19 @@ Sample weights are estimates of allocation, not exact bytes retained or proof
 of a particular cache lifetime; a memory redesign needs a live-set/ownership
 analysis before claiming a remedy.
 
+The same JFR's `GCHeapSummary`/`G1HeapSummary` events narrow the third-bake
+mechanism further. Four `G1New` evacuation pauses start inside the 1049.846–
+1124.062 s bake window: 14.844, 15.994, 26.133 and 8.558 s. Their complete
+event durations total 65.529 s, while **only 60.182 s overlaps the bake
+window**. After-GC old-gen occupancy rises approximately 3,528 → 3,751 →
+4,024 → 4,384 → 4,672 MiB across these collections. For comparison, the
+first bake starts near 1,755 MiB old-gen occupancy and the second near
+3,328 MiB. This shows severe live/tenured pressure during late bake, not a
+proved leak or a specific retaining owner. `G1Old` events nearby include
+concurrent phases and must not be counted as extra stop-the-world time. An
+I/O batch may move or reduce open costs while leaving this GC wall intact;
+judge both separately in any candidate A/B.
+
 ## Reload completion and the overlay
 
 The manual public requests take 283.123 and 433.488 s to their returned
