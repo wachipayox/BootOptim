@@ -3,6 +3,7 @@ package dev.wachipayox.bootoptim.profiling.client;
 import dev.wachipayox.bootoptim.profiling.VarianceProbe;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,13 +19,13 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Listener hot-path observation is intentionally restricted to {@link System#nanoTime()}, atomics,
  * and the stock preparation barrier/future callbacks. No MXBean snapshot, logger lookup, or log formatting
- * occurs per listener while the initial reload is on the startup critical path. Listener rows are emitted
- * only after the first title frame is presented.</p>
+ * occurs per listener while any reload is on the critical path. Listener rows are emitted
+ * after a completed display update, including subsequent manual reloads.</p>
  */
 public final class ReloadListenerVarianceProfiler {
     private static final AtomicInteger NEXT_RELOAD_ID = new AtomicInteger();
-    private static final CopyOnWriteArrayList<ReloadTrace> RELOADS = new CopyOnWriteArrayList<>();
-    private static final AtomicBoolean EMITTED = new AtomicBoolean();
+    private static final ConcurrentLinkedQueue<ReloadTrace> COMPLETED = new ConcurrentLinkedQueue<>();
+    private static final AtomicBoolean TITLE_PRESENTED = new AtomicBoolean();
 
     private ReloadListenerVarianceProfiler() {}
 
@@ -32,17 +33,25 @@ public final class ReloadListenerVarianceProfiler {
         if (!VarianceProbe.enabled()) {
             return null;
         }
-        ReloadTrace trace = new ReloadTrace(NEXT_RELOAD_ID.incrementAndGet());
-        RELOADS.add(trace);
-        return trace;
+        return new ReloadTrace(NEXT_RELOAD_ID.incrementAndGet());
     }
 
-    /** Emit stored listener timing after the first title-present boundary, outside TTMM. */
-    public static void emitAfterTitle() {
-        if (!VarianceProbe.enabled() || !EMITTED.compareAndSet(false, true)) {
+    /** Release first-reload evidence only after the first title display, outside TTMM. */
+    public static void emitAfterTitle(String screenClass) {
+        if (!VarianceProbe.enabled() || !TITLE_PRESENTED.compareAndSet(false, true)) {
             return;
         }
-        for (ReloadTrace reload : RELOADS) {
+        emitCompletedAfterFrame(screenClass);
+    }
+
+    /** Drain completed generations after an actual display update, never inside allDone. */
+    public static void emitCompletedAfterFrame(String screenClass) {
+        if (!VarianceProbe.enabled() || !TITLE_PRESENTED.get()) {
+            return;
+        }
+        ReloadTrace reload;
+        while ((reload = COMPLETED.poll()) != null) {
+            VarianceProbe.point("reload_frame_presented", "reload_" + reload.id + "_screen_" + token(screenClass));
             reload.emit();
         }
     }
@@ -92,6 +101,7 @@ public final class ReloadListenerVarianceProfiler {
                         "resource_reload",
                         "reload_" + id + "_listeners_" + listenerCount + "_result_" + result(failure),
                         started);
+                COMPLETED.add(this);
             });
         }
 

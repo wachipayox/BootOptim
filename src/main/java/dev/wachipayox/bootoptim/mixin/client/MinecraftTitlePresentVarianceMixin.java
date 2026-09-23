@@ -5,7 +5,10 @@ import dev.wachipayox.bootoptim.profiling.VarianceProbe;
 import dev.wachipayox.bootoptim.profiling.client.ReloadListenerVarianceProfiler;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.LoadingOverlay;
+import net.minecraft.client.gui.screens.Overlay;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,6 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(Minecraft.class)
 abstract class MinecraftTitlePresentVarianceMixin {
+    @Shadow private Overlay overlay;
     private static final AtomicBoolean BOOTOPTIM$PRESENT_REPORTED = new AtomicBoolean();
     @Unique private boolean bootoptim$firstTitleFrame;
     @Unique private VarianceProbe.Stamp bootoptim$renderStamp;
@@ -85,15 +89,20 @@ abstract class MinecraftTitlePresentVarianceMixin {
             bootoptim$displayStamp = null;
             bootoptim$firstTitleFrame = false;
         }
-        if (!VarianceProbe.enabled()
-                || !StartupProfiler.hasMainMenuOpened()
-                || !BOOTOPTIM$PRESENT_REPORTED.compareAndSet(false, true)) {
+        if (!VarianceProbe.enabled() || !StartupProfiler.hasMainMenuOpened()) {
+            return;
+        }
+        Minecraft game = (Minecraft) (Object) this;
+        String screenClass = game.screen == null ? "none" : game.screen.getClass().getName();
+        if (!BOOTOPTIM$PRESENT_REPORTED.compareAndSet(false, true)) {
+            if (!(overlay instanceof LoadingOverlay)) {
+                ReloadListenerVarianceProfiler.emitCompletedAfterFrame(screenClass);
+            }
             return;
         }
         VarianceProbe.point("main_menu_presented");
-        Minecraft game = (Minecraft) (Object) this;
-        VarianceProbe.point("startup_presented_screen", game.screen == null ? "none" : game.screen.getClass().getName());
-        ReloadListenerVarianceProfiler.emitAfterTitle();
+        VarianceProbe.point("startup_presented_screen", screenClass);
+        ReloadListenerVarianceProfiler.emitAfterTitle(screenClass);
         if (StartupProfiler.shouldExitAfterPresentedTitle()) {
             ((Minecraft) (Object) this).stop();
         }

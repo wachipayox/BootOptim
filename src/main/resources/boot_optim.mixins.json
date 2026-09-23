@@ -22,6 +22,7 @@
     "client.BootstrapVarianceBoundaryMixin",
     "client.FancyMenuVarianceMarkerMixin",
     "client.MinecraftTitlePresentVarianceMixin",
+    "client.MinecraftManualReloadVarianceMixin",
     "client.ModelBakeryVarianceBoundaryMixin",
     "client.ModelManagerVarianceBoundaryMixin",
     "client.SimpleReloadInstanceVarianceMixin"
