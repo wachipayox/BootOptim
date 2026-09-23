@@ -15,12 +15,14 @@ public final class JfrReloadSummary {
     private record Window(String name, long start, long end) {}
     private static final class Counts {
         long count;
+        long bytesRead;
         double milliseconds;
         double maxMilliseconds;
         final Map<String, Double> paths = new HashMap<>();
         final Map<String, Double> classes = new HashMap<>();
         final Map<String, Double> frames = new HashMap<>();
         final Map<String, Double> families = new HashMap<>();
+        final Map<String, Double> familyBytes = new HashMap<>();
         void add(RecordedEvent event, String type, double windowMilliseconds) {
             count++;
             double ms = event.hasField("duration") ? windowMilliseconds : 0;
@@ -31,6 +33,9 @@ public final class JfrReloadSummary {
             if (type.equals("jdk.FileRead") && event.hasField("path")) {
                 String path = event.getString("path");
                 paths.merge(path == null ? "<unknown>" : path, ms, Double::sum);
+            }
+            if (type.equals("jdk.FileRead") && event.hasField("bytesRead")) {
+                bytesRead += event.getLong("bytesRead");
             }
             if (type.equals("jdk.ObjectAllocationSample") && event.hasField("objectClass")) {
                 String allocated = event.getClass("objectClass").getName();
@@ -47,6 +52,9 @@ public final class JfrReloadSummary {
                         if (method.contains("TextureUtil.readResource")) { family = "texture_input"; break; }
                     }
                     families.merge(family, ms, Double::sum);
+                    if (event.hasField("bytesRead")) {
+                        familyBytes.merge(family, (double) event.getLong("bytesRead"), Double::sum);
+                    }
                 }
                 for (RecordedFrame frame : trace.getFrames()) {
                     String owner = frame.getMethod().getType().getName();
@@ -104,10 +112,11 @@ public final class JfrReloadSummary {
             for (String type : List.of("jdk.FileRead", "jdk.GarbageCollection", "jdk.GCPhasePause",
                     "jdk.ExecutionSample", "jdk.ObjectAllocationSample", "jdk.ThreadPark", "jdk.JavaMonitorWait")) {
                 Counts counts = types.getOrDefault(type, new Counts());
-                System.out.printf("EVENT %s count=%d duration_ms_sum=%.3f max_ms=%.3f%n",
-                        type, counts.count, counts.milliseconds, counts.maxMilliseconds);
+                System.out.printf("EVENT %s count=%d duration_ms_sum=%.3f max_ms=%.3f bytes_read=%d%n",
+                        type, counts.count, counts.milliseconds, counts.maxMilliseconds, counts.bytesRead);
                 if (type.equals("jdk.FileRead")) top("PATH_MS", counts.paths, 12);
                 if (type.equals("jdk.FileRead")) top("FAMILY_MS", counts.families, 12);
+                if (type.equals("jdk.FileRead")) top("FAMILY_BYTES", counts.familyBytes, 12);
                 if (type.equals("jdk.FileRead") || type.equals("jdk.ExecutionSample")) top("FRAME_WEIGHT", counts.frames, 12);
                 if (type.equals("jdk.ObjectAllocationSample")) top("CLASS_BYTES", counts.classes, 12);
                 if (type.equals("jdk.ObjectAllocationSample")) top("FRAME_BYTES", counts.frames, 12);
