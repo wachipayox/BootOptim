@@ -4,6 +4,17 @@ from variance_probe import parse_line, parse_listener_line, summarize
 
 
 class VarianceProbeParserTests(unittest.TestCase):
+    def test_resource_next_requires_constructor_and_frame_boundaries(self):
+        from variance_probe import RESOURCE_NEXT_REQUIRED
+        rows = [r for r in self.valid_records() if r["phase"] != "fancymenu_preload"]
+        existing = {(r["phase"], r["event"]) for r in rows}
+        for index, (phase, event) in enumerate(sorted(RESOURCE_NEXT_REQUIRED - existing)):
+            rows.append(self.record(phase, event, 1000 + index, 2000 + index))
+        self.assertTrue(summarize(rows, profile="resource_next")["valid"])
+        missing = [row for row in rows if row["phase"] != "title_first_frame_display_update"]
+        self.assertIn("missing:title_first_frame_display_update:end",
+                      summarize(missing, profile="resource_next")["invalid_reasons"])
+
     def test_resource_split_profile_does_not_accept_missing_new_hooks(self):
         from variance_probe import RESOURCE_SPLIT_REQUIRED
         rows = [r for r in self.valid_records() if r["phase"] != "fancymenu_preload"]

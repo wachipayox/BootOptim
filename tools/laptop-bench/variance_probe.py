@@ -47,6 +47,13 @@ RESOURCE_SPLIT_REQUIRED = (REQUIRED - {("fancymenu_preload", "end")}) | {
                   "entity_add_layers_post")
     for event in ("start", "end")
 }
+RESOURCE_NEXT_REQUIRED = RESOURCE_SPLIT_REQUIRED | {
+    (phase, event)
+    for phase in ("bakery_post_blockstates_to_items", "bakery_vanilla_item_loop",
+                  "bakery_additional_models_loop", "title_first_frame_render",
+                  "title_first_frame_blit", "title_first_frame_display_update")
+    for event in ("start", "end")
+} | {("startup_presented_screen", "point")}
 
 
 def _parse_payload(payload: str, int_fields, float_fields):
@@ -136,7 +143,8 @@ def _scope_summaries(records):
 
 
 def summarize(records, max_early_uptime_ms=60_000, listeners=None, profile="legacy"):
-    required = RESOURCE_SPLIT_REQUIRED if profile == "resource_split" else REQUIRED
+    required = {"legacy": REQUIRED, "resource_split": RESOURCE_SPLIT_REQUIRED,
+                "resource_next": RESOURCE_NEXT_REQUIRED}[profile]
     records = sorted(records, key=lambda row: (row.get("mono_ns") is None, row.get("mono_ns") or 0))
     invalid = []
     warnings = []
@@ -233,8 +241,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("logs", nargs="+", type=Path, help="completed console/latest.log files; read only after Java exits")
     parser.add_argument("--max-early-uptime-ms", type=int, default=60_000)
-    parser.add_argument("--profile", choices=("legacy", "resource_split"), default="legacy",
-                        help="resource_split requires the seven new scopes; legacy FancyMenu hook is not its endpoint")
+    parser.add_argument("--profile", choices=("legacy", "resource_split", "resource_next"), default="legacy",
+                        help="resource_next also requires constructor and first-frame splits")
     args = parser.parse_args()
     output = {str(path): analyze_file(path, args.max_early_uptime_ms, args.profile) for path in args.logs}
     print(json.dumps(output, indent=2, sort_keys=True))
