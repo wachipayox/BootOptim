@@ -23,7 +23,7 @@ An offline inventory of the pinned `exact-pack-2026-09-02-v1` fixture (SHA-256
 found 35,384 `assets/*/models/*.json` entries containing 24,424,776
 uncompressed bytes, and 11,235 `assets/*/blockstates/*.json` entries
 containing 15,793,853 bytes, across *all* nested mod JARs and resource-pack
-ZIPs. Combined ~40.2 MB is an inventory upper-ish corpus bound, **not** the
+ZIPs. Combined ~40.2 MB is a fixture archive subtotal, **not** the
 active winner set or a cache-size measurement: the fixture includes inactive
 duplicate mod versions and omits vanilla's JAR. Runtime task counts include
 vanilla and discovered IDs beyond this archive inventory. These data support
