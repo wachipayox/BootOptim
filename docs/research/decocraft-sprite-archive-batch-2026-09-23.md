@@ -173,3 +173,31 @@ zero retained bytes. The expected selected packs, one initial reload,
 observed. Its 91.449 s menu result is **not a timed candidate** because
 verification opens the stock stream for every hit. The next gate is an
 alternating-order hosted A/B with verification off.
+
+Hosted exact-pack [async paired A/B #35933592866](https://github.com/wachipayox/BootOptim/actions/runs/35933592866)
+passed all four same-VM pairs on `eb18a51`, with alternating order. Each
+candidate prepared in 105–333 ms, used the snapshot for all 5,771 eligible
+opens, had zero fallbacks and retained zero bytes after ModelManager finished.
+All eight processes had one initial reload, the expected selected packs,
+8192×8192×2 block atlas, main menu and zero BootOptim Mixin errors.
+
+| Pair | Order | Candidate − control to menu | Reload→FancyMenu | FancyMenu panorama |
+| --- | --- | ---: | ---: | ---: |
+| 1 | control→candidate | −1.270 s | −0.898 s | −0.114 s |
+| 2 | candidate→control | +0.723 s | +0.106 s | +0.037 s |
+| 3 | control→candidate | +0.543 s | −2.470 s | −0.311 s |
+| 4 | candidate→control | +1.737 s | +2.141 s | −0.327 s |
+
+The median within-pair delta is **+0.633 s to menu** and −0.396 s over
+reload→FancyMenu. The independent group-median differences are +0.234 s and
+−0.343 s respectively. These use process-uptime menu markers and the same
+wall-clock reload endpoints within each pair. Pair 2's absolute process
+times were ~52–53 s rather than ~89–94 s for the other pairs, but its
+within-pair comparison remains matched. The reload effect changes sign
+between pairs and the menu median regresses. Even subtracting each panorama
+interval leaves mixed-sign pre-FancyMenu deltas (−0.784, +0.069, −2.159,
++2.468 s). Thus the async revision has **no reproducible critical-wall win**
+on the hosted surrogate despite perfect activation and lower retained-heap
+lifetime. Keep it default-off and unmerged. Do not spend a laptop run on
+this mechanism without a materially different premise or direct atlas
+barrier evidence.
