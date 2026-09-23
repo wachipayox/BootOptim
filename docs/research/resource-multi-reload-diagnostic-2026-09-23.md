@@ -1,6 +1,7 @@
 # Manual resource-pack reload diagnostic — 2026-09-23
 
-Status: **prepared; laptop run requires the user's explicit signal**. This is
+Status: **completed; valid physical result recorded** in
+[the result entry](resource-multi-reload-physical-result-2026-09-23.md). This is
 diagnostic-only work on PR #282, based on current integration `b3f0c5f`. It
 extends the existing resource profiler to generations after the first title
 frame; it is not a proposed startup optimization.
