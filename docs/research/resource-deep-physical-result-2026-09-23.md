@@ -108,6 +108,21 @@ concurrent phases and must not be counted as extra stop-the-world time. An
 I/O batch may move or reduce open costs while leaving this GC wall intact;
 judge both separately in any candidate A/B.
 
+The JFR also contains 187 `jdk.OldObjectSample` records at recording end.
+Many sampled, long-aged byte arrays were allocated through
+`InputStream.readAllBytes` → `ZipFileSystem.newByteChannel` during early mod
+loading. Their largest sizes match exact uncompressed nested JarJar entries
+in the pinned pack: the 70,837,810-byte `rocksdbjni-9.7.3.jar` inside the
+user-edited Voxy Reforged JAR appears as three sampled ~70.8 MB arrays;
+14,127,503-byte `sqlite-jdbc` inside the same JAR, 25,616,483-byte
+CreateAeronautics nested JAR, and other nested JAR sizes also match sampled
+arrays. These are **allocation-site/size matches**, not identified reference
+roots, exact retained-live-set totals, or proof they alone caused the late
+G1 pauses. They establish a plausible long-lived memory-headroom competitor
+outside ModelManager. The archive/JarJar ownership question belongs to a
+separate loader-memory investigation; it must not be silently charged to
+model JSON parsing or to the Decocraft input-batch candidate.
+
 ## Reload completion and the overlay
 
 The manual public requests take 283.123 and 433.488 s to their returned
