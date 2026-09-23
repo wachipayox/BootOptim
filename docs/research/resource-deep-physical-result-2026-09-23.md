@@ -156,3 +156,34 @@ alone is insufficient. Hosted semantic validation and same-branch A/B must
 precede any physical comparison. The separate late-bake GC amplification
 needs its own allocation/lifetime design. No physical optimization test is
 authorized by this result alone.
+
+## Follow-up decision after the first archive-batch run
+
+The later user-authorized combined diagnostic in [PR #286](https://github.com/wachipayox/BootOptim/pull/286)
+tested the narrower [PR #285](https://github.com/wachipayox/BootOptim/pull/285)
+Decocraft JSON archive batch on the same laptop with an initial load and two
+manual font-pack changes. The exact pack selection was restored, the three
+reloads completed, and all three generations recorded 10,809 batch hits with
+zero fallbacks. The guarded Decocraft model/state `openAsReader` task-sums
+were sharply reduced, confirming the narrow mechanism. The whole reload
+intervals, however, were 163.047 / 332.537 / 518.459 s, versus this control's
+164.950 / 281.209 / 428.399 s. The third candidate atlas future grew from
+about 218.9 to 283.4 s even though its model future shortened from 191.0 to
+183.1 s. These overlapping futures are not additive.
+
+The candidate's first startup marker was at JVM uptime 109.134 s (this
+control: 41.617 s) and its wall/start/uptime fields disagreed by about 9.015 s.
+The stipulated early-origin validator therefore rejects its time-to-menu.
+The JFR pre-marker window showed ForgeWrapper installer and rolling-log
+compression activity; the slow/unmeasured prefix belongs outside this
+resource-reload optimization. Monotonic within-reload timings remain useful
+phase diagnostics, but this run is **not** a valid end-to-end A/B. The laptop
+transaction nevertheless completed and restored the original Prism config
+and BootOptim JAR. See the PR #285 research note for the detailed comparison.
+
+This result supersedes the immediate "next experiment" wording above: the
+narrow Decocraft input batch has now been tested physically and is **not
+promoted**. The large `openAsReader` task-sum reduction did not translate to
+reload completion in this run. A matched control/candidate repeat with valid
+origin and comparable machine state would be needed before a performance
+claim; broadening a resource cache solely from task sums is not justified.
