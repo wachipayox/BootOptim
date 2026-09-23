@@ -187,3 +187,41 @@ promoted**. The large `openAsReader` task-sum reduction did not translate to
 reload completion in this run. A matched control/candidate repeat with valid
 origin and comparable machine state would be needed before a performance
 claim; broadening a resource cache solely from task sums is not justified.
+
+## Next resource-loading question
+
+In the third candidate generation, `atlas_schedule_load` runs from JVM
+uptime 956.8 to 1240.2 s (283.4 s) and `bake_models` starts as it ends.
+The block-model future ends at 1139.9 s and the CIT active-load scope at
+1179.8 s. This makes the atlas branch the observed last ModelManager
+prerequisite for that generation. The earlier control's third atlas future
+ends at 1018.4 s, while bake starts at 1049.8 s; the bottleneck can change
+between runs and cannot be inferred from one hosted profile.
+
+Prior [PR #72](https://github.com/wachipayox/BootOptim/pull/72) already
+showed 20,054 almost-unique sprite loads, with `Resource.open()` accounting
+for about 76.1 s of 83.9 s inclusive sprite task-sum and PNG decode only
+about 3.1 s. Its source audit traced SecureJar UnionFS into ZipFS eager
+entry materialization, but those task-sums are not recoverable wall. The
+current JFR's third candidate reload records ~579.5 s overlapping slow
+`FileRead` event duration on texture-input stacks within a 518.5 s reload;
+the control records ~943.1 s within 428.4 s. Lower event-duration sum with
+higher wall demonstrates why this family cannot be converted to saved time.
+The third candidate reload also did almost the same process CPU work over
+more wall time (~884.5 vs 892.5 CPU-seconds, 518.5 vs 428.4 wall-seconds),
+which is consistent with lower average throughput rather than a larger
+model-JSON workload.
+
+The next independent premise is therefore an archive-backed **sprite-input**
+path that preserves the already-selected `Resource`, metadata, custom atlas
+loaders and NeoForge `SpriteContentsConstructor`, while reducing entry-open
+materialization or repeated physical reads without caching decoded pixels.
+First validate the exact physical archive/source mapping and byte identity
+offline, then use an opt-in hosted semantic verifier and same-branch A/B.
+Any retained encoded-byte design needs a strict memory budget and archive/
+pack-generation invalidation; the late 6 GiB G1 pressure makes even a
+~20 MiB Decocraft PNG corpus a measured tradeoff. Do not ask for another
+long physical manual-reload run on the basis of task sums alone. A hosted
+critical-wall signal and evidence that the atlas remains a physical gate
+should precede it. This remains a research direction, not a production
+change or a license to bypass pack precedence.
