@@ -1,10 +1,12 @@
 # Pandora AppCDS net-benefit decision — 2026-09-25
 
-**Status: not promotable; one bounded falsification test remains before final
-retirement.** The current AppCDS path has no demonstrated net startup benefit.
-Do not merge the identity/archive micro-optimizations or enable AppCDS by
-default unless the final test proves both HotSpot consumption and an end-to-end
-win after preflight.
+**Status: RETIRED for the current generic full-archive design.** Four balanced
+physical pairs already show no repeatable time-to-menu benefit even though the
+dynamic archive was proven mapped by HotSpot. Do not run proposed PR #65 or
+invest in identity/archive micro-optimizations #51/#62/#63. Reopen only for a
+materially smaller archive selected by critical-path class-load evidence, or a
+new mechanism that removes critical-path work without paying full-archive map
+cost.
 
 ## Scope and authority
 
@@ -35,10 +37,17 @@ within-helper comparison and not click→menu. Fixed order, `n=1`, and page-cach
 effects prevent interpreting the +0.62 seconds as a general HDD cost for
 checking `ready.jsa`.
 
-Most importantly, the prior `activation=enabled` message proves that Pandora
-selected READY and passed the CDS flags; it does **not** prove HotSpot mapped
-the dynamic archive or loaded any application class from it. No `-Xlog:cds` or
-class-source log was captured, so actual VM consumption remains unknown.
+This pair is weak and does not provide a true stock control. Separately, the
+physical Prism campaign in BootOptim PR #268 resolves the mechanism question:
+four paired READY/control runs explicitly opened the dynamic archive and
+mapped dynamic regions 0, 1 and 2. The JVM recorded 35,542 shareable classes.
+The per-pair AppCDS-minus-control deltas were +3,328, −33,486, +4,258 and
++19,607 ms; their median was **+3,793 ms** (slower with AppCDS). The lone large
+win did not repeat. The all-side medians are biased by three control-first
+pairs, so the paired-delta median is the decision statistic. The scope was
+BootOptim Java marker to `main_menu`; launcher pre-Java overhead was separate.
+PR #268 records effective JVM argument checks, run order, logs and archive
+mapping evidence.
 
 An earlier 2026-09-21 ledger entry said that `activation=enabled` meant the
 archive was “genuinely consumed.” That inference is corrected and superseded
@@ -61,19 +70,20 @@ hashes the 285,671,424-byte `ready.jsa` unless a separately validated reuse path
 is enabled. Consequently, disabling only `BOOTOPTIM_APPCDS_MODE` is not a
 baseline without preflight.
 
-The observed Java delta between READY and `plan` is effectively zero. If that
-remains true, the current user-visible product path is slower than ordinary
-launch by roughly the repeated preflight cost. As a rough break-even condition,
-with other launcher work held equal, READY must save more than about 36.8
-seconds Java→menu to recover its current per-launch preflight. This is an
-inference from the observed scopes, not a measured no-helper A/B.
+The observed Java delta between READY and `plan` is effectively zero, and the
+separate true-control Prism campaign found a +3.793 s paired median on the
+Java-to-menu scope. Adding Pandora's measured ~36.8 s recurring preflight would
+make the current path still less favorable. The campaigns used different
+builds/harnesses and must not be algebraically combined; each independently
+fails to show a net win.
 
-The cost may be reducible. PR #51 proposes fail-closed NTFS/USN reuse of per-file
-digests; #62 reduces repeated journal-boundary queries; #63 targets the full
-READY archive hash. They are unmerged, default-off/experimental candidates and
-have no physical net-win evidence. #63 cannot remove the ~36 seconds shared by
-`plan`, because `plan` returns before READY archive hashing. Do not optimize
-these paths before proving the JVM mechanism is useful.
+The cost might be reducible, but current results do not justify further work:
+PR #51 proposes fail-closed NTFS/USN reuse of per-file digests; #62 reduces
+repeated journal-boundary queries; #63 targets the full READY archive hash.
+These remain unmerged experiments with no end-to-end net-win evidence. The
+physical runs already proved that mapping the current full archive is not a
+repeatable startup win, so reducing its preparation cost does not rescue the
+design by itself.
 
 ## Is the JVM mechanism impossible?
 
@@ -88,50 +98,17 @@ failure, while transformed/generated classes may still be ineligible.
 Sources: [JDK 21 `java` command and unified logging](https://docs.oracle.com/en/java/javase/21/docs/specs/man/java.html),
 [JDK 21 class-data sharing guide](https://docs.oracle.com/en/java/javase/21/vm/class-data-sharing.html).
 
-## One final decision test
+## Reopening gate
 
-PR [#65](https://github.com/wachipayox/BootOptimPandora/pull/65) adds the exact
-opt-in `BOOTOPTIM_APPCDS_VM_CONSUMPTION_DIAGNOSTICS=1`, inserting
-`-Xlog:cds=info,class+load=info` after identity/cache classification. Head
-`a7787a76dd64430d4772bf086570e3925f68df14` passed the focused Windows check and
-test in run [36000306173](https://github.com/wachipayox/BootOptimPandora/actions/runs/36000306173).
-It is not a release artifact and no laptop run has exercised it.
+The JVM mechanism works: physical logs proved archive mapping, while hosted
+production-JAR validation recorded 4,641 application/custom-runtime shared
+class hits and preserved exact resource selection. AppCDS is not categorically
+incompatible with this loader stack. The product decision is nevertheless
+**NO-GO** for the current full archive: the balanced physical paired result is
+slower by a +3.793 s median before counting Pandora preflight.
 
-Use two stages so verbose class logging does not contaminate performance timing
-and do not spend four slow-laptop launches proving a mechanism that fails on
-the first:
-
-1. **Consumption check:** capture one READY launch with the diagnostic opt-in.
-   Require a HotSpot log showing the dynamic archive path mapped and at least
-   one non-JDK application class (for example Minecraft/mod code) loaded with
-   source `shared objects file`. JDK base-archive classes do not count. If the
-   archive is absent or no application classes load from it, stop and retire
-   AppCDS without a timing campaign. A stock diagnostic run is optional only if
-   the log cannot distinguish the dynamic archive's application classes.
-2. **Performance check only if stage 1 passes:** run one A-B-B-A with verbose
-   class logging disabled, same current launcher build, Java, pack, instance,
-   settings and cache. A uses READY; B removes the interposer environment
-   variable and therefore skips both AppCDS and its preflight. Record
-   Start/request→Java spawn, BootOptim Java→menu and Start→menu separately.
-   Keep launcher setup and post-menu time separate; inspect logs only after the
-   timed sequence. Confirm normal Java exit.
-
-This split avoids the `class+load` logger's synchronous per-class I/O from
-serving as the performance treatment. Use process/JVM logs for mechanism
-verification and uninstrumented timing for the product decision.
-
-## Decision gate
-
-- If the dynamic archive is not mapped or no application classes are
-  reproducibly loaded from it, **retire AppCDS**; do not proceed to cache
-  optimization.
-- If classes are shared but uninstrumented READY does not beat stock in both
-  Java→menu and total Start→menu by more than the B-run spread, **retire it**.
-- Keep the feature only if it shares a material, reproducible application-class
-  set and its uninstrumented end-to-end saving exceeds the full preflight cost.
-  Only then resume #51/#62/#63 to lower that measured cost.
-
-Current disposition: **do not ship, do not promote, and do not optimize the
-preflight yet.** AppCDS is technically repairable in principle, but the current
-cost/benefit evidence makes further engineering unjustified until the single
-consumption-and-net-benefit gate above passes.
+Do not run PR #65 or spend more on #51/#62/#63. A future reopening needs
+critical-path evidence identifying a materially smaller set of classes worth
+sharing, followed by a fresh order-balanced physical control/candidate study
+that proves both a repeatable Java-to-menu saving and a net launcher-start to
+menu saving after all preparation. No current evidence meets that bar.

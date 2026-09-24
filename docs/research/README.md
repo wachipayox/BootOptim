@@ -37,7 +37,7 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
-- [Pandora AppCDS net-benefit decision — 2026-09-25](pandora-appcds-net-benefit-2026-09-25.md) — corrects the earlier inference that `activation=enabled` proves HotSpot consumption, assesses the 36-second identity preflight against the unchanged READY/plan Java→menu pair, and defines one consumption plus uninstrumented net-benefit gate before retaining or retiring AppCDS.
+- [Pandora AppCDS net-benefit decision — 2026-09-25](pandora-appcds-net-benefit-2026-09-25.md) — retires the current full-archive design after four physical pairs mapped AppCDS but had a +3.793 s paired median slowdown; reopens only for a smaller archive justified by critical-path class-load evidence.
 
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
