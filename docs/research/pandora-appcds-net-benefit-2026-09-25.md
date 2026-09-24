@@ -1,7 +1,8 @@
 # Pandora AppCDS net-benefit decision — 2026-09-25
 
 **Status: RETIRED for the current generic full-archive design.** Four balanced
-physical pairs already show no repeatable time-to-menu benefit even though the
+physical paired runs (three control→candidate and one candidate→control) show
+no repeatable time-to-menu benefit even though the
 dynamic archive was proven mapped by HotSpot. Do not run proposed PR #65 or
 invest in identity/archive micro-optimizations #51/#62/#63. Reopen only for a
 materially smaller archive selected by critical-path class-load evidence, or a
