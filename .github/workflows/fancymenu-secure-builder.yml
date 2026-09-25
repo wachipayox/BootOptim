@@ -24,26 +24,36 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Generate ephemeral decryption key
+      - name: Generate and publish ephemeral public key
         shell: bash
         run: |
+          set -euo pipefail
           openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/fm-private.pem
           openssl pkey -in /tmp/fm-private.pem -pubout -out /tmp/fm-public.pem
-          echo "FM_BUILDER_PUBLIC_KEY_B64=$(base64 -w0 /tmp/fm-public.pem)"
+          mkdir -p .tmp-fancymenu-secure
+          cp /tmp/fm-public.pem ".tmp-fancymenu-secure/public-${GITHUB_RUN_ID}.pem"
+          git config user.name "FancyMenu temporary builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add ".tmp-fancymenu-secure/public-${GITHUB_RUN_ID}.pem"
+          git commit -m "Publish ephemeral builder public key ${GITHUB_RUN_ID}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Wait for encrypted patch
         shell: bash
         run: |
           set -euo pipefail
           BRANCH='temp/fancymenu-emf-secure-build-20260925'
+          PAYLOAD=".tmp-fancymenu-secure/payload-${GITHUB_RUN_ID}.enc"
+          EKEY=".tmp-fancymenu-secure/key-${GITHUB_RUN_ID}.enc"
+          IV=".tmp-fancymenu-secure/iv-${GITHUB_RUN_ID}.bin"
           for i in $(seq 1 180); do
             git fetch -q origin "$BRANCH"
-            if git cat-file -e "origin/$BRANCH:.tmp-fancymenu-secure/payload.enc" 2>/dev/null \
-              && git cat-file -e "origin/$BRANCH:.tmp-fancymenu-secure/key.enc" 2>/dev/null \
-              && git cat-file -e "origin/$BRANCH:.tmp-fancymenu-secure/iv.bin" 2>/dev/null; then
-              git show "origin/$BRANCH:.tmp-fancymenu-secure/payload.enc" > /tmp/payload.enc
-              git show "origin/$BRANCH:.tmp-fancymenu-secure/key.enc" > /tmp/key.enc
-              git show "origin/$BRANCH:.tmp-fancymenu-secure/iv.bin" > /tmp/iv.bin
+            if git cat-file -e "origin/$BRANCH:$PAYLOAD" 2>/dev/null \
+              && git cat-file -e "origin/$BRANCH:$EKEY" 2>/dev/null \
+              && git cat-file -e "origin/$BRANCH:$IV" 2>/dev/null; then
+              git show "origin/$BRANCH:$PAYLOAD" > /tmp/payload.enc
+              git show "origin/$BRANCH:$EKEY" > /tmp/key.enc
+              git show "origin/$BRANCH:$IV" > /tmp/iv.bin
               exit 0
             fi
             sleep 3
