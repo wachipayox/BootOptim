@@ -37,6 +37,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Oracle JDK 25 AOT cache on the physical laptop — 2026-09-25](jdk25-aot-cache-laptop-2026-09-25.md) — **NO-GO for the current launcher profile**: HotSpot loaded a 316 MiB cache, but the single physical pair improved only 3.043 s (0.81%) with fixed-order/page-cache bias; the profile is configured for Java 21, which does not support AOT caches.
+
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
 
 - [Post-FancyMenu preload critical-tail audit — 2026-09-05](post-fancymenu-critical-tail-audit-2026-09-05.md) — **LIMITED / NO-GO**: current integration has coarse preload/reload/title endpoints but lacks the #47-style scheduler barrier and first-present boundary needed to attribute the variable physical tail; no safe runtime optimization is identified.
