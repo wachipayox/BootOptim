@@ -1,0 +1,93 @@
+name: Temporary Secure FancyMenu Builder
+
+on:
+  push:
+    branches:
+      - temp/fancymenu-emf-secure-build-20260925
+    paths:
+      - '.github/workflows/fancymenu-secure-builder.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout builder branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Generate ephemeral decryption key
+        shell: bash
+        run: |
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/fm-private.pem
+          openssl pkey -in /tmp/fm-private.pem -pubout -out /tmp/fm-public.pem
+          echo "FM_BUILDER_PUBLIC_KEY_B64=$(base64 -w0 /tmp/fm-public.pem)"
+
+      - name: Wait for encrypted patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH='temp/fancymenu-emf-secure-build-20260925'
+          for i in $(seq 1 180); do
+            git fetch -q origin "$BRANCH"
+            if git cat-file -e "origin/$BRANCH:.tmp-fancymenu-secure/payload.enc" 2>/dev/null \
+              && git cat-file -e "origin/$BRANCH:.tmp-fancymenu-secure/key.enc" 2>/dev/null \
+              && git cat-file -e "origin/$BRANCH:.tmp-fancymenu-secure/iv.bin" 2>/dev/null; then
+              git show "origin/$BRANCH:.tmp-fancymenu-secure/payload.enc" > /tmp/payload.enc
+              git show "origin/$BRANCH:.tmp-fancymenu-secure/key.enc" > /tmp/key.enc
+              git show "origin/$BRANCH:.tmp-fancymenu-secure/iv.bin" > /tmp/iv.bin
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Encrypted patch was not supplied in time" >&2
+          exit 1
+
+      - name: Decrypt patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl pkeyutl -decrypt -inkey /tmp/fm-private.pem -in /tmp/key.enc -out /tmp/aes.key \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
+          KEY_HEX=$(xxd -p -c 256 /tmp/aes.key)
+          IV_HEX=$(xxd -p -c 256 /tmp/iv.bin)
+          openssl enc -d -aes-256-cbc -K "$KEY_HEX" -iv "$IV_HEX" \
+            -in /tmp/payload.enc -out /tmp/fancymenu.patch
+
+      - name: Reconstruct FancyMenu fork
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone -q https://github.com/Keksuccino/FancyMenu.git fancymenu-src
+          cd fancymenu-src
+          git checkout -q 2e58c3e97241ae8ca1443399f94d52f28e7024a7
+          git apply --check /tmp/fancymenu.patch
+          git apply /tmp/fancymenu.patch
+
+      - name: Build NeoForge 1.21.1
+        working-directory: fancymenu-src
+        run: |
+          chmod +x gradlew
+          ./gradlew :neoforge:build --stacktrace --no-daemon
+
+      - name: Show outputs
+        run: ls -lah fancymenu-src/neoforge/build/libs
+
+      - name: Upload test JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: fancymenu-welite-emf-fix-neoforge-1.21.1
+          path: |
+            fancymenu-src/neoforge/build/libs/*.jar
+            !fancymenu-src/neoforge/build/libs/*-sources.jar
+            !fancymenu-src/neoforge/build/libs/*-dev.jar
+          if-no-files-found: error
+          retention-days: 3
