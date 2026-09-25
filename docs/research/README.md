@@ -74,6 +74,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 - [Production optimizations](production-optimizations.md) — startup optimizations that crossed the evidence bar and are intended to live in integration.
 - [Mixin / ModLauncher transformation pipeline](mixin-pipeline.md) — #41/#42/#43/#46/#48 evidence, including the rejected generic side-load cache, confirmed-but-irrelevant ClassInfo negative-cache bug, and rejected external ASM writer-tail target.
 
+- [Xaero World Map startup version check — 2026-09-25](xaero-startup-update-check-2026-09-25.md) — newly attributed synchronous render-thread network stall after the early title, with a version-guarded skip candidate and explicit update-notification tradeoff.
+
 ## Project rule
 
 A large count reduction is not sufficient evidence of startup improvement. BootOptim optimizes time-to-main-menu, so experiments must ultimately be judged by their contribution to the real critical path. CPU work that is cheap per call or hidden under another concurrent gate can be worth documenting without being worth shipping.
