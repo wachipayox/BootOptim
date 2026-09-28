@@ -38,3 +38,5 @@ Dynamic FancyMenu validation then attached the pack's real `video_mcef` block to
 The pack's WebDisplaysFork `2.5.0-1.21.1` registers its normal callback through `MCEF.scheduleForInit` and creates browsers through `MCEF.getClient()`, so the real MCEF lifecycle remains sufficient; no BootOptim-specific WebDisplays callback is dispatched.
 
 Full evidence and validation boundaries: [`../../research/mcef-first-consumer-defer-2026-09-03.md`](../../research/mcef-first-consumer-defer-2026-09-03.md).
+
+The screen-task correction was validated on the fast PC exact pack: BootOptim skipped the redundant delayed MCEF task on menu transitions, and Title→Options / Options→Title displayed-frame gaps fell from approximately one second in the previous diagnostic run to 99 / 100 ms. The user reported normal visuals, successful world entry and successful F3+T. This is a physical behavior check, not a paired TTMM benchmark; see [`../../research/mcef-screen-transition-sleep-2026-09-28.md`](../../research/mcef-screen-transition-sleep-2026-09-28.md).
