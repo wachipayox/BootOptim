@@ -1,6 +1,6 @@
 # Direct vanilla multipart dependency collection — 2026-09-28
 
-Status: **ACTIVE EXPERIMENT**, default disabled. This is not production evidence.
+Status: **LIMITED / NOT PROMOTED**, default disabled. This is not production evidence.
 
 ## Premise and measured boundary
 
@@ -25,3 +25,11 @@ Historical PRs checked: #13/#14/#35/#36/#47/#55/#257 and the [model pipeline led
 [Workflow #36474778215](https://github.com/wachipayox/BootOptim/actions/runs/36474778215) completed six fresh-VM runs successfully. Candidate and control each reached the menu with `8192x8192x2` block atlas and zero BootOptim Mixin errors. The candidate emitted its one-time active marker. Candidate process-origin → menu results were **90.050, 68.598, 90.629 s**; controls were **96.464, 68.194, 88.029 s**. Their medians are **90.050 vs 88.029 s**, candidate **+2.021 s**. The corresponding initial reload→FancyMenu medians were **40.853 vs 40.948 s**, candidate **−0.095 s**. Candidate/control per-index menu differences are −6.414, +0.404 and +2.600 s; pre-entrypoint differences are −3.364, +0.057 and +1.756 s, already showing large unrelated runner variance before the target path. The panorama medians also differ by −0.600 s. This is **not a coherent end-to-end win** and gives no basis to promote or claim F3+T improvement.
 
 The mechanism is CPU/allocation-sensitive and the hosted delta is small relative to variance, so this first A/B does not establish a physical no-effect result either. A same-VM alternating-order paired hosted run is the next narrow noise gate. Only a coherent within-pair reload-phase improvement would justify asking for a physical in-world F3+T comparison; otherwise leave the experiment unpromoted and redirect to the larger model preparation/apply bottlenecks.
+
+## Same-VM paired diagnostic and decision
+
+[Workflow #36500115048](https://github.com/wachipayox/BootOptim/actions/runs/36500115048) passed all three paired jobs and the aggregate. Both process variants in each VM reached the menu with the same `8192x8192x2` atlas and zero BootOptim Mixin errors. The candidate active marker appeared in its process logs. Pair order alternated: control→candidate in pairs 1 and 3, candidate→control in pair 2.
+
+Candidate-minus-control **within-pair** process-origin→menu deltas were **−1.229, +2.383, −1.083 s**; reload→FancyMenu deltas were **−2.502, +0.489, −2.874 s**. In both measures, the candidate won only when it was the **second** process. The paired medians (−1.083 s menu, −2.502 s reload→FancyMenu) therefore cannot be attributed to the direct-dependency loop: order/page-cache/JIT and unrelated pack variance remain a simpler explanation. The candidate was also slower in the only candidate-first pair. Do not promote or ask the user for a manual F3+T trial on this evidence.
+
+This is a **decision against this standalone optimization at current evidence**, not a physical proof that its CPU allocation savings are exactly zero. The physical in-world diagnostic has no paired candidate/control run, and hosted startup is not the manual F3+T endpoint. Reopen only with a materially changed algorithm or a direct, clean ModelBakery dependency CPU/critical-path attribution that exceeds this noise. Preserve the original 3.2-million-call observation as diagnostic context; it must not be conflated with recoverable seconds. The approximately 8–10-s construction and 5-s bake milestones plus the ~3–4-s ordered application remain the larger architectural front.
