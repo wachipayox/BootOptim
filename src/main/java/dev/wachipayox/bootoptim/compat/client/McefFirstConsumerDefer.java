@@ -29,13 +29,34 @@ public final class McefFirstConsumerDefer {
     private static final ThreadLocal<Boolean> FORCE_INITIALIZE = ThreadLocal.withInitial(() -> false);
     private static final AtomicReference<State> STATE = new AtomicReference<>(State.ARMED);
     private static final CompletableFuture<Boolean> INITIALIZATION_COMPLETION = new CompletableFuture<>();
+    private static final StackWalker SCREEN_HOOK_STACK = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 
     private static volatile boolean compatibilityChecked;
     private static volatile boolean compatible;
     private static volatile boolean compatibilityReported;
     private static volatile int suppressedCalls;
+    private static volatile int skippedScreenTasks;
 
     private McefFirstConsumerDefer() {
+    }
+
+    /**
+     * MCEF's setScreen hook queues a client-thread task that sleeps for one second before its
+     * automatic initialize call. With first-consumer deferral that call is suppressed, so every
+     * ordinary menu transition would otherwise sleep for no useful work. Omit only that exact
+     * task while the defer is active. MCEF's download/failure-screen logic still runs in its hook.
+     */
+    public static boolean shouldSkipAutomaticScreenInitTask() {
+        if (!ENABLED || STATE.get() != State.DEFERRED || !isCompatible()) {
+            return false;
+        }
+        boolean fromMcefScreenHook = SCREEN_HOOK_STACK.walk(frames -> frames.limit(8).anyMatch(frame ->
+                frame.getDeclaringClass() == Minecraft.class
+                        && frame.getMethodName().contains("$mcef$redirScreen")));
+        if (fromMcefScreenHook && ++skippedScreenTasks <= 4) {
+            LOGGER.info("BOOTOPTIM_MCEF_FIRST_CONSUMER status=skipped_redundant_screen_init_task count={}", skippedScreenTasks);
+        }
+        return fromMcefScreenHook;
     }
 
     /** Called from the optional MCEF mixin at {@code MCEF.initialize()} HEAD. */
