@@ -1,6 +1,8 @@
 package dev.wachipayox.bootoptim.mixin.client;
 
+import dev.wachipayox.bootoptim.optimization.client.DecocraftCornerRotationReuse;
 import dev.wachipayox.bootoptim.optimization.client.DecocraftRotatedQuadReuse;
+import dev.wachipayox.bootoptim.profiling.client.DecocraftCornerQuadEquivalenceProbe;
 import net.minecraft.client.resources.model.ModelBakery;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -17,5 +19,7 @@ abstract class ModelBakeryDecocraftReuseMixin {
     @Inject(method = "bakeModels", at = @At("RETURN"), require = 0)
     private void bootoptim$finishDecocraftReuse(ModelBakery.TextureGetter textureGetter, CallbackInfo ci) {
         DecocraftRotatedQuadReuse.finishModelBake();
+        DecocraftCornerRotationReuse.finishModelBake();
+        DecocraftCornerQuadEquivalenceProbe.finishModelBake();
     }
 }

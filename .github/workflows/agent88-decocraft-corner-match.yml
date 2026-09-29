@@ -1,0 +1,36 @@
+name: Agent88 Decocraft corner matcher
+
+on:
+  push:
+    branches:
+      - agent88/decocraft-bbgeometry-inmod-20260909
+  pull_request:
+    branches:
+      - agent/integration-current
+
+permissions:
+  contents: read
+
+jobs:
+  match:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify pinned Decocraft 3.0.11 bytecode boundary
+        run: |
+          curl --fail --location --retry 3 \
+            'https://cdn.modrinth.com/data/IZJSgKZe/versions/Z8xm2POI/decocraft-3.0.11-1.21.1-neoforge.jar' \
+            --output decocraft.jar
+          echo 'b0589eb7d03b13bbf3b9c45df7f50db556a721882e9ad2bb6be0ff23e5a64526  decocraft.jar' | sha256sum -c -
+          javap -classpath decocraft.jar -p -c -s \
+            'com.razz.decocraft.models.bbmodel.BlockbenchBakery' > bakery.javap
+          grep -Fq 'private void bakeVertex(com.razz.decocraft.models.bbmodel.BlockbenchBakery$VertexData[], int,' bakery.javap
+          grep -Fq 'descriptor: ([Lcom/razz/decocraft/models/bbmodel/BlockbenchBakery$VertexData;ILcom/razz/decocraft/models/bbmodel/BBModelParts$Locator;Lnet/minecraft/core/Direction;Lcom/razz/decocraft/models/bbmodel/BlockbenchLoader$BlockbenchSetting;Lcom/razz/decocraft/models/bbmodel/BBModelParts$UVCoordinate;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Resolution;FFFFFFLnet/minecraft/client/renderer/texture/TextureAtlasSprite;Lorg/joml/Matrix4f;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Element;)V' bakery.javap
+          test "$(grep -Fc 'Method applyElementRotation:(Lcom/razz/decocraft/models/libgdx/Vector3;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Element;)V' bakery.javap)" -eq 1
+          test "$(grep -Fc 'Method rotateVertexBy:(Lcom/razz/decocraft/models/libgdx/Vector3;Lcom/razz/decocraft/models/libgdx/Vector3;Lcom/razz/decocraft/models/libgdx/Matrix4;)V' bakery.javap)" -eq 3
+          grep -Fq 'Method applyModelRotation:(Lcom/razz/decocraft/models/libgdx/Vector3;Lcom/razz/decocraft/models/libgdx/Vector3;Lorg/joml/Matrix4f;)V' bakery.javap
+          grep -Fq 'Method fillVertex:([Lcom/razz/decocraft/models/bbmodel/BlockbenchBakery$VertexData;ILcom/razz/decocraft/models/bbmodel/BlockbenchLoader$BlockbenchSetting;Lcom/razz/decocraft/models/libgdx/Vector3;Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;Lcom/razz/decocraft/models/bbmodel/BBModelParts$UVCoordinate;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Resolution;)V' bakery.javap
