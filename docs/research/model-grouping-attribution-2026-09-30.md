@@ -79,3 +79,37 @@ zero BootOptim Mixin errors; not a paired performance comparison or physicalF3+T
 Artifacts collected C:/BootOptimBench/analysis-reload-20260930/grouping-36740130542.
 No laptop JAR changed. Next source attribution must split remaining discovery,
 state publication/map work and reading before choosing a direct optimization.
+
+## Residual follow-up: exact blockstate work callsites
+
+Continue this active diagnostic PR rather than creating an overlapping profiler.
+Refreshed integration still a0b8fdc0. Reviewed historical #51/#55 production index,
+#217/#221 constructor attribution and its CIT correction, #261 architecture NO-GO,
+#262 logging postmortem and closed #295 dependency experiment. #221's CIT constructor
+residual is outside our loadAllBlockStates scope and is NOT this 3.828 s remainder.
+Production indexed variant matching is present in actual integration source.
+
+New default-off `boot_optim.profileBlockStateWork=true` enables the same existing
+loadAll scope plus exact-call buckets: stateToModelLocation (lambda$2), LoadedJson.parse,
+discoveredModelOutput BiConsumer.accept (lambda$10), state publication Map.forEach,
+and group-map finalization Map.forEach. Actual clean1.21.1 bytecode has nine Map.forEach
+calls in loadBlockStateDefinitions: variant matching ordinal0; publication1/3/5/7
+and finalization2/4/6/8 are the four compiler-emitted finally copies (normal and
+exception paths). Observe every copy, leave original operation/exception in place.
+
+Phase clocks subtract measured nested intervals using the scope's cumulative known
+wall. Publication excludes discovery and factory time; six exclusive buckets plus
+unmeasured remainder reconstruct whole scoped load. Discovery still INCLUDES its
+un-instrumented dependency calls (a possible owner requiring further attribution),
+parse includes actual definition/selector work, and remainder includes variant
+application, map setup/merge, classloading and wrapper overhead. No sum of inclusive
+listeners, no claimed CPU savings. No persistent cache, skipped callbacks, threading,
+GL, loader ordering or resource publication changes. Scopes clear/restore in finally.
+
+Local packaged build PASS. Real helper tests verify exact result/exception identity,
+once-only calls, nested non-overlapping accounting, nonnegative buckets and failed
+phase cleanup. Python gate compiles. Hosted runner now rejects requested work probe
+unless all required callsites are observed (`success=true available=true`). Runtime
+validation is pending; require this gate before choosing an optimization. No user
+PC installation and no laptop bundle modification: combined ABBA campaign remains
+separate with fixed JAR/flags. Do not infer savings from counts or diagnostic wall.

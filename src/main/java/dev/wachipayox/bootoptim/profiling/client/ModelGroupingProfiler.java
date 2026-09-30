@@ -5,8 +5,10 @@ import java.util.function.Supplier;
 
 /** Diagnostic only: attribute current-call grouping without caching or skipping callbacks. */
 public final class ModelGroupingProfiler {
-    private static final boolean ENABLED = Boolean.getBoolean("boot_optim.profileModelGrouping");
+    private static final boolean WORK = Boolean.getBoolean("boot_optim.profileBlockStateWork");
+    private static final boolean ENABLED = WORK || Boolean.getBoolean("boot_optim.profileModelGrouping");
     private static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();
+    public enum Phase { LOCATION, PARSE, DISCOVERY, GROUP, PUBLICATION, FINALIZATION }
 
     private ModelGroupingProfiler() {}
 
@@ -31,6 +33,20 @@ public final class ModelGroupingProfiler {
                     success, scope.calls > 0, total / 1e6, scope.wallNs / 1e6,
                     (total - scope.wallNs) / 1e6, scope.calls, scope.nested, scope.failures,
                     Thread.currentThread().getName());
+            if (WORK) {
+                boolean available = scope.phaseCalls[Phase.LOCATION.ordinal()] > 0
+                        && scope.phaseCalls[Phase.PARSE.ordinal()] > 0
+                        && scope.phaseCalls[Phase.DISCOVERY.ordinal()] > 0
+                        && scope.phaseCalls[Phase.PUBLICATION.ordinal()] > 0
+                        && scope.phaseCalls[Phase.FINALIZATION.ordinal()] > 0 && scope.calls > 0;
+                LogUtils.getLogger().info(
+                        "BOOTOPTIM_BLOCKSTATE_WORK success={} available={} load_all_wall_ms={} locations_ms={} parse_ms={} discovery_ms={} group_factory_ms={} publication_ms={} finalization_ms={} remainder_ms={} location_calls={} parse_calls={} discovery_calls={} publication_calls={} finalization_calls={} group_calls={}",
+                        success, available, total / 1e6, scope.phaseNs[0] / 1e6,
+                        scope.phaseNs[1] / 1e6, scope.phaseNs[2] / 1e6, scope.phaseNs[3] / 1e6,
+                        scope.phaseNs[4] / 1e6, scope.phaseNs[5] / 1e6, (total - scope.measuredNs) / 1e6,
+                        scope.phaseCalls[0], scope.phaseCalls[1], scope.phaseCalls[2],
+                        scope.phaseCalls[4], scope.phaseCalls[5], scope.calls);
+            }
         }
     }
 
@@ -43,7 +59,7 @@ public final class ModelGroupingProfiler {
         long start = outer ? System.nanoTime() : 0;
         boolean success = false;
         try {
-            Object result = original.get();
+            Object result = phase(Phase.GROUP, original);
             success = true;
             return result;
         } finally {
@@ -53,11 +69,31 @@ public final class ModelGroupingProfiler {
         }
     }
 
+    /** Exclusive timing: nested measured calls are subtracted from the enclosing bucket. */
+    public static <T> T phase(Phase phase, Supplier<T> original) {
+        Scope scope = WORK ? CURRENT.get() : null;
+        if (scope == null) return original.get();
+        int bucket = phase.ordinal();
+        scope.phaseCalls[bucket]++;
+        long childrenBefore = scope.measuredNs;
+        long start = System.nanoTime();
+        try {
+            return original.get();
+        } finally {
+            long exclusive = System.nanoTime() - start - (scope.measuredNs - childrenBefore);
+            scope.phaseNs[bucket] += exclusive;
+            scope.measuredNs += exclusive;
+        }
+    }
+
     private static final class Scope {
         long calls;
         long nested;
         long failures;
         long wallNs;
         int depth;
+        long measuredNs;
+        final long[] phaseNs = new long[Phase.values().length];
+        final long[] phaseCalls = new long[Phase.values().length];
     }
 }

@@ -48,10 +48,51 @@ public class Check {
 }
 '''
 
+WORK_TEST = r'''
+import dev.wachipayox.bootoptim.profiling.client.ModelGroupingProfiler;
+import dev.wachipayox.bootoptim.profiling.client.ModelGroupingProfiler.Phase;
+import com.mojang.logging.LogUtils;
+public class CheckWork {
+ static void require(boolean v) { if(!v) throw new AssertionError(); }
+ public static void main(String[] args) {
+  Object token = new Object(); int[] calls = {0};
+  ModelGroupingProfiler.loadAll(() -> {
+   require(ModelGroupingProfiler.phase(Phase.LOCATION, () -> token) == token);
+   ModelGroupingProfiler.phase(Phase.PUBLICATION, () -> {
+    ModelGroupingProfiler.phase(Phase.DISCOVERY, () -> {
+     ModelGroupingProfiler.phase(Phase.PARSE, () -> {calls[0]++;return token;});
+     return token;
+    });
+    ModelGroupingProfiler.group(() -> token);
+    return token;
+   });
+   ModelGroupingProfiler.phase(Phase.FINALIZATION, () -> token);
+  });
+  Object[] r = LogUtils.records.get(1);
+  require(r[0].equals(true) && r[1].equals(true) && calls[0] == 1);
+  double sum = 0;
+  for(int i=3;i<=8;i++) { require((double)r[i]>=0); sum+=(double)r[i]; }
+  require(Math.abs(sum+(double)r[9]-(double)r[2]) < 0.00001);
+  for(int i=10;i<=15;i++) require(r[i].equals(1L));
+  RuntimeException failure = new RuntimeException();
+  try { ModelGroupingProfiler.loadAll(() -> ModelGroupingProfiler.phase(Phase.PUBLICATION,
+      () -> ModelGroupingProfiler.phase(Phase.PARSE, () -> {throw failure;})));
+      throw new AssertionError();
+  } catch(RuntimeException seen) {require(seen == failure);}
+  ModelGroupingProfiler.loadAll(() -> {});
+  require(LogUtils.records.get(5)[1].equals(false));
+  for(int i=3;i<=8;i++) require(LogUtils.records.get(5)[i].equals(0.0));
+  System.out.println("PASS exclusive nested accounting and failed phase cleanup");
+ }
+}
+'''
+
 with tempfile.TemporaryDirectory(prefix="bootoptim-grouping-") as tmp:
     work = Path(tmp)
     helper = ROOT / "src/main/java/dev/wachipayox/bootoptim/profiling/client/ModelGroupingProfiler.java"
     (work / "LogUtils.java").write_text(STUB)
     (work / "Check.java").write_text(TEST)
-    subprocess.run([shutil.which("javac"), "-d", str(work), str(helper), str(work / "LogUtils.java"), str(work / "Check.java")], check=True)
+    (work / "CheckWork.java").write_text(WORK_TEST)
+    subprocess.run([shutil.which("javac"), "-d", str(work), str(helper), str(work / "LogUtils.java"), str(work / "Check.java"), str(work / "CheckWork.java")], check=True)
     subprocess.run([shutil.which("java"), "-Dboot_optim.profileModelGrouping=true", "-cp", str(work), "Check"], check=True)
+    subprocess.run([shutil.which("java"), "-Dboot_optim.profileBlockStateWork=true", "-cp", str(work), "CheckWork"], check=True)

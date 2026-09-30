@@ -185,6 +185,9 @@ def main() -> None:
             raise SystemExit(f"Exact-pack run reached marker but startup report is missing: {startup_log}")
 
         latest_text = latest_log.read_text(encoding="utf-8", errors="replace")
+        if "-Dboot_optim.profileBlockStateWork=true" in os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "").splitlines():
+            if "BOOTOPTIM_BLOCKSTATE_WORK success=true available=true" not in latest_text:
+                raise RuntimeError("Requested blockstate work attribution did not observe all required callsites")
         if "-Dboot_optim.profileModelGrouping=true" in os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "").splitlines():
             if "BOOTOPTIM_MODEL_GROUPING success=true available=true" not in latest_text:
                 raise SystemExit("Requested grouping probe did not observe successful supplier calls.")
