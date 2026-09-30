@@ -41,6 +41,12 @@ successful duration extraction, ordinary startup, failure, duplicate,
 truncation, extra reload and invalid origin; local packaging passes. Hosted
 runtime validation is pending.
 
+The aggregate reports repeat 1 and repeat 2 medians separately, including
+within-VM candidate-minus-control differences for matching ordinals. It
+rejects missing sequences, mismatched boundaries/counts, invalid durations
+and missing/duplicate paired processes. Eleven focused tests now cover
+these contracts. Repeated reload wall is never added to main-menu time.
+
 ## First hosted failure and correction
 
 [Run 36687765308](https://github.com/wachipayox/BootOptim/actions/runs/36687765308)

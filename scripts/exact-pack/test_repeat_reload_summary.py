@@ -1,5 +1,5 @@
 import unittest
-from summarize_startup import parse_repeat_reloads
+from summarize_startup import parse_repeat_reloads, aggregate_repeat_reloads
 
 
 def valid_lines():
@@ -46,6 +46,37 @@ class RepeatReloadSummaryTest(unittest.TestCase):
         lines = valid_lines()
         lines[1] = lines[1].replace("origin=reload_invocation", "origin=process_start")
         self.assertFalse(parse_repeat_reloads(lines)["valid"])
+
+    def test_separate_paired_generations(self):
+        rows = []
+        for pair, control, candidate in ((1, [1500, 1800], [1200, 1600]), (2, [1700, 2000], [1600, 1900])):
+            for variant, walls in (("control", control), ("candidate", candidate)):
+                item = parse_repeat_reloads(valid_lines())
+                item["wall_ms"] = walls
+                rows.append({"variant": variant, "paired_pair": pair, "paired_same_vm": True,
+                             "paired_order": "control->candidate" if pair == 1 else "candidate->control",
+                             "repeat_reloads": item})
+        result = aggregate_repeat_reloads(rows)
+        self.assertTrue(result["valid"])
+        self.assertEqual(result["variants"]["candidate"]["wall_ms"], [1400, 1750])
+        self.assertEqual(result["paired_median_deltas_ms"], [-200, -150])
+        self.assertEqual(result["paired"][1]["order"], "candidate->control")
+
+    def test_mixed_repeat_contract_rejected(self):
+        rows = [{"variant": "candidate", "repeat_reloads": parse_repeat_reloads(valid_lines())},
+                {"variant": "control", "repeat_reloads": None}]
+        self.assertFalse(aggregate_repeat_reloads(rows)["valid"])
+        rows[1]["repeat_reloads"] = parse_repeat_reloads(valid_lines())
+        rows[1]["repeat_reloads"]["world"] = "in_world"
+        self.assertFalse(aggregate_repeat_reloads(rows)["valid"])
+
+    def test_duplicate_paired_process_rejected(self):
+        row = {"variant": "candidate", "paired_same_vm": True, "paired_pair": 1,
+               "repeat_reloads": parse_repeat_reloads(valid_lines())}
+        self.assertFalse(aggregate_repeat_reloads([row, row])["valid"])
+
+    def test_ordinary_aggregate_unaffected(self):
+        self.assertIsNone(aggregate_repeat_reloads([{"variant": "control"}]))
 
 
 if __name__ == "__main__":
