@@ -1,6 +1,6 @@
 # FerriteCore bounded empty quad-table capacity
 
-Status: **ACTIVE DEFAULT-OFF EXPERIMENT — no speedup claim**
+Status: **LIMITED DEFAULT-OFF EXPERIMENT — no consistent hosted speedup; not promoted**
 
 Base authority refreshed: `agent/integration-current` at `a0b8fdc`.
 No open/closed BootOptim PR specific to FerriteCore quad storage was found;
@@ -91,3 +91,46 @@ ordinals separately; retain the individual deltas, not only a median.
 Both sides have identical sparse telemetry and diagnostic settling.
 Candidate differs only by `ferriteCoreQuadCapacity=true` versus false.
 No physical staging or production promotion is authorized by smoke alone.
+
+## Three paired repeat comparisons completed
+
+The initially linked run 36691743452 was cancelled when a replacement of
+the same head was launched. Its partial artifacts are retained separately
+at `paired-cancelled/` and are excluded from comparison.
+[Completed run 36691964405](https://github.com/wachipayox/BootOptim/actions/runs/36691964405)
+on `b5514af8` is authoritative: all six processes and twelve repeats pass
+resource selection, atlas, strict request/future boundaries and zero
+BootOptim Mixin failures. All nine candidate capacity markers succeed,
+with preceding unique counts between 479,823 and 479,905.
+
+Candidate-minus-control repeat wall deltas in milliseconds:
+
+| Pair | Process order | Repeat 1 | Repeat 2 |
+| --- | --- | ---: | ---: |
+| 1 | control then candidate | -1747.841 | +1003.863 |
+| 2 | candidate then control | +361.038 | -171.663 |
+| 3 | control then candidate | +136.220 | +502.319 |
+| Within-pair median | | +136.220 | +502.319 |
+
+The isolated first-repeat improvement does not repeat, and the second
+repeat is slower in two pairs. Startup deltas are also positive
+(+3183/+1282/+2568 ms), including +924/+1086/+753 ms before mod entrypoint.
+Capacity reuse cannot explain that pre-entrypoint difference; do not claim
+all observed startup difference as a causal mechanism regression. Runner
+conditions vary substantially between pairs, so subtracting variant-wide
+medians would also manufacture a different inference from paired deltas.
+
+This does not establish a consistent time reduction. No physical F3+T or
+laptop speedup/zero-effect claim is made, and no GC-equivalence claim is
+inferred from successful reloads. Artifacts are under the adjacent
+`paired/` directory. Keep the candidate default-off and unpromoted; do not
+ask for another unchanged hosted comparison without a new premise.
+
+Explicit future low-end checklist: include capacity true/false in a paired
+repeat-reload/GC comparison when the user authorizes the laptop campaign.
+Heap/GC sensitivity is the remaining distinct physical premise; neither
+the experimental code nor that pending check should be forgotten. The
+current evidence does not warrant installing it in the user's active PC
+instance. A targeted proof that rehash CPU or GC dominates a physical
+reload can reopen the candidate; the complete FerriteCore/model bake
+subsystem is not closed by this limited storage result.

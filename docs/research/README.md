@@ -37,7 +37,7 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
-- [FerriteCore bounded empty quad-table capacity](ferritecore-quad-capacity-2026-09-30.md) — default-off generation-cleared storage reuse to avoid rebuilding the canonical quad table each manual reload; original hash/data clearing remains, retained reference slots are bounded, and runtime economics are pending.
+- [FerriteCore bounded empty quad-table capacity](ferritecore-quad-capacity-2026-09-30.md) — runtime and canonicalization guards pass, but hosted repeat-reload paired medians are +136/+502 ms; default-off and unpromoted, with a future low-end/GC comparison explicitly pending.
 
 - [Hosted same-process resource reload diagnostic](hosted-repeat-reload-2026-09-30.md) — opt-in stock menu reloads after the separate startup endpoint, with fixed monotonic request/future boundaries and strict generation/pack validation; physical in-world behavior remains a separate gate.
 
