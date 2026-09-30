@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $Utf8=New-Object System.Text.UTF8Encoding($false)
 
-function Save([object]$o){$t="$StateFile.tmp-$PID";[IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8);Move-Item -LiteralPath $t -Destination $StateFile -Force}
+function Save([object]$o){$t="$StateFile.tmp-$PID";[IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8);if([IO.File]::Exists($StateFile)){[IO.File]::Replace($t,$StateFile,[NullString]::Value)}else{[IO.File]::Move($t,$StateFile)}}
 function Load{Get-Content -LiteralPath $StateFile -Raw|ConvertFrom-Json}
 function Fail([object]$s,[string]$m){$s.valid=$false;$s.reason=$m;$s.phase='invalid';Save $s;throw "BOOTOPTIM_REMOTE_INVALID: $m"}
 function Text-Sha256([string]$text){$h=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($text)))).Replace('-','')}finally{$h.Dispose()}}
@@ -38,7 +38,7 @@ function Assert-ExpectedSession([object]$s){
 }
 function Target-Java([string]$game,[string]$root){
     $all=@(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'")
-    @($all|Where-Object{$c=[string]$_.CommandLine;$c -and (($c.IndexOf($game,[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge0))})
+    @($all|Where-Object{$c=([string]$_.CommandLine).Replace('/','\');$c -and (($c.IndexOf($game.Replace('/','\'),[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root.Replace('/','\'),[StringComparison]::OrdinalIgnoreCase)-ge0))})
 }
 function Prism-Procs([string]$exe){$n=@('prismlauncher.exe','PrismLauncher.exe',[IO.Path]::GetFileName($exe))|Select-Object -Unique;@(Get-CimInstance Win32_Process|Where-Object{$n -contains $_.Name})}
 function Quote-Arg([string]$v){
