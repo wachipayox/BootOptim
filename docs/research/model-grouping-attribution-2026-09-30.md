@@ -147,3 +147,33 @@ collection remains order-confounded; this does not authorize repeating its uncha
 candidate. Identifier lane~0.859s is secondary: vanilla already uses direct StringBuilder,
 Palladium mutableproperty cache remains unsafe/unsupported. Do not blindly cache
 identifiers or skip serializers. All diagnostic code stays out of production/laptop.
+
+
+## Discovery owner continuation — 2026-09-30
+
+Continue PR303's existing diagnostic and scope; no second overlapping profiler.
+The actual NeoForge-patched1.21.1 source shows `registerModelAndLoadDependencies`
+calling `model.getDependencies()`, `getModel` for each current returned location,
+and `registerModel` (topLevelModels.put). `getModel` cache hits currently do
+containsKey plus get; misses include loading-stack traversal and current model
+loader hooks. That double lookup is a hypothesis, not yet an attribution or a
+safe permission to bypass callbacks. No dependency collection reuse or loader
+reordering was implemented; closed#295 remains excluded as an unchanged premise.
+
+Default-off `boot_optim.profileDiscoveryWork=true` enables the same previous
+loadAll scope and adds three exact invocation wrappers inside the discovery
+callback: dependency enumeration, full current `getModel`, top-level registration.
+Each original call/result/exception is preserved. New sub-buckets are exclusive;
+the legacy DISCOVERY report reaggregates its sub-buckets so the six original
+buckets plus remainder still reconstruct whole loadAll wall. A separate fixed
+BOOTOPTIM_DISCOVERY_WORK record reports the split and residual loop/callback time.
+Counters outside the loadAll scope are not attributed. No clocks enter the
+physical candidate decision JAR from PR304.
+
+Local packaged build and actual helper tests PASS: once-only result/exception
+identity, nested exclusive accounting, sub-buckets reconstructing their parent,
+failed-scope cleanup and registration. Hosted runtime must observe all three
+callsites success=true available=true before choosing a concrete optimization.
+Per-call diagnostic wall includes instrumentation overhead and is not CPU or
+end-to-end saving. PR304's within-JVM trial runs independently while this analysis
+progresses. User explicitly requested this concurrent local investigation.

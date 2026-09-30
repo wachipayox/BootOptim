@@ -5,10 +5,11 @@ import java.util.function.Supplier;
 
 /** Diagnostic only: attribute current-call grouping without caching or skipping callbacks. */
 public final class ModelGroupingProfiler {
-    private static final boolean WORK = Boolean.getBoolean("boot_optim.profileBlockStateWork");
+    private static final boolean DETAIL = Boolean.getBoolean("boot_optim.profileDiscoveryWork");
+    private static final boolean WORK = DETAIL || Boolean.getBoolean("boot_optim.profileBlockStateWork");
     private static final boolean ENABLED = WORK || Boolean.getBoolean("boot_optim.profileModelGrouping");
     private static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();
-    public enum Phase { LOCATION, PARSE, DISCOVERY, GROUP, PUBLICATION, FINALIZATION }
+    public enum Phase { LOCATION, PARSE, DISCOVERY, GROUP, PUBLICATION, FINALIZATION, DEPENDENCIES, MODEL_LOOKUP, TOP_LEVEL_REGISTRATION }
 
     private ModelGroupingProfiler() {}
 
@@ -42,10 +43,17 @@ public final class ModelGroupingProfiler {
                 LogUtils.getLogger().info(
                         "BOOTOPTIM_BLOCKSTATE_WORK success={} available={} load_all_wall_ms={} locations_ms={} parse_ms={} discovery_ms={} group_factory_ms={} publication_ms={} finalization_ms={} remainder_ms={} location_calls={} parse_calls={} discovery_calls={} publication_calls={} finalization_calls={} group_calls={}",
                         success, available, total / 1e6, scope.phaseNs[0] / 1e6,
-                        scope.phaseNs[1] / 1e6, scope.phaseNs[2] / 1e6, scope.phaseNs[3] / 1e6,
+                        scope.phaseNs[1] / 1e6, (scope.phaseNs[2] + scope.phaseNs[6] + scope.phaseNs[7] + scope.phaseNs[8]) / 1e6, scope.phaseNs[3] / 1e6,
                         scope.phaseNs[4] / 1e6, scope.phaseNs[5] / 1e6, (total - scope.measuredNs) / 1e6,
                         scope.phaseCalls[0], scope.phaseCalls[1], scope.phaseCalls[2],
                         scope.phaseCalls[4], scope.phaseCalls[5], scope.calls);
+                if (DETAIL) {
+                    LogUtils.getLogger().info(
+                            "BOOTOPTIM_DISCOVERY_WORK success={} available={} dependencies_ms={} model_lookup_ms={} top_level_registration_ms={} callback_residual_ms={} dependency_calls={} model_lookup_calls={} registration_calls={} discovery_calls={}",
+                            success, available && scope.phaseCalls[6] > 0 && scope.phaseCalls[7] > 0 && scope.phaseCalls[8] > 0,
+                            scope.phaseNs[6] / 1e6, scope.phaseNs[7] / 1e6, scope.phaseNs[8] / 1e6, scope.phaseNs[2] / 1e6,
+                            scope.phaseCalls[6], scope.phaseCalls[7], scope.phaseCalls[8], scope.phaseCalls[2]);
+                }
             }
         }
     }
@@ -84,6 +92,10 @@ public final class ModelGroupingProfiler {
             scope.phaseNs[bucket] += exclusive;
             scope.measuredNs += exclusive;
         }
+    }
+
+    public static <T> T discoveryPhase(Phase phase, Supplier<T> original) {
+        return DETAIL ? phase(phase, original) : original.get();
     }
 
     private static final class Scope {

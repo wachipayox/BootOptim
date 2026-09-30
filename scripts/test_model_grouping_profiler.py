@@ -92,12 +92,49 @@ public class CheckWork {
 }
 '''
 
+DISCOVERY_TEST = r'''
+import dev.wachipayox.bootoptim.profiling.client.ModelGroupingProfiler;
+import dev.wachipayox.bootoptim.profiling.client.ModelGroupingProfiler.Phase;
+import com.mojang.logging.LogUtils;
+public class CheckDiscovery {
+ static void require(boolean v) {if(!v) throw new AssertionError();}
+ public static void main(String[] args) {
+  Object token=new Object(); int[] calls={0};
+  ModelGroupingProfiler.loadAll(() -> {
+   for(Phase p:new Phase[]{Phase.LOCATION,Phase.PARSE,Phase.PUBLICATION,Phase.FINALIZATION}) ModelGroupingProfiler.phase(p,()->token);
+   ModelGroupingProfiler.phase(Phase.DISCOVERY,()->{
+    for(Phase p:new Phase[]{Phase.DEPENDENCIES,Phase.MODEL_LOOKUP,Phase.TOP_LEVEL_REGISTRATION})
+     require(ModelGroupingProfiler.discoveryPhase(p,()->{calls[0]++;return token;})==token);
+    return token;
+   });
+   ModelGroupingProfiler.group(()->token);
+  });
+  Object[] work=LogUtils.records.get(1), detail=LogUtils.records.get(2);
+  require(work[1].equals(true) && detail[1].equals(true) && calls[0]==3);
+  double sum=0; for(int i=3;i<=8;i++) sum+=(double)work[i];
+  require(Math.abs(sum+(double)work[9]-(double)work[2])<0.00001);
+  double discovery=0; for(int i=2;i<=5;i++) {require((double)detail[i]>=0);discovery+=(double)detail[i];}
+  require(Math.abs(discovery-(double)work[5])<0.00001);
+  for(int i=6;i<=9;i++) require(detail[i].equals(1L));
+  RuntimeException expected=new RuntimeException();
+  try {ModelGroupingProfiler.loadAll(()->ModelGroupingProfiler.discoveryPhase(Phase.MODEL_LOOKUP,()->{throw expected;})); throw new AssertionError();}
+  catch(RuntimeException actual){require(actual==expected);}
+  ModelGroupingProfiler.loadAll(()->{});
+  require(LogUtils.records.get(8)[1].equals(false));
+  System.out.println("PASS discovery partition, identity, once-only calls and cleanup");
+ }
+}
+'''
+
 with tempfile.TemporaryDirectory(prefix="bootoptim-grouping-") as tmp:
     work = Path(tmp)
     helper = ROOT / "src/main/java/dev/wachipayox/bootoptim/profiling/client/ModelGroupingProfiler.java"
     (work / "LogUtils.java").write_text(STUB)
     (work / "Check.java").write_text(TEST)
     (work / "CheckWork.java").write_text(WORK_TEST)
-    subprocess.run([shutil.which("javac"), "-d", str(work), str(helper), str(work / "LogUtils.java"), str(work / "Check.java"), str(work / "CheckWork.java")], check=True)
+    (work / "CheckDiscovery.java").write_text(DISCOVERY_TEST)
+    subprocess.run([shutil.which("javac"), "-d", str(work), str(helper), str(work / "LogUtils.java"), str(work / "Check.java"), str(work / "CheckWork.java"), str(work / "CheckDiscovery.java")], check=True)
     subprocess.run([shutil.which("java"), "-Dboot_optim.profileModelGrouping=true", "-cp", str(work), "Check"], check=True)
     subprocess.run([shutil.which("java"), "-Dboot_optim.profileBlockStateWork=true", "-cp", str(work), "CheckWork"], check=True)
+
+    subprocess.run([shutil.which("java"), "-Dboot_optim.profileDiscoveryWork=true", "-cp", str(work), "CheckDiscovery"], check=True)
