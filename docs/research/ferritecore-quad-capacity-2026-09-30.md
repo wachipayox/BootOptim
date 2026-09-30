@@ -66,3 +66,28 @@ strict #297 repeated-future contract and no new Mixin errors. Only then
 request paired hosted economics; any positive result still needs physical
 in-world F3+T and representative visual/GC validation. The user instance and
 laptop remain untouched.
+
+## Hosted smoke passed
+
+[Run 36690784816](https://github.com/wachipayox/BootOptim/actions/runs/36690784816)
+passes startup and two same-JVM repeat reloads with the original resource
+selection and 8192x8192x2 block atlas. All three capacity markers are
+successful: preceding unique counts 479,905 / 479,878 / 479,905. At this
+size the retained empty backing table has 2^20 slots, below the worst-case
+bound. The strict repeat future contract passes and there are zero
+BootOptim Mixin failures. This proves actual target application and
+generation transition under hosted runtime, not visual equivalence.
+
+Repeat request-to-future walls are 31.085 and 28.692 seconds. These must
+**not** be compared with #297's 25.149 / 22.077 values: they come from
+different hosted VMs and initial startup itself is much slower here (92.320
+versus 67.885 seconds), before capacity retention could benefit a repeat.
+The smoke supplies no economic delta. Artifacts are retained at
+`C:/BootOptimBench/ferrite-quad-capacity-20260930/smoke/`.
+
+Next gate is three same-VM control/candidate process pairs, alternating
+order, with two reloads in each process. Compare corresponding repeat
+ordinals separately; retain the individual deltas, not only a median.
+Both sides have identical sparse telemetry and diagnostic settling.
+Candidate differs only by `ferriteCoreQuadCapacity=true` versus false.
+No physical staging or production promotion is authorized by smoke alone.
