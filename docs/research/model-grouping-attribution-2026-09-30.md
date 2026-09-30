@@ -225,3 +225,34 @@ References die with loadAll scope finally cleanup. This distinguishes the alread
 rejected multipart direct loop from potentially different MultiVariant or custom
 owners before designing another candidate. Real helper census once-only/identity,
 failed-scope/partition tests and local packaged build PASS. Hosted census pending.
+
+
+## Confirmed concrete-type budget — 2026-09-30
+
+Source d329fc8b exact-pack36775640253 PASS, offline concrete-type sums PASS.
+The 313687 current calls and 1132.375847ms dependency bucket reconstruct exactly:
+
+| Type | Calls | Distinct model identities | Dependency wall ms |
+| --- | ---: | ---: | ---: |
+| BlockModel |317|1|0.104691|
+| MultiVariant |165464|110343|65.305900|
+| MultiPart |147906|961|1066.965256|
+
+Stock multipart represents ~94.2% of this dependency wall, with ~154 queries
+per distinct model on average. Flat MultiVariant is only~65ms: do not present
+its stream loop as a strong new front. The worthwhile owner is repeated
+multipart union construction. A final field is not proof of immutable contents;
+getSelectors/getVariants expose supplied mutable Lists. The next design must
+avoid duplicate union/hash/allocation work while validating current topology
+and preserving required callbacks, subclass fallback, collection ownership
+and generation lifetime. An unchanged #295 direct loop is not a new premise.
+This census gives a concrete budget and repetition domain, not permission to
+memoize mutable getDependencies results or claim a startup win.
+
+A hardening follow-up records each nested dependency call's exclusive phase
+rather than a bucket delta, preventing per-type double counting if a custom
+callback reenters registration. Real-helper nested different-type partition
+and offline reconstruction tests PASS. All requested discovery probes now
+require per-type calls/wall to reconstruct the observed dependency bucket.
+The hosted d329 result has no discrepancy and remains valid attribution;
+new helper hardening still needs its own source-head runtime gate.

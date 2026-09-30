@@ -131,6 +131,14 @@ public class CheckDiscovery {
   catch(RuntimeException actual){require(actual==expected);}
   ModelGroupingProfiler.loadAll(()->{});
   require(LogUtils.records.get(12)[1].equals(false));
+  LogUtils.records.clear();
+  ModelGroupingProfiler.loadAll(()->ModelGroupingProfiler.dependencies(new Object(),()->{
+   ModelGroupingProfiler.dependencies("nested",()->token);
+   return token;
+  }));
+  double typeSum=0;
+  for(int i=3;i<LogUtils.records.size();i++) typeSum+=(double)LogUtils.records.get(i)[3];
+  require(Math.abs(typeSum-(double)LogUtils.records.get(2)[2])<0.00001);
   System.out.println("PASS discovery partition, identity, once-only calls and cleanup");
  }
 }

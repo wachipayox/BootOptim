@@ -96,6 +96,7 @@ public final class ModelGroupingProfiler {
             long exclusive = System.nanoTime() - start - (scope.measuredNs - childrenBefore);
             scope.phaseNs[bucket] += exclusive;
             scope.measuredNs += exclusive;
+            scope.lastPhaseExclusiveNs = exclusive;
         }
     }
 
@@ -110,11 +111,10 @@ public final class ModelGroupingProfiler {
         DependencyType cost = scope.dependencyTypes.computeIfAbsent(model.getClass(), ignored -> new DependencyType());
         cost.calls++;
         if (scope.dependencyModels.put(model, Boolean.TRUE) == null) cost.distinct++;
-        long before = scope.phaseNs[Phase.DEPENDENCIES.ordinal()];
         try {
             return phase(Phase.DEPENDENCIES, original);
         } finally {
-            cost.wallNs += scope.phaseNs[Phase.DEPENDENCIES.ordinal()] - before;
+            cost.wallNs += scope.lastPhaseExclusiveNs;
         }
     }
 
@@ -127,6 +127,7 @@ public final class ModelGroupingProfiler {
         long wallNs;
         int depth;
         long measuredNs;
+        long lastPhaseExclusiveNs;
         final long[] phaseNs = new long[Phase.values().length];
         final long[] phaseCalls = new long[Phase.values().length];
         final Map<Class<?>, DependencyType> dependencyTypes = new IdentityHashMap<>();

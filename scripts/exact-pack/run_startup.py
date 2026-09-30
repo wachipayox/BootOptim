@@ -194,6 +194,8 @@ def main() -> None:
         if "-Dboot_optim.profileDiscoveryWork=true" in os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "").splitlines():
             if "BOOTOPTIM_DISCOVERY_WORK success=true available=true" not in latest_text:
                 raise RuntimeError("Requested discovery work attribution did not observe all required callsites")
+            from validate_discovery_profile import validate
+            validate(latest_text)
         mixin_failures = (
             "InvalidInjectionException",
             "Mixin apply for mod boot_optim failed",
