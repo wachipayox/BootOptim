@@ -5,6 +5,7 @@ param(
     [string]$CampaignId='express-sweep-20260930',
     [string]$LocalRoot='C:/BootOptimBench/artifacts/express-sweep-20260930',
     [string]$ArtifactJar=(Join-Path $PSScriptRoot '../../bootstrap/build/libs/boot_optim-bootstrap-0.1.0.jar'),
+    [ValidateSet('individual','combined-abba')][string]$ComparisonMode='individual',
     [switch]$IncludeMenuReload
 )
 Set-StrictMode -Version Latest
@@ -32,7 +33,7 @@ switch ($Action) {
         }
         $sha=(Get-FileHash -LiteralPath (Join-Path $bundle 'candidate.jar') -Algorithm SHA256).Hash
         $plan=[ordered]@{
-            schema=1; campaignId=$CampaignId; outputRoot=$remote+'/results';
+            schema=1; comparisonMode=$ComparisonMode; campaignId=$CampaignId; outputRoot=$remote+'/results';
             artifactJar=$remote+'/candidate.jar'; jarSha256=$sha;
             computerName='DESKTOP-8D4B389'; interactiveUser='DESKTOP-8D4B389\wachi';
             instanceRoot='C:/BootOptimBench/prism/instances/BootOptimBench';
@@ -41,7 +42,7 @@ switch ($Action) {
             origin='physical_laptop'; worldEntry=$false; includeMenuReload=[bool]$IncludeMenuReload
         }
         [IO.File]::WriteAllText((Join-Path $bundle 'plan.json'),($plan|ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($false))
-        [pscustomobject]@{status='prepared_locally'; runs=5; jarSha256=$sha; plan=(Join-Path $bundle 'plan.json')}|ConvertTo-Json
+        [pscustomobject]@{status='prepared_locally'; runs=$(if($ComparisonMode -eq 'combined-abba'){4}else{5}); jarSha256=$sha; plan=(Join-Path $bundle 'plan.json')}|ConvertTo-Json
     }
     'Start' {
         $plan=Get-Content -LiteralPath (Join-Path $bundle 'plan.json') -Raw|ConvertFrom-Json
@@ -62,7 +63,7 @@ if (Get-ScheduledTask -TaskName `$name -ErrorAction SilentlyContinue) { throw 'C
 `$settings=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 3)
 Register-ScheduledTask -TaskName `$name -Action `$act -Principal `$principal -Settings `$settings | Out-Null
 Start-ScheduledTask -TaskName `$name
-[pscustomobject]@{status='dispatched';task=`$name;results='$remote/results';runs=5}|ConvertTo-Json
+[pscustomobject]@{status='dispatched';task=`$name;results='$remote/results';runs=$(if($plan.comparisonMode -eq 'combined-abba'){4}else{5})}|ConvertTo-Json
 "@
     }
     'Status' {

@@ -227,3 +227,23 @@ but does not establish a win; lifetime GC includes both generations and is not a
 reload-only budget. Decocraft counters are zero because per-call profiling was OFF,
 not because target necessarily had zero calls. Do not promote any candidate from
 these five timings. Keep all four gates open and carry this evidence into decisions.
+
+## Combined physical comparison requested — 2026-09-30
+
+User explicitly requests accumulating the four candidates and testing whether gains
+stack on laptop. Added controller plan mode `combined-abba`: control-1, combined-1,
+combined-2, control-2. Same already-hosted composition JAR (SHA unchanged), Java21.0.9,
+parent direct baker ON both sides, four candidate switches all OFF/all ON, one menu
+reload per process, no world entry. Two pairs reverse order; cache still uncontrolled,
+so small/noisy results remain inconclusive. Effective flag matrix and all three
+available target activation markers must validate in BOTH combined processes.
+No new mod/optimization code or profiling overhead. Offline five controller cases,
+six result-checker tests and PS5 atomic state tests PASS including wrong combined
+flag rejection. Original transaction restoration and fail-fast policy unchanged.
+
+Campaign express-combined-20260930; local C:/BootOptimBench/artifacts/express-combined-20260930,
+remote C:/BootOptimBench/express-combined-20260930/results. User authorized launch;
+verify measuring state before reporting live and collect all four endpoints before
+claiming accumulation. Prior individual raw deltas must not be summed as predicted
+saving. Lifetime GC is not a per-reload budget. Previous sweep took93.6min for5 modes;
+this four-process startup+repeat campaign may take ~70–90min rather than20min.

@@ -60,5 +60,29 @@ class SummaryTests(unittest.TestCase):
         (self.root/'sodium-axis/latest.log').write_text('Reloading ResourceManager: vanilla, file/test.zip\n', encoding='utf-8')
         self.assertFalse(summarize(self.root)['valid'])
 
+    def test_combined_abba_validates_all_flags_and_markers(self):
+        names = ['control-1', 'combined-1', 'combined-2', 'control-2']
+        keys = ['experimentalDecocraftCornerRotationReuseV2','ferriteCoreQuadCapacity','sodiumAxisQuadFlags','generatedItemLayerDeltaHoist']
+        markers = '\n'.join(['BOOTOPTIM_DECOCRAFT_CORNER_ROTATION mode=substitute_v2', 'BOOTOPTIM_FERRITE_QUAD_CAPACITY success=true', 'BOOTOPTIM_SODIUM_AXIS_QUAD_FLAGS status=active'])
+        runs = []
+        for i, name in enumerate(names):
+            folder = self.root/name
+            folder.mkdir()
+            combined = name.startswith('combined')
+            runs.append(dict(name=name, valid=True, restored=True, jarSha256='a'*64, startupMs=1000-i, initialReloadCompleteMs=900, gcMs=10, menuReloadMs=400-i))
+            for f in ('options.before.txt', 'options.after.txt'):
+                (folder/f).write_text('resourcePacks:["vanilla","file/test.zip"]\n')
+            (folder/'latest.log').write_text('Reloading ResourceManager: vanilla, file/test.zip\n'*2 + (markers if combined else ''))
+            flags = [f"-Dboot_optim.{key}={'true' if combined else 'false'}" for key in keys]
+            (folder/'transaction.finished.json').write_text(json.dumps(dict(valid=True, effectiveCommandLineSha256='b'*64, javaCreationDate='fixture', validatedRequiredJvmArgs=flags)))
+        self.summary.update(comparisonMode='combined-abba',runs=runs)
+        self.save()
+        self.assertTrue(summarize(self.root)['valid'])
+        p=self.root/'combined-2/transaction.finished.json'
+        tx=json.loads(p.read_text())
+        tx['validatedRequiredJvmArgs'][0]=tx['validatedRequiredJvmArgs'][0].replace('true','false')
+        p.write_text(json.dumps(tx))
+        self.assertFalse(summarize(self.root)['valid'])
+
 if __name__ == '__main__':
     unittest.main()

@@ -36,7 +36,9 @@ $options = Join-Path $game 'options.txt'
 $tx = Join-Path $PSScriptRoot 'remote_laptop_transaction.ps1'
 $lockPath = Join-Path $game '.bootoptim-express-sweep.lock'
 $lock = $null
-$summary = [ordered]@{schema=1; status='preflight'; origin='physical_laptop'; cacheState='session_uncontrolled'; startedUtc=[DateTime]::UtcNow.ToString('o'); runs=@(); error=$null; finishedUtc=$null}
+$comparison = if ($plan.PSObject.Properties.Name -contains 'comparisonMode') { [string]$plan.comparisonMode } else { 'individual' }
+if ($comparison -notin @('individual','combined-abba')) { throw 'Unknown comparison mode' }
+$summary = [ordered]@{schema=1; comparisonMode=$comparison; status='preflight'; origin='physical_laptop'; cacheState='session_uncontrolled'; startedUtc=[DateTime]::UtcNow.ToString('o'); runs=@(); error=$null; finishedUtc=$null}
 try {
     # Lock ownership is a handle, not a process-name guess. Never remove another campaign's lock.
     $lock = [IO.File]::Open($lockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
@@ -59,10 +61,10 @@ try {
     $replaceKeys = ($keys + @('generatedItemDirectBake') | ForEach-Object { [regex]::Escape($_) }) -join '|'
     $baseArgs = [regex]::Replace($baseArgs, '(?<!\S)-Dboot_optim\.(' + $replaceKeys + '|profile[A-Za-z0-9_.]*|verify[A-Za-z0-9_.]*|benchmark\.[A-Za-z0-9_.]*)(?:=[^\s]*)?(?=\s|$)', '').Trim()
     if ($baseArgs -match 'StartFlightRecording|agentlib|javaagent|Xlog:|\-Dboot_optim\.experiment') { throw 'Unexpected tracing or another experiment in baseline; prepare an explicit timed baseline first' }
-    $modes = @('control','decocraft-v2','ferrite-capacity','sodium-axis','layer-delta')
+    $modes = if ($comparison -eq 'combined-abba') { @('control-1','combined-1','combined-2','control-2') } else { @('control','decocraft-v2','ferrite-capacity','sodium-axis','layer-delta') }
     $summary.status = 'running'
     Save $summary (Join-Path $root 'summary.json')
-    foreach ($index in 0..4) {
+    foreach ($index in 0..($modes.Count - 1)) {
         $name = $modes[$index]
         $runId = ([string]$plan.campaignId) + '-' + $name
         $dir = Join-Path $root $name
@@ -70,7 +72,7 @@ try {
         $result = [ordered]@{name=$name; valid=$false; issues=@(); origin='jvm_uptime'; endpoint='main_menu_presented_after_initial_reload'; startupMs=$null; initialReloadCompleteMs=$null; menuReloadMs=$null; gcCount=$null; gcMs=$null; jarSha256=$plan.jarSha256; javaVersion=$javaVersion; restored=$false}
         $switches = @('-Dboot_optim.profileStartup=true','-Dboot_optim.benchmark.expressSweep=true','-Dboot_optim.generatedItemDirectBake=true')
         $switches += '-Dboot_optim.benchmark.expressMenuReloads=' + $(if ($plan.includeMenuReload) { '1' } else { '0' })
-        foreach ($k in 0..3) { $enabled = if ($index -eq $k + 1) { 'true' } else { 'false' }; $switches += '-Dboot_optim.' + $keys[$k] + '=' + $enabled }
+        foreach ($k in 0..3) { $enabled = if (($comparison -eq 'combined-abba' -and $name.StartsWith('combined-')) -or ($comparison -eq 'individual' -and $index -eq $k + 1)) { 'true' } else { 'false' }; $switches += '-Dboot_optim.' + $keys[$k] + '=' + $enabled }
         $sweepArgs = @{
             RunId=$runId; InstanceRoot=[string]$plan.instanceRoot; PrismExe=[string]$plan.prismExe;
             PrismRoot=[string]$plan.prismRoot; InstanceId=[string]$plan.instanceId;

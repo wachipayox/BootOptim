@@ -19,11 +19,11 @@ switch($Action) {
   @{phase='staged';valid=$false;reason=$null;instanceRoot=$InstanceRoot} | ConvertTo-Json | Set-Content -LiteralPath $file
  }
  'Run' {
-  $mode=[regex]::Match($RunId,'(control|decocraft-v2|ferrite-capacity|sodium-axis|layer-delta)$').Value
+  $mode=[regex]::Match($RunId,'(control(?:-[12])?|combined-[12]|decocraft-v2|ferrite-capacity|sodium-axis|layer-delta)$').Value
   $expected=@{control='';'decocraft-v2'='experimentalDecocraftCornerRotationReuseV2';'ferrite-capacity'='ferriteCoreQuadCapacity';'sodium-axis'='sodiumAxisQuadFlags';'layer-delta'='generatedItemLayerDeltaHoist'}[$mode]
   $args=Get-Content -LiteralPath (Join-Path $InstanceRoot 'instance.cfg') -Raw
   $enabled=@([regex]::Matches($args,'-Dboot_optim\.(experimentalDecocraftCornerRotationReuseV2|ferriteCoreQuadCapacity|sodiumAxisQuadFlags|generatedItemLayerDeltaHoist)=true'))
-  if (($mode -eq 'control' -and $enabled.Count -ne 0) -or ($mode -ne 'control' -and ($enabled.Count -ne 1 -or $enabled[0].Groups[1].Value -ne $expected))) { throw 'Wrong independent flag matrix' }
+  if (($mode.StartsWith('control') -and $enabled.Count -ne 0) -or ($mode.StartsWith('combined') -and $enabled.Count -ne 4) -or (-not $mode.StartsWith('control') -and -not $mode.StartsWith('combined') -and ($enabled.Count -ne 1 -or $enabled[0].Groups[1].Value -ne $expected))) { throw 'Wrong independent flag matrix' }
   if ($args.TrimStart().StartsWith('"') -or $args.Contains('-Dboot_optim.benchmark.exitOnTitle=true')) { throw 'Quoted QSettings baseline or stale exitOnTitle leaked into effective JVM args' }
   if (-not $args.Contains('-XX:+UseG1GC')) { throw 'User GC baseline was lost' }
   New-Item -ItemType Directory -Path (Join-Path $game 'logs') -Force | Out-Null
@@ -45,7 +45,7 @@ switch($Action) {
 [IO.File]::WriteAllText((Join-Path $sandbox 'remote_laptop_transaction.ps1'),$mock)
 # Shadow sleeps only in the test parent scope; the production script is unchanged.
 function Start-Sleep { param($Seconds,$Milliseconds) }
-foreach($case in @('success','failure','menu-repeat','quoted-config')) {
+foreach($case in @('success','failure','menu-repeat','quoted-config','combined-abba')) {
  $fail=if($case -eq 'failure'){'decocraft-v2'}else{''}
  $caseRoot=Join-Path $sandbox $case
  $instance=Join-Path $caseRoot 'instance'
@@ -59,7 +59,7 @@ foreach($case in @('success','failure','menu-repeat','quoted-config')) {
  @('OverrideJavaLocation=true',('JavaPath='+$java),'OverrideJavaArgs=true',$fixtureArgs) | Set-Content -LiteralPath $cfg
  $original=[IO.File]::ReadAllText($cfg)
  Set-Content -LiteralPath (Join-Path $instance '.minecraft/options.txt') -Value 'resourcePacks:["vanilla","file/test.zip"]'
- $plan=@{outputRoot=(Join-Path $caseRoot 'results');campaignId='fixture';computerName=$env:COMPUTERNAME;instanceRoot=$instance;prismRoot=$caseRoot;prismExe='fake';instanceId='fixture';interactiveUser='fixture';artifactJar='fake';jarSha256='fixture';expectedJavaVersion='25.0.4';includeMenuReload=($case -eq 'menu-repeat')}
+ $plan=@{outputRoot=(Join-Path $caseRoot 'results');campaignId='fixture';computerName=$env:COMPUTERNAME;instanceRoot=$instance;prismRoot=$caseRoot;prismExe='fake';instanceId='fixture';interactiveUser='fixture';artifactJar='fake';jarSha256='fixture';expectedJavaVersion='25.0.4';comparisonMode=$(if($case -eq 'combined-abba'){'combined-abba'}else{'individual'});includeMenuReload=($case -in @('menu-repeat','combined-abba'))}
  $planFile=Join-Path $caseRoot 'plan.json'
  $plan | ConvertTo-Json | Set-Content -LiteralPath $planFile
  $env:BOOTOPTIM_SWEEP_TEST_FAIL=$fail
@@ -70,9 +70,10 @@ foreach($case in @('success','failure','menu-repeat','quoted-config')) {
  if ($fail) {
   if ($summary.status -ne 'failed' -or $summary.runs.Count -ne 2 -or -not $summary.runs[1].restored) { throw 'Fail-fast recovery failed' }
  } else {
-  if ($summary.status -ne 'finished' -or $summary.runs.Count -ne 5 -or @($summary.runs | Where-Object {-not $_.valid -or -not $_.restored}).Count) { throw 'Five-run evidence/restoration failed' }
-  if ($case -eq 'menu-repeat' -and @($summary.runs | Where-Object {$_.menuReloadMs -ne 2}).Count) { throw 'Optional repeat timings missing' }
+  if ($summary.status -ne 'finished' -or $summary.runs.Count -ne $(if($case -eq 'combined-abba'){4}else{5}) -or @($summary.runs | Where-Object {-not $_.valid -or -not $_.restored}).Count) { throw 'Five-run evidence/restoration failed' }
+  if ($case -in @('menu-repeat','combined-abba') -and @($summary.runs | Where-Object {$_.menuReloadMs -ne 2}).Count) { throw 'Optional repeat timings missing' }
  }
+ if($case -eq 'combined-abba' -and (($summary.runs.name -join ',') -ne 'control-1,combined-1,combined-2,control-2')){throw 'Wrong counterbalanced order'}
  Write-Output "PASS $case evidence, flag matrix, config restoration and lock cleanup"
 }
 Remove-Item Env:BOOTOPTIM_SWEEP_TEST_FAIL -ErrorAction SilentlyContinue
