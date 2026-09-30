@@ -1,6 +1,6 @@
 # Manual reload: Decocraft corner V2 revalidation
 
-Status: **ACTIVE EXPERIMENT — not promoted**
+Status: **LIMITED — hosted repeat-reload benefit not established; not promoted**
 
 ## Current authority and target
 
@@ -137,3 +137,42 @@ two repeats per process, detailed corner telemetry disabled on both sides,
 and only V2 substitution true/false differing. The stage/end completion
 marker remains. No FerriteCore capacity candidate is enabled in this V2
 comparison. Physical in-world visual and timing gates remain outstanding.
+
+## 2026-09-30: repeated-reload comparison completed
+
+[Run 36691961377](https://github.com/wachipayox/BootOptim/actions/runs/36691961377)
+completed all three alternating process pairs and two repeats per process.
+All six processes preserve selected packs, 8192x8192x2 block atlas and
+strict request/future markers; there are zero BootOptim Mixin failures.
+All nine candidate bake completion markers report supported V2 mode.
+Detailed counters remain zero intentionally, not evidence of inactivity.
+
+Candidate-minus-control request-to-future wall differences, in milliseconds:
+
+| Pair | Process order | Repeat 1 | Repeat 2 |
+| --- | --- | ---: | ---: |
+| 1 | control then candidate | -710.427 | +679.194 |
+| 2 | candidate then control | +279.998 | +395.307 |
+| 3 | control then candidate | +336.611 | +635.365 |
+| Within-pair median | | +279.998 | +635.365 |
+
+The second repeat is slower in all three pairs. Initial reload-to-FancyMenu
+is -701 / -496 / -273 ms, but that is a separate startup interval and
+cannot be presented as a repeated-reload win. Process-origin-to-menu deltas
+are +2308 / -1421 / -300 ms. Timings are hosted menu reloads on llvmpipe;
+no change to physical in-world F3+T's 17–19 seconds is established.
+Artifacts: adjacent `repeat-paired/` directory.
+
+Disposition: do not promote or stage this unchanged candidate as a reload
+speedup. Keep the semantic evidence and code for a materially different
+premise or a future explicitly scheduled physical campaign. The historical
+laptop post-entrypoint -2.325-second direction remains **inconclusive** and
+is not erased by this hosted result. This does not close the whole
+Decocraft front or revert the separately retained quarter-turn reuse.
+
+Explicit future low-end checklist: when laptop testing resumes with user
+authorization, include V2 true/false paired repeat reloads if testing these
+experimental mechanisms; compare matching origins and geometry/visual
+output, with detailed telemetry off. No laptop run is requested now, and
+the switch remains default-off rather than becoming a forgotten enabled
+experiment. Reopening on another unchanged hosted run is not justified.

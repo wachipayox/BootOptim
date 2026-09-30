@@ -37,7 +37,7 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
-- [Manual-reload Decocraft corner V2 revalidation](manual-reload-decocraft-v2-2026-09-29.md) — current-integration repeat of #224; low-telemetry timing is mixed, independent raw geometry/logical UV guards match, and repeated-reload economics remains a separate gate before any physical F3+T claim.
+- [Manual-reload Decocraft corner V2 revalidation](manual-reload-decocraft-v2-2026-09-29.md) — raw geometry/logical UV guards match, but actual hosted repeat-reload paired medians are +280/+635 ms; not promoted, with the inconclusive historical laptop evidence and a future low-end checklist preserved.
 - [Hosted same-process resource reload diagnostic](hosted-repeat-reload-2026-09-30.md) — opt-in stock menu reloads after the separate startup endpoint, with fixed monotonic request/future boundaries and strict generation/pack validation; physical in-world behavior remains a separate gate.
 
 - [MCEF screen-transition sleep during first-consumer deferral — 2026-09-28](mcef-screen-transition-sleep-2026-09-28.md) — exact-pack fast-PC watchdog attributes repeated ~1-second menu navigation gaps to MCEF's delayed automatic initializer while BootOptim keeps CEF deferred; scoped skip passed hosted startup and physical menu/world validation.
