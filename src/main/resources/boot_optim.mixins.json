@@ -6,6 +6,7 @@
   "client": [
     "client.ModelGroupingScopeMixin",
     "client.ModelGroupingSupplierMixin",
+    "client.BlockStateWorkAttributionMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
     "client.FancyMenuBrowserElementFirstConsumerMixin",
     "client.FancyMenuMcefBrowserFirstConsumerMixin",

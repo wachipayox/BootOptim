@@ -1,10 +1,15 @@
 """Exercise the real diagnostic helper with a minimal logging stub, without Minecraft."""
 from pathlib import Path
+import json
 import shutil
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+config = json.loads((ROOT / 'src/main/resources/boot_optim.mixins.json').read_text())
+for name in ('client.ModelGroupingScopeMixin', 'client.ModelGroupingSupplierMixin', 'client.BlockStateWorkAttributionMixin'):
+    assert name in config['client'], f'Missing registered diagnostic: {name}'
+
 STUB = r'''
 package com.mojang.logging;
 public final class LogUtils {
