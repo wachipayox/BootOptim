@@ -78,4 +78,7 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Project rule
 
+- [Autonomous laptop express sweep](laptop-express-sweep-2026-09-30.md) — prepared five-configuration serial campaign, automatic recovery and separated startup/menu-reload endpoints; no laptop use without the user's signal.
+- [Express candidate register](express-candidates-laptop-register-2026-09-30.md) — exact flags, prior evidence and missing low-end/PC gates; read before staging any campaign.
+
 A large count reduction is not sufficient evidence of startup improvement. BootOptim optimizes time-to-main-menu, so experiments must ultimately be judged by their contribution to the real critical path. CPU work that is cheap per call or hidden under another concurrent gate can be worth documenting without being worth shipping.

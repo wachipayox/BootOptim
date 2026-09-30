@@ -2,6 +2,7 @@
 import argparse
 import http.server
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -9,6 +10,35 @@ import threading
 from pathlib import Path
 
 MARKER = "BOOTOPTIM_STARTUP phase=main_menu"
+
+
+def validate_express_endpoint(log: str, jvm_args: str) -> None:
+    """An opted-in sweep must finish, not merely open the first title screen."""
+    properties = {}
+    for line in jvm_args.splitlines():
+        match = re.fullmatch(r"-D([^=]+)=(.*)", line.strip())
+        if match:
+            properties[match[1]] = match[2]
+    if properties.get("boot_optim.benchmark.expressSweep", "false").lower() != "true":
+        return
+    repeat = properties.get("boot_optim.benchmark.expressMenuReloads", "0") == "1"
+    stages = re.findall(r"BOOTOPTIM_SWEEP stage=(\w+)([^\r\n]*)", log)
+    expected = ["initial_reload_created", "initial_reload_complete", "main_menu_presented"]
+    if repeat:
+        expected += ["menu_reload_requested", "menu_reload_complete"]
+    expected += ["finished"]
+    if [stage for stage, _ in stages] != expected:
+        raise ValueError(f"Incomplete/ambiguous express lifecycle: {[s for s, _ in stages]}")
+    for stage, details in stages:
+        if stage.endswith("reload_complete") and "success=true" not in details:
+            raise ValueError(f"Failed express endpoint: {stage}")
+    times = [int(re.search(r"uptime_ms=(\d+)", details).group(1))
+             for stage, details in stages if stage not in ("menu_reload_requested", "menu_reload_complete")]
+    if times != sorted(times):
+        raise ValueError("Express presentation precedes initial completion")
+    count = len(re.findall(r"Reloading ResourceManager:", log))
+    if count != (2 if repeat else 1):
+        raise ValueError(f"Express reload count mismatch: {count}")
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -185,6 +215,7 @@ def main() -> None:
             raise SystemExit(f"Exact-pack run reached marker but startup report is missing: {startup_log}")
 
         latest_text = latest_log.read_text(encoding="utf-8", errors="replace")
+        validate_express_endpoint(latest_text, os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", ""))
         mixin_failures = (
             "InvalidInjectionException",
             "Mixin apply for mod boot_optim failed",
