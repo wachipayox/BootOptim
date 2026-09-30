@@ -78,4 +78,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Project rule
 
+- [Express candidates: mandatory future laptop register](express-candidates-laptop-register-2026-09-30.md) — persistent flags, source branches, established evidence and pending physical gates; read before resuming low-end tests.
+- [Generated-item layer expansion arithmetic](generated-item-layer-delta-2026-09-30.md) — default-off pure float hoist with per-face callbacks preserved; no measured saving yet.
+- [Generated-item pixel-query reuse audit](generated-item-pixel-query-followup-2026-09-30.md) — 5,562 topology comparisons and an observable callback counterexample; express NO-GO without a reliable purity guard.
+
 A large count reduction is not sufficient evidence of startup improvement. BootOptim optimizes time-to-main-menu, so experiments must ultimately be judged by their contribution to the real critical path. CPU work that is cheap per call or hidden under another concurrent gate can be worth documenting without being worth shipping.
