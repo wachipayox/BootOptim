@@ -37,6 +37,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Runner variance: calibrated within-JVM evidence protocol — 2026-10-01](runner-variance-calibrated-trials-2026-10-01.md) — offline gate for counterbalanced blocks, real A/A noise and independent JVM replication; extends existing paired and #304 tooling without treating fresh-VM medians or one screening block as a causal win.
+
 - [MCEF screen-transition sleep during first-consumer deferral — 2026-09-28](mcef-screen-transition-sleep-2026-09-28.md) — exact-pack fast-PC watchdog attributes repeated ~1-second menu navigation gaps to MCEF's delayed automatic initializer while BootOptim keeps CEF deferred; scoped skip passed hosted startup and physical menu/world validation.
 
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
