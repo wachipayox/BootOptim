@@ -84,4 +84,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Project rule
 
+- [Paired Sodium repeat-reload diagnostic](sodium-paired-repeat-reload-2026-09-30.md) — matched hosted reload generations and low-overhead bake intervals; runtime smoke passed, performance comparison pending.
+- [Hosted repeat-reload harness](hosted-repeat-reload-2026-09-30.md) — validated stock menu reload automation and separate measurement origins.
+- [UnionFS path normalization audit](unionfs-path-normalization-triage-2026-09-30.md) — pure source reduction verified offline; intrusive loader patch not justified.
+
 A large count reduction is not sufficient evidence of startup improvement. BootOptim optimizes time-to-main-menu, so experiments must ultimately be judged by their contribution to the real critical path. CPU work that is cheap per call or hidden under another concurrent gate can be worth documenting without being worth shipping.

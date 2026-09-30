@@ -3,6 +3,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 import dev.wachipayox.bootoptim.optimization.client.QuadCoordinateView;
 import dev.wachipayox.bootoptim.optimization.client.SodiumQuadFlagClassifier;
 import dev.wachipayox.bootoptim.optimization.client.SodiumQuadFlagSupport;
+import dev.wachipayox.bootoptim.profiling.client.QuadClassifierBakeBenchmark;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.core.Direction;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,6 +23,10 @@ public abstract class SodiumQuadFlagClassifierMixin {
     @Inject(method = "getQuadFlags", at = @At("HEAD"), cancellable = true, require = 0)
     private static void bootoptim$classify(@Coerce Object quad, Direction face,
                                            CallbackInfoReturnable<Integer> result) {
+        if (QuadClassifierBakeBenchmark.ENABLED && face != null && quad != null
+                && quad.getClass() == BakedQuad.class && quad instanceof QuadCoordinateView) {
+            QuadClassifierBakeBenchmark.eligibleQuad();
+        }
         if (!BOOTOPTIM_AXIS_FLAGS_REQUESTED || face == null || quad == null || quad.getClass() != BakedQuad.class
                 || !(quad instanceof QuadCoordinateView view) || !SodiumQuadFlagSupport.supported()) {
             return;
