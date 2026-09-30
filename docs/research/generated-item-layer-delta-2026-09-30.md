@@ -31,10 +31,31 @@ arithmetic. No exclusive CPU or end-to-end saving is established.
 Local `gradlew.bat build --no-daemon` passed and produced the packaged
 `bootstrap/build/libs/boot_optim-bootstrap-0.1.0.jar`. Source equivalence is
 limited to this two-operation hoist; do not claim new exhaustive model or
-visual validation from a green compile. Enabled exact-pack smoke is the
-next runtime gate. Physical timing/visual checks stay pending in the
+visual validation from a green compile. Enabled exact-pack smoke passed
+as recorded below. Physical timing/visual checks stay pending in the
 [candidate register](express-candidates-laptop-register-2026-09-30.md).
 
-Pixel-query reuse is a separate subagent investigation and is not included
-here. Do not silently promote any callback-skipping implementation alongside
-this arithmetic change.
+## Completed runtime gate
+
+[Exact-pack smoke 36721846567](https://github.com/wachipayox/BootOptim/actions/runs/36721846567)
+passed on commit `f940cad8` with `generatedItemLayerDeltaHoist=true` in the
+benchmark JVM arguments. Build and minimal client-startup gates also passed.
+The actual resource-selection check is valid, with no issues, and the expected
+enabled pack order matches exactly. The block atlas remains 8192x8192x2,
+BootOptim Mixin errors are zero and no direct-baker fail-open warning appears.
+Startup marker to title is 89.223 seconds; mod entrypoint is 30.860 seconds,
+post-entrypoint 58.363 seconds. These are one enabled hosted run, not an A/B,
+not physical F3+T and not an estimate of time saved. There is no per-layer
+activation counter or exhaustive quad comparator in this branch, so a healthy
+runtime does not constitute a new exhaustive semantic proof.
+
+Disposition: keep the small candidate default off and unpromoted; source
+arithmetic equivalence and enabled runtime gate pass. Timing and physical
+visual evidence remain missing. Preserve it in the future low-end register,
+without using the laptop now or rerunning unchanged smoke for a speed claim.
+Artifacts: `C:\BootOptimBench\analysis-reload-20260930\generated-layer-36721846567`.
+
+Pixel-query reuse was separately completed in commit `6c2feba0`; 5,562
+ordered-topology cases pass but a callback counterexample changes 12 queries
+to 4. It is express NO-GO without a reliable purity guard, not an implementation
+included here. Do not promote callback skipping alongside this arithmetic change.
