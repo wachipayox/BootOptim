@@ -16,7 +16,13 @@ function ConfigValue($file, $key) {
     $m = @([regex]::Matches([IO.File]::ReadAllText($file), '(?m)^' + [regex]::Escape($key) + '=(.*)\r?$'))
     if ($m.Count -gt 1) { throw "Duplicate Prism key: $key" }
     if ($m.Count -eq 0) { return '' }
-    $m[0].Groups[1].Value.TrimEnd("`r").Replace('\\', '\').Replace('\"', '"')
+    # QSettings wraps some string values in quotes. They are serialization,
+    # not literal shell/JVM argument quotes; remove them before unescaping.
+    $value = $m[0].Groups[1].Value.TrimEnd("`r")
+    if ($value.StartsWith('"') -and $value.EndsWith('"') -and $value.Length -ge 2) {
+        $value = $value.Substring(1, $value.Length - 2)
+    }
+    $value.Replace('\\', '\').Replace('\"', '"')
 }
 function PackSelection($file) {
     $lines = @(Get-Content -LiteralPath $file | Where-Object { $_.StartsWith('resourcePacks:') })

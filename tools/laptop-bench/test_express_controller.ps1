@@ -24,6 +24,8 @@ switch($Action) {
   $args=Get-Content -LiteralPath (Join-Path $InstanceRoot 'instance.cfg') -Raw
   $enabled=@([regex]::Matches($args,'-Dboot_optim\.(experimentalDecocraftCornerRotationReuseV2|ferriteCoreQuadCapacity|sodiumAxisQuadFlags|generatedItemLayerDeltaHoist)=true'))
   if (($mode -eq 'control' -and $enabled.Count -ne 0) -or ($mode -ne 'control' -and ($enabled.Count -ne 1 -or $enabled[0].Groups[1].Value -ne $expected))) { throw 'Wrong independent flag matrix' }
+  if ($args.TrimStart().StartsWith('"') -or $args.Contains('-Dboot_optim.benchmark.exitOnTitle=true')) { throw 'Quoted QSettings baseline or stale exitOnTitle leaked into effective JVM args' }
+  if (-not $args.Contains('-XX:+UseG1GC')) { throw 'User GC baseline was lost' }
   New-Item -ItemType Directory -Path (Join-Path $game 'logs') -Force | Out-Null
   @('BOOTOPTIM_SWEEP stage=initial_reload_complete success=true uptime_ms=1000','BOOTOPTIM_SWEEP stage=main_menu_presented origin=jvm_uptime uptime_ms=1200','BOOTOPTIM_SWEEP stage=finished origin=jvm_uptime uptime_ms=3200 gc_count=2 gc_ms=3') | Set-Content -LiteralPath (Join-Path $game 'logs/latest.log')
   Add-Content -LiteralPath (Join-Path $game 'logs/latest.log') -Value 'Reloading ResourceManager: vanilla, file/test.zip'
@@ -43,7 +45,7 @@ switch($Action) {
 [IO.File]::WriteAllText((Join-Path $sandbox 'remote_laptop_transaction.ps1'),$mock)
 # Shadow sleeps only in the test parent scope; the production script is unchanged.
 function Start-Sleep { param($Seconds,$Milliseconds) }
-foreach($case in @('success','failure','menu-repeat')) {
+foreach($case in @('success','failure','menu-repeat','quoted-config')) {
  $fail=if($case -eq 'failure'){'decocraft-v2'}else{''}
  $caseRoot=Join-Path $sandbox $case
  $instance=Join-Path $caseRoot 'instance'
@@ -53,7 +55,8 @@ foreach($case in @('success','failure','menu-repeat')) {
  Set-Content -LiteralPath $java -Value 'fake'
  Set-Content -LiteralPath (Join-Path $javaRoot 'release') -Value 'JAVA_VERSION="25.0.4"'
  $cfg=Join-Path $instance 'instance.cfg'
- @('OverrideJavaLocation=true',('JavaPath='+$java),'OverrideJavaArgs=true','JvmArgs=-XX:+UseG1GC -Dboot_optim.sodiumAxisQuadFlags=true') | Set-Content -LiteralPath $cfg
+ $fixtureArgs = if ($case -eq 'quoted-config') { 'JvmArgs="-XX:+UseG1GC -Dboot_optim.sodiumAxisQuadFlags=true -Dboot_optim.benchmark.exitOnTitle=true"' } else { 'JvmArgs=-XX:+UseG1GC -Dboot_optim.sodiumAxisQuadFlags=true' }
+ @('OverrideJavaLocation=true',('JavaPath='+$java),'OverrideJavaArgs=true',$fixtureArgs) | Set-Content -LiteralPath $cfg
  $original=[IO.File]::ReadAllText($cfg)
  Set-Content -LiteralPath (Join-Path $instance '.minecraft/options.txt') -Value 'resourcePacks:["vanilla","file/test.zip"]'
  $plan=@{outputRoot=(Join-Path $caseRoot 'results');campaignId='fixture';computerName=$env:COMPUTERNAME;instanceRoot=$instance;prismRoot=$caseRoot;prismExe='fake';instanceId='fixture';interactiveUser='fixture';artifactJar='fake';jarSha256='fixture';expectedJavaVersion='25.0.4';includeMenuReload=($case -eq 'menu-repeat')}
