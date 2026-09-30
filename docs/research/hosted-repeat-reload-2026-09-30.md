@@ -69,6 +69,21 @@ process timeout. No interactive setting or fixture resource selection is
 changed. FerriteCore's concurrent smoke was cancelled because it used the
 same invalid harness; it provided no candidate-performance evidence.
 
+## Corrected hosted runtime
+
+[Smoke 36690617238](https://github.com/wachipayox/BootOptim/actions/runs/36690617238)
+passes the full resource contract and completes both repeats in one JVM.
+Startup marker-to-title is 67.885 seconds, reported independently. Repeat
+request-to-future completion is 25.149 and 22.077 seconds. The optional
+welcome is declined once before the first request; there are exactly three
+effective reloads (initial plus two), the block atlas remains 8192x8192x2
+each time and there are zero BootOptim Mixin failures. Local aggregation
+of these real artifacts validates the new separate report. These values
+establish a usable hosted mechanism, **not** a physical F3+T baseline or
+an optimization delta. Artifacts are under the adjacent `corrected-smoke/`
+directory. Candidate comparisons should use matched ordinals and paired
+same-VM runs with alternating process order.
+
 ## Next candidate premise
 
 Physical F3+T JFR's bake interval contains FerriteCore 7.0.3 quad
