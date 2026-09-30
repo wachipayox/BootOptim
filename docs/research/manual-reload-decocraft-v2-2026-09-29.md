@@ -103,5 +103,24 @@ geometry/logical UV from the old inverse-atlas/q1e6 fingerprint, which can
 be sensitive to atlas placement and float rounding. New hooks are disabled
 with detailed profiling, and the matcher checks the pinned single U/V
 callsite. A profiled control/candidate pair is semantic-only; its timing is
-not an economic comparison. Build passes; runtime semantic validation is
-pending.
+not an economic comparison.
+
+[Semantic paired run 36688442846](https://github.com/wachipayox/BootOptim/actions/runs/36688442846)
+passes build, startup, pinned matcher and effective-pack contracts. Both
+sides produce 3,527 models / 964,046 quads, identical metadata and identical
+final raw non-UV fingerprints (`67384ae4e5ad362c`, `11cf5abe1c6e146a`). All
+7,712,368 logical UV calls match the input aggregate (`247788fdb90bc096` sum;
+the XOR cancels to zero on both). Candidate executes 2,527,029 V2 reuses with
+zero shape/alias fallbacks. The old inverse-atlas/q1e6 fingerprints differ
+even though these independent raw geometry and pre-atlas UV aggregates
+match. This confines the observed fingerprint drift to post-atlas UVs / the
+inverse normalization; it is not evidence of changed position math.
+
+Aggregate hashing is a semantic guard, not a pixel-perfect proof of every
+model's ordered output. The mapping invokes the original vanilla method
+once; atlas placement can vary between runs. Prior exact corner verify-only
+results remain relevant, and representative physical in-world visual checks
+are still required before promotion. Detailed instrumentation in this pair
+is intentionally excluded from performance conclusions. Artifacts are
+under the adjacent `semantic/` directory. The low-telemetry mixed timing is
+still the current economic result; no measured physical F3+T reduction yet.
