@@ -10,7 +10,7 @@ import net.minecraft.server.packs.resources.ReloadableResourceManager;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
-/** Fixed-marker physical diagnostic. Never enters a world or requests a reload. */
+/** Fixed-marker physical diagnostic. Never enters a world; optional reload stays in the menu. */
 public final class ExpressSweepEndpoint {
     private static final boolean ENABLED = Boolean.getBoolean("boot_optim.benchmark.expressSweep");
     private static final AtomicBoolean FIRST_RELOAD = new AtomicBoolean();
@@ -27,6 +27,9 @@ public final class ExpressSweepEndpoint {
     private static boolean welcomeDeclined;
 
     private ExpressSweepEndpoint() {}
+
+    /** This diagnostic owns shutdown, even when a hosted run also enables exitOnTitle. */
+    public static boolean ownsShutdown() { return ENABLED; }
 
     public static void observe(ReloadableResourceManager manager, ReloadInstance reload) {
         if (!ENABLED) return;

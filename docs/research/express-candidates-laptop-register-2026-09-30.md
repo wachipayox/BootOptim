@@ -38,6 +38,10 @@ reuse and UnionFS have no runtime candidates and add no laptop runs.
 ## Staging and recovery contract
 
 A combined **diagnostic-only** JAR is now prepared on `codex/laptop-express-sweep-20260930`; see [autonomous sweep](laptop-express-sweep-2026-09-30.md). Individual candidate PRs remain the authority for optimization evidence. There is still no promoted combined production JAR.
+Hosted 36728663450 passed initial startup but closed before the automatic menu
+reload: it is NOT a completed sweep validation. Shutdown ownership and explicit
+hosted lifecycle rejection are corrected; seven regression checks and build pass.
+Wait for the corrected hosted endpoint gate and user signal before laptop use.
 Before a future campaign fetch integration, re-read the PR bodies/results and
 verify actual sources and flags. Build an isolated candidate branch containing
 only intended optimization code, excluding repeat automation, JFR/per-quad

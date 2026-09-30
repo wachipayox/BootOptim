@@ -82,11 +82,38 @@ passed success, failure-after-one-run and menu-repeat scenarios: independent
 flag matrix, five separate outputs, fail-fast, original config restoration and
 lock cleanup. Five offline summary tests passed, including effective resource
 fallback and partial failure rejection. No game or SSH was used in these tests.
-Next: hosted control/all-enabled smoke with the automatic menu-repeat endpoint,
-then the user's signal before touching the laptop. Do not call the full remote
+Next: corrected hosted control/all-enabled smoke with the automatic menu-repeat
+endpoint, then the user's signal before touching the laptop. Do not call the full remote
 Windows task lifecycle physically validated merely from local doubles or Linux CI.
+
+### Hosted gate review: 36728663450 (2026-09-30)
+
+At source `f2fabc52`, both variants compiled and reached the initial full-generation
+menu without BootOptim Mixin failures. Effective resource selection matched the
+fixture and the blocks atlas was 8192x8192x2. Candidate Decocraft V2, FerriteCore
+capacity and Sodium activation markers were present. However, the workflow's
+green status was **not a valid autonomous-cycle gate**: each latest.log contained
+only `initial_reload_created` and `initial_reload_complete`, one generation, and
+no rendered-menu/repeat/final sweep markers. The normal `exitOnTitle` route stopped
+the client immediately after title opening; Gradle's run config supplies that
+property even though extra JVM args requested false. No menu repeat ran.
+
+Hosted initial complete-generation uptime was 86,085 ms control and 91,501 ms
+all-enabled candidate; first title opening was 86,204 / 91,633 ms in latest.log.
+These single independent VM runs are composition checks, not an attributed speed
+win. In particular they say nothing about retained capacity's next generation.
+Evidence: Actions run 36728663450 artifacts and local `express-endpoint-review.json`.
+
+The diagnostic now owns shutdown while expressSweep is enabled, regardless of
+the legacy exitOnTitle setting; ordinary startup-only benchmarks keep their
+existing behavior. The hosted runner also rejects an opted-in express campaign
+unless the exact initial/presented/repeat/final stage sequence and generation
+count are present. Seven offline tests cover premature closure, failed repeat,
+duplicate final marker, extra generation and invalid endpoint order. Build passed.
+The corrected hosted cycle is pending; do not launch the laptop from the old green
+status. No laptop contact occurred during this review.
 
 Local bundle: `C:\BootOptimBench\artifacts\express-sweep-20260930\bundle`.
 Packaged JAR SHA256:
-`24170B05D356DFF64D10819694D9C79699392FF30B6338F17936F1BB8E483215`.
+`3C986500743BA83F30F165D1EC84BCDD5D38D75586BD91CEA63BB9E5D62120AF`.
 Source and gates also live in the [persistent candidate register](express-candidates-laptop-register-2026-09-30.md).

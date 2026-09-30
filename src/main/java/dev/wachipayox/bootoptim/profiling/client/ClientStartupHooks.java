@@ -28,7 +28,8 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()
+                && !ExpressSweepEndpoint.ownsShutdown()) {
             Minecraft.getInstance().stop();
         }
     }
