@@ -96,6 +96,52 @@ def parse_blocks_atlas(lines):
     return None, None, None
 
 
+def parse_repeat_reloads(lines):
+    records = []
+    for line in lines:
+        if "BOOTOPTIM_REPEAT_RELOAD " in line:
+            records.append(dict(re.findall(r"(\w+)=([^\s]+)", line.split("BOOTOPTIM_REPEAT_RELOAD ", 1)[1])))
+    if not records:
+        return None
+    issues = []
+    try:
+        count = int(records[0].get("count", "0"))
+    except ValueError:
+        count = 0
+    if not 1 <= count <= 3:
+        issues.append("Invalid requested repeat count")
+        count = 0
+    if (records[0].get("origin"), records[0].get("endpoint"), records[0].get("world")) != (
+            "reload_invocation", "future_completion", "none"):
+        issues.append("Invalid repeated-reload measurement boundary")
+    expected_stages = ["armed"] + [stage for _ in range(count) for stage in ("begin", "end")] + ["done"]
+    if [r.get("stage") for r in records] != expected_stages:
+        issues.append("Missing, duplicated or unordered repeated-reload markers")
+    durations = []
+    for index in range(count):
+        pair = records[1 + index * 2:3 + index * 2]
+        if len(pair) != 2:
+            continue
+        if any(r.get("generation") != str(index + 1) for r in pair):
+            issues.append(f"Repeat {index + 1}: generation mismatch")
+        end = pair[1]
+        try:
+            wall_ns = int(end.get("wall_ns", "0"))
+        except ValueError:
+            wall_ns = 0
+        if end.get("success") != "true" or wall_ns <= 0:
+            issues.append(f"Repeat {index + 1}: failed or invalid duration")
+        durations.append(wall_ns / 1_000_000)
+    if records[-1].get("stage") != "done" or records[-1].get("success") != "true" or records[-1].get("requested") != str(count):
+        issues.append("Repeat sequence did not finish successfully")
+    effective_reloads = sum("Reloading ResourceManager:" in line for line in lines)
+    if effective_reloads != count + 1:
+        issues.append("Effective reload count does not match startup plus requested repeats")
+    return {"valid": not issues, "issues": issues, "requested": count,
+            "wall_ms": durations, "origin": "reload_invocation",
+            "endpoint": "future_completion", "world": "none"}
+
+
 def parse_single(args):
     latest_path = Path(args.latest)
     startup_path = Path(args.startup)
@@ -121,7 +167,7 @@ def parse_single(args):
             continue
         for pattern in panorama_patterns:
             match = pattern.search(line)
-            if match:
+            if match and panorama_ms is None:
                 try:
                     panorama_ms = float(match.group(1).replace(",", "."))
                 except ValueError:
@@ -156,9 +202,12 @@ def parse_single(args):
         "blocks_atlas_width": atlas_width,
         "blocks_atlas_height": atlas_height,
         "blocks_atlas_levels": atlas_levels,
+        "repeat_reloads": parse_repeat_reloads(lines),
     }
     Path(args.output).write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
+    if result["repeat_reloads"] and not result["repeat_reloads"]["valid"]:
+        raise SystemExit("Repeated-reload contract failed; see result.json")
 
 
 def median(values):
