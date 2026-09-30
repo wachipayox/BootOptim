@@ -1,5 +1,7 @@
 # BootOptim research ledger
 
+- [Current-call model grouping attribution — 2026-09-30](model-grouping-attribution-2026-09-30.md): diagnostic budget gate for direct grouping/stream allocation work; does not revive predicate/dependency/identifier caches.
+
 This directory is the durable memory for startup-performance research. Its purpose is to prevent the project from repeatedly rediscovering the same bottleneck, optimization idea, or negative result after profiling branches are closed or left unmerged.
 
 Before starting a new optimization experiment, check this ledger and the linked PRs. A previously rejected direction may be reopened only when the new hypothesis changes a material premise (different critical path, different implementation, different version, or evidence that the old measurement no longer applies). "The phase is still slow" by itself is not enough to repeat an experiment that already showed poor wall-clock leverage.
