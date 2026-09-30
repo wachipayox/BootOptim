@@ -101,3 +101,35 @@ Reopen a deliberately restricted version only when all of these are available:
 Another simpler alternative is allocation reduction in the stock formatter
 without caching or skipping callbacks, but its benefit has not been measured
 and it should not be presented as a seconds-scale optimization.
+
+## Existing fast-PC caller samples: restricted-domain decision
+
+Re-reading the existing multifocus recording (no new recording/run), first
+manual F3+T origin `2026-09-28T21:37:10.604+02:00`, gives exact markers
+`bakeEnd=14941`, `loadModelsEnd=15768` ms: **827 ms** outside the enclosing bake
+in this generation. The other two logged residuals were **871 / 762 ms**. This
+corrects applying the older roughly 0.94-second residual to this particular run.
+
+In the first generation's `[14.941, 15.768]` second window, restricted to the
+actual `Worker-ResourceReload-0` owner, existing JFR execution samples contain:
+
+- 75 owner-thread samples total;
+- 22 with dispatch `lambda$loadModels$18` on their stack;
+- 17 with `stateToModelLocation` on their stack (includes constructor work);
+- only 7 with `statePropertiesToString` (4 `StringBuilder.append` leaves,
+  3 `AbstractStringBuilder.ensureCapacityNewCoder` leaves);
+- 9 with `onModifyBakingResult`, including DragonLib callbacks.
+
+These are stack-presence counts, **not exclusive milliseconds or a confidence
+interval**. Samples do not identify which property domain each call serializes.
+The restricted stock-property cache would attack only a subset of the seven
+formatter samples and leave fresh MRL construction/Palladium work intact. A
+strict exact Boolean/Integer domain could preserve the known stock serializer,
+but an enum's `StringRepresentable` implementation also needs an independent
+purity proof; checking only exact `EnumProperty` class is insufficient.
+
+Decision: a multi-hook generation cache retaining hundreds of thousands of
+state/property maps is not justified by this bounded evidence. Do not launch a
+new profiler or CI campaign solely for it. The larger 17-sample fresh-identifier
+path overlaps Palladium's separate optimization lane; optimize that lane first
+and reassess whether plain string-builder allocation remains material.
