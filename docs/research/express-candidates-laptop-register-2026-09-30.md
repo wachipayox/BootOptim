@@ -62,3 +62,12 @@ On the fast PC also verify repeated F3+T and first-world entry; on the laptop
 verify only the authorized menu/startup gates above. Record every rejection/promotion and update this table with its
 PR, flag, final disposition and missing gates. No experimental option may be
 silently forgotten because a hosted delta was small.
+
+Physical gate update: five-mode campaign `express-sweep-20260930-final` completed
+and strict lifecycle/effective flags/pack-state validation passed, originals restored
+and final hashes rechecked. See autonomous sweep ledger for raw timings. Oracle21.0.9,
+single fixed-order startup + menu reload per mode, uncontrolled cache: exploratory
+only, no promotion. Ferrite repeat336.608 s vs control389.864 s is a promising direction
+requiring paired controls; Sodium repeat432.589 s and Decocraft443.269 s show why
+startup-only ordering cannot select winners. All four options remain tracked;
+in-world visual/repeat validation still belongs on fast PC, never this laptop.

@@ -195,3 +195,35 @@ campaign `express-sweep-20260930-final` uses the unchanged combined diagnostic J
 and Oracle21.0.9. Do not assume success until its measuring state is verified.
 
 Final campaign verified after more than 30 seconds: measuring, valid=true, owned JavaPID7004/session8 with fresh recorded creation and expected Oracle21 executable. Full five-mode measurements and restoration are still pending.
+
+## Completed physical sweep — 2026-09-30
+
+`express-sweep-20260930-final` completed all five modes; offline strict evidence
+validation PASS (ordered stages, unambiguous two generations, JVM identity/effective
+flags, enabled pack state, activation markers). Collected results live at
+`C:/BootOptimBench/artifacts/express-sweep-20260930-final/results` including
+`checked-summary.json`. All original files restored each mode. Fresh final remote
+hash checks match cfg A9744BF7A4C5660F6B58A6FE1FE9309A91ECACC2AC2189BF099DD2A145AA1ECC
+and JAR379BC509EFD43A0D2EDF7CFB6BC1E2F99DD1601B3D8E3AB43B00C70F6DEA4989;
+no remaining instance Prism/Java. No world entry or physical in-world F3+T.
+
+| Mode | JVM uptime to presented menu (s) | Repeat menu reload request to future (s) | Whole measured process GC (s) |
+| --- | ---: | ---: | ---: |
+| control | 457.295 | 389.864 | 67.833 |
+| decocraft-v2 | 464.291 | 443.269 | 70.733 |
+| ferrite-capacity | 437.722 | 336.608 | 74.851 |
+| sodium-axis | 409.624 | 432.589 | 88.603 |
+| layer-delta | 420.765 | 378.808 | 62.881 |
+
+Origin is JVM uptime, endpoint is main menu presented after initial reload; repeat
+origin is one stock menu reload invocation, endpoint is its completed future.
+Launcher/controller staging excluded. Total campaign took ~93.6 minutes, not the
+initial speculative 20; actual HDD pack startup plus repeat reload dominate.
+Single fixed-order run per mode with uncontrolled HDD/page cache and no interleaved
+controls: these raw deltas are exploratory, not causal gains/regressions. Sodium
+startup is lower yet repeat reload higher; layer arithmetic cannot credibly explain
+36.5 s alone. Ferrite's -53.3 s repeat direction warrants paired physical confirmation
+but does not establish a win; lifetime GC includes both generations and is not a
+reload-only budget. Decocraft counters are zero because per-call profiling was OFF,
+not because target necessarily had zero calls. Do not promote any candidate from
+these five timings. Keep all four gates open and carry this evidence into decisions.
