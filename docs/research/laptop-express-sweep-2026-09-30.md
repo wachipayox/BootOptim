@@ -193,3 +193,5 @@ on the physical laptop. Recovery binds both force switches explicitly by name.
 Four controller scenarios and process-path tests also pass. Fresh authorized
 campaign `express-sweep-20260930-final` uses the unchanged combined diagnostic JAR
 and Oracle21.0.9. Do not assume success until its measuring state is verified.
+
+Final campaign verified after more than 30 seconds: measuring, valid=true, owned JavaPID7004/session8 with fresh recorded creation and expected Oracle21 executable. Full five-mode measurements and restoration are still pending.
