@@ -63,3 +63,19 @@ Do not request another manual PC run unless the hosted attribution demonstrates
 enough budget to justify a candidate. Never merge these probes into production.
 
 Standalone tests compile and exercise the real helper: exact result/exception identity, once-only calls, nested intervals, failed-scope cleanup and previous-scope restoration PASS. Runner Python compiles; local packaged build PASS. Hosted probe requires explicit observed available=true evidence, not just a green process exit.
+
+## Hosted attribution result — 2026-09-30
+
+PR303 / commit4beb5490: build, client startup and exact-pack smoke all PASS.
+Actions https://github.com/wachipayox/BootOptim/actions/runs/36740130542.
+Observed Worker-ResourceReload-1, success=true available=true, 313687 suppliers,
+no nested or failed calls. Whole loadAllBlockStates wall4368.127334 ms;
+current group+coloring suppliers540.031264 ms; outside suppliers3828.09607 ms.
+This factory lane is ~12.36% of the whole measured load (including diagnostic
+overhead), and does not include grouping-map insertion. The remainder is the
+stronger attribution target; do not claim 4.37 s belongs to group creation or
+540 ms is achievable saving. Hosted smoke menu marker86786 ms JVM origin,
+zero BootOptim Mixin errors; not a paired performance comparison or physicalF3+T.
+Artifacts collected C:/BootOptimBench/analysis-reload-20260930/grouping-36740130542.
+No laptop JAR changed. Next source attribution must split remaining discovery,
+state publication/map work and reading before choosing a direct optimization.
