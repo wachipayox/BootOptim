@@ -96,6 +96,52 @@ def parse_blocks_atlas(lines):
     return None, None, None
 
 
+def parse_repeat_reloads(lines):
+    records = []
+    for line in lines:
+        if "BOOTOPTIM_REPEAT_RELOAD " in line:
+            records.append(dict(re.findall(r"(\w+)=([^\s]+)", line.split("BOOTOPTIM_REPEAT_RELOAD ", 1)[1])))
+    if not records:
+        return None
+    issues = []
+    try:
+        count = int(records[0].get("count", "0"))
+    except ValueError:
+        count = 0
+    if not 1 <= count <= 3:
+        issues.append("Invalid requested repeat count")
+        count = 0
+    if (records[0].get("origin"), records[0].get("endpoint"), records[0].get("world")) != (
+            "reload_invocation", "future_completion", "none"):
+        issues.append("Invalid repeated-reload measurement boundary")
+    expected_stages = ["armed"] + [stage for _ in range(count) for stage in ("begin", "end")] + ["done"]
+    if [r.get("stage") for r in records] != expected_stages:
+        issues.append("Missing, duplicated or unordered repeated-reload markers")
+    durations = []
+    for index in range(count):
+        pair = records[1 + index * 2:3 + index * 2]
+        if len(pair) != 2:
+            continue
+        if any(r.get("generation") != str(index + 1) for r in pair):
+            issues.append(f"Repeat {index + 1}: generation mismatch")
+        end = pair[1]
+        try:
+            wall_ns = int(end.get("wall_ns", "0"))
+        except ValueError:
+            wall_ns = 0
+        if end.get("success") != "true" or wall_ns <= 0:
+            issues.append(f"Repeat {index + 1}: failed or invalid duration")
+        durations.append(wall_ns / 1_000_000)
+    if records[-1].get("stage") != "done" or records[-1].get("success") != "true" or records[-1].get("requested") != str(count):
+        issues.append("Repeat sequence did not finish successfully")
+    effective_reloads = sum("Reloading ResourceManager:" in line for line in lines)
+    if effective_reloads != count + 1:
+        issues.append("Effective reload count does not match startup plus requested repeats")
+    return {"valid": not issues, "issues": issues, "requested": count,
+            "wall_ms": durations, "origin": "reload_invocation",
+            "endpoint": "future_completion", "world": "none"}
+
+
 def parse_single(args):
     latest_path = Path(args.latest)
     startup_path = Path(args.startup)
@@ -121,7 +167,7 @@ def parse_single(args):
             continue
         for pattern in panorama_patterns:
             match = pattern.search(line)
-            if match:
+            if match and panorama_ms is None:
                 try:
                     panorama_ms = float(match.group(1).replace(",", "."))
                 except ValueError:
@@ -156,9 +202,12 @@ def parse_single(args):
         "blocks_atlas_width": atlas_width,
         "blocks_atlas_height": atlas_height,
         "blocks_atlas_levels": atlas_levels,
+        "repeat_reloads": parse_repeat_reloads(lines),
     }
     Path(args.output).write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
+    if result["repeat_reloads"] and not result["repeat_reloads"]["valid"]:
+        raise SystemExit("Repeated-reload contract failed; see result.json")
 
 
 def median(values):
@@ -184,6 +233,56 @@ def atlas_text(row):
     if None in (width, height, levels):
         return None
     return f"{width}x{height}x{levels}"
+
+
+def aggregate_repeat_reloads(rows):
+    requested = [row.get("repeat_reloads") for row in rows]
+    if not any(item is not None for item in requested):
+        return None
+    issues = []
+    boundary = ("reload_invocation", "future_completion", "none")
+    counts = set()
+    for item in requested:
+        if not item or not item.get("valid"):
+            issues.append("Missing or invalid repeat sequence in aggregate")
+            continue
+        count = item.get("requested")
+        if type(count) is not int or not 1 <= count <= 3:
+            issues.append("Invalid requested repeat count in aggregate")
+            continue
+        counts.add(count)
+        if tuple(item.get(key) for key in ("origin", "endpoint", "world")) != boundary:
+            issues.append("Mismatched repeated-reload boundary in aggregate")
+        walls = item.get("wall_ms", [])
+        if len(walls) != count or any(type(wall) not in (int, float) or not 0 < wall < float("inf") for wall in walls):
+            issues.append("Invalid repeated-reload durations in aggregate")
+    if len(counts) != 1:
+        issues.append("Mismatched requested repeat counts in aggregate")
+    if issues:
+        return {"valid": False, "issues": sorted(set(issues))}
+    count = counts.pop()
+    variants = {}
+    for variant in sorted({row["variant"] for row in rows}):
+        subset = [row for row in rows if row["variant"] == variant]
+        variants[variant] = {"runs": len(subset), "wall_ms": [
+            median(row["repeat_reloads"]["wall_ms"][index] for row in subset) for index in range(count)]}
+    paired = []
+    groups = {}
+    for row in rows:
+        if row.get("paired_same_vm") and row.get("paired_pair") is not None:
+            groups.setdefault(row["paired_pair"], []).append(row)
+    for pair, pair_rows in sorted(groups.items()):
+        controls = [row for row in pair_rows if row["variant"] == "control"]
+        candidates = [row for row in pair_rows if row["variant"] == "candidate"]
+        if len(controls) != 1 or len(candidates) != 1:
+            return {"valid": False, "issues": ["Missing or duplicate repeat process in paired group"]}
+        control, candidate = controls[0], candidates[0]
+        paired.append({"pair": pair, "order": candidate.get("paired_order", "unknown"),
+                       "deltas_ms": [candidate["repeat_reloads"]["wall_ms"][index] -
+                                     control["repeat_reloads"]["wall_ms"][index] for index in range(count)]})
+    return {"valid": True, "requested": count, "origin": boundary[0], "endpoint": boundary[1],
+            "world": boundary[2], "variants": variants, "paired": paired,
+            "paired_median_deltas_ms": [median(pair["deltas_ms"][index] for pair in paired) for index in range(count)]}
 
 
 def parse_aggregate(args):
@@ -322,9 +421,28 @@ def parse_aggregate(args):
                 markdown.append(f"- `{metric}`: {delta:+,.1f} ms")
 
     markdown_text = "\n".join(markdown) + "\n"
+    repeats = aggregate_repeat_reloads(rows)
+    if repeats is not None:
+        summary["repeat_reloads"] = repeats
+        markdown_text += "\n## Post-startup menu reloads\n\n"
+        markdown_text += "Origin: stock reload invocation; endpoint: returned future completion. These are not startup or in-world freeze durations.\n\n"
+        if repeats["valid"]:
+            markdown_text += "| Variant | Runs | Repeat | Median wall ms |\n| --- | ---: | ---: | ---: |\n"
+            for variant, data in repeats["variants"].items():
+                for index, wall in enumerate(data["wall_ms"], 1):
+                    markdown_text += f"| {variant} | {data['runs']} | {index} | {format_ms(wall)} |\n"
+            if repeats["paired"]:
+                markdown_text += "\n| Pair | Order | Repeat | Candidate minus control ms |\n| ---: | --- | ---: | ---: |\n"
+                for pair in repeats["paired"]:
+                    for index, delta in enumerate(pair["deltas_ms"], 1):
+                        markdown_text += f"| {pair['pair']} | {pair['order']} | {index} | {format_ms(delta)} |\n"
+        else:
+            markdown_text += "Invalid repeat aggregate: " + "; ".join(repeats["issues"]) + "\n"
     Path(args.output).write_text(markdown_text, encoding="utf-8")
     Path(args.json_output).write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
     print(markdown_text)
+    if repeats is not None and not repeats["valid"]:
+        raise SystemExit("Repeated-reload aggregate contract failed; see summary JSON")
 
 
 def main():
