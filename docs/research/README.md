@@ -37,6 +37,12 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Sodium axis quad classification — 2026-09-30](sodium-axis-quad-classification-2026-09-30.md) — default-off direct-operation candidate: preserve all coordinate reads and replace face-axis min/max with exact sentinel-aware plane checks; semantic and hosted validation gates.
+- [Independent exact-binary Sodium classifier audit — 2026-09-30](sodium-quad-classifier-independent-audit-2026-09-30.md) — 2,410,296 output comparisons and getter-order/exception checks; mixed CPU microbenchmarks are not a reload win.
+- [Optional Sodium coordinate bridge — 2026-09-30](sodium-optional-coordinate-bridge-audit-2026-09-30.md) — Mixin interface/Object-coercion source audit and JVM linkage fixture; real runtime gate remains required.
+- [Palladium identifier triage — 2026-09-30](palladium-identifiers-triage-2026-09-30.md) — mutable-array semantics and corrected JFR attribution: most join leaves are UnionPath, not the variant getter.
+- [Model dispatch identifier reuse audit — 2026-09-30](model-dispatch-identifier-reuse-audit-2026-09-30.md) — generic cache rejected pending a justified callback-safe scope; post-bake wall is not formatter-exclusive cost.
+
 - [MCEF screen-transition sleep during first-consumer deferral — 2026-09-28](mcef-screen-transition-sleep-2026-09-28.md) — exact-pack fast-PC watchdog attributes repeated ~1-second menu navigation gaps to MCEF's delayed automatic initializer while BootOptim keeps CEF deferred; scoped skip passed hosted startup and physical menu/world validation.
 
 - [Laptop shader fallback and Voxy-save variance — 2026-09-05](laptop-shader-voxy-variance-2026-09-05.md) — **REJECTED** physical diagnostic: five deliberate shader-capability failures cost 155 ms wall/62.5 ms CPU, while Voxy saved once in 5.5 ms with no concurrency; neither is an actionable startup target.
