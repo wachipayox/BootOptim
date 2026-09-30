@@ -28,7 +28,9 @@ public final class ClientStartupHooks {
         }
 
         if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
-            Minecraft.getInstance().stop();
+            if (!RepeatReloadBenchmark.start()) {
+                Minecraft.getInstance().stop();
+            }
         }
     }
 }
