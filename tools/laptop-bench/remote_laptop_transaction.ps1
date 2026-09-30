@@ -69,7 +69,7 @@ function Prism-Procs([string]$exe) {
 }
 function Target-Java([string]$game,[string]$root) {
     $all=@(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'")
-    @($all|Where-Object{$c=[string]$_.CommandLine;$c -and (($c.IndexOf($game,[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge0))})
+    @($all|Where-Object{$c=([string]$_.CommandLine).Replace('/','\');$c -and (($c.IndexOf($game.Replace('/','\'),[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root.Replace('/','\'),[StringComparison]::OrdinalIgnoreCase)-ge0))})
 }
 
 function Ensure-Wts {

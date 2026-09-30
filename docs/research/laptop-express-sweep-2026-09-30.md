@@ -148,3 +148,35 @@ Local bundle: `C:\BootOptimBench\artifacts\express-sweep-20260930\bundle`.
 Packaged JAR SHA256:
 `3C986500743BA83F30F165D1EC84BCDD5D38D75586BD91CEA63BB9E5D62120AF`.
 Source and gates also live in the [persistent candidate register](express-candidates-laptop-register-2026-09-30.md).
+
+## Physical dispatch and harness repairs — 2026-09-30
+
+User authorized background dispatch. Actual Prism instance override selects Oracle
+Java **21.0.9**, not the hosted baseline 25.0.4. Original campaign stopped at that
+preflight before staging. Subsequent physical campaigns retain the configured JVM
+and GC arguments identically across modes; this is an explicitly recorded baseline
+deviation, never a comparison against hosted Java25 or historical laptop timings.
+
+Two harness defects were found before valid measurement:
+
+- `express-sweep-20260930-java21`: QSettings stored `JvmArgs` inside enclosing
+  quotes. ConfigValue retained them; transaction escaping made them literal JVM
+  quotes. User saw "Could not create the java virtual machine"; no game JVM was
+  tracked. Original config/JAR restoration passed. Parser now strips only the
+  serialization wrapper before unescaping. Four offline controller scenarios
+  (including quoted baseline + stale exitOnTitle) PASS. Direct physical decoded
+  baseline `java.exe -version` returned exit0 with Java21.0.9.
+- `express-sweep-20260930-qfix`: game Java did start, but both helpers compared
+  raw command lines against backslash paths. Prism used forward slashes, so the
+  controller failed to recognize it and timed out. PID6888 had the expected parent
+  Prism7640, active session8, expected executable and matching normalized instance
+  path. It was explicitly terminated after fresh creation-time verification before
+  recovery; do not count that run as a benchmark. Both Target-Java helpers now
+  normalize separators before matching. Offline real-function AST tests cover
+  forward/backslash, case variation, unrelated paths and absent command lines.
+
+Fresh corrected campaign: `express-sweep-20260930-pfix`, local bundle parent
+`C:/BootOptimBench/artifacts/express-sweep-20260930-pfix`, remote result root
+`C:/BootOptimBench/express-sweep-20260930-pfix/results`. Packaged JAR is unchanged;
+the fixes only affect script staging/process ownership. Preserve rejected campaigns
+and partial evidence. Do not edit a running campaign's JAR, plan or helpers.
