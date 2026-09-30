@@ -247,3 +247,5 @@ verify measuring state before reporting live and collect all four endpoints befo
 claiming accumulation. Prior individual raw deltas must not be summed as predicted
 saving. Lifetime GC is not a per-reload budget. Previous sweep took93.6min for5 modes;
 this four-process startup+repeat campaign may take ~70–90min rather than20min.
+
+Combined live check: measuring valid=true, JavaPID7532 with fresh recorded creation, Prism3964/session8 and verified effective arguments. Prism preparation took several minutes; it remains outside JVM-origin measurements. Controller proceeds unattended; results pending.
