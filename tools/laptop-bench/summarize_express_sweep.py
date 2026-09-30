@@ -58,6 +58,9 @@ def summarize(root):
     if comparison == 'combined-abba' and not issues:
         import statistics
         result['medians'] = {group: {metric: statistics.median(r[metric] for r in runs if r['name'].startswith(group) and r[metric] is not None) for metric in ('startupMs', 'menuReloadMs') if all(r[metric] is not None for r in runs)} for group in ('control', 'combined')}
+    if comparison == 'combined-abba' and not issues:
+        by_name = {r['name']: r for r in runs}
+        result['paired_deltas_ms'] = {metric: [by_name[f'combined-{i}'][metric] - by_name[f'control-{i}'][metric] for i in (1, 2)] for metric in ('startupMs', 'menuReloadMs') if all(r[metric] is not None for r in runs)}
     text = ['# Laptop exploratory sweep', '', 'HDD page cache is uncontrolled. Individual mode has one run per configuration; combined mode uses two counterbalanced pairs (ABBA). Treat small/noisy differences as inconclusive.', '', '| Configuration | JVM→menu ms | Initial reload complete ms | Menu reload ms | GC ms | Delta vs first control ms |', '| --- | ---: | ---: | ---: | ---: | ---: |']
     for r in runs:
         delta = r['startupMs'] - baseline if r['startupMs'] is not None and baseline is not None else None
