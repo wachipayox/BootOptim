@@ -50,3 +50,29 @@ A pinned SecureJarHandler source replacement, an upstream patch, or a separately
 No game run, new recording, bootstrap build, PR or hosted dispatch was needed: no runtime candidate was created. No performance saving is claimed. Root Sodium work can continue without waiting on this lane.
 
 Reopen only if an already-authorized SJH replacement makes deployment cheap, or exclusive current-pack counts/allocation/CPU show material absolute-path churn. Then validate directory and ZIP bases, multiple-base priority, denied filters, dynamic file changes, missing-file errors, close/lifetime and full exact-pack resource contracts. Do not replace this premise with blanket path/FS caches, read caps (#283), archive batching (#285), empty-prefix logging changes (#264), or claims inferred from sample counts.
+
+
+## Reactivated analysis — 2026-10-01
+
+Integration refreshed again; authority remains `a0b8fdc05dd97267698ebbce1f561ac4895d3b74`. Prior semantic/allocation work was recovered rather than repeated as new evidence. No recording, instance change, campaign edit or optimization publication occurred.
+
+The September 28 multifocus JFR contains **zero** `ObjectAllocationSample`, `ObjectAllocationInNewTLAB`, `ObjectAllocationOutsideTLAB`, `FileRead` and `FileWrite` events. It has 2,879 execution samples and 321 thread-CPU-load events. It therefore cannot prove path allocation bytes, actual path access counts, per-lookup repetition or I/O cost. Do not infer these from sampling.
+
+Counting all existing execution stacks that contain UnionFS (not only `String.join` leaf) finds **72 / 85 sampled events** in single/multifocus recordings. The main resource worker accounts for 59 / 65. Inclusive sampled method occurrences are `toRealPath` 25 / 32, `getPath` 24 / 33, `UnionPath.<init>` 14 / 29, `getPathParts` 10 / 14 and `normalize` 10 / 5. Occurrences overlap within individual stacks. These recordings have shallow stacks; they do not establish an exclusive constructor wall budget or game savings.
+
+### A smaller hook outside the bootstrap layer
+
+Minecraft's `PathPackResources.getResource(PackType, ResourceLocation)` constructs:
+
+```java
+Path path = this.root.resolve(packType.getDirectory()).resolve(location.getNamespace());
+return getResource(location, path);
+```
+
+`FileUtil.resolvePath` then creates the resource suffix path. Several existing JFR stacks lead directly from PathPackResources through `Path.resolve` / `FileUtil.resolvePath` into UnionFS path construction. **Reusing only the lexical root/type/namespace prefix** is therefore a distinct candidate from normalizing UnionFS's private lookup path. It can potentially remove two pure prefix constructions in a game-owned callsite, without redefining bootstrap classes.
+
+This is not a resolved-file cache: all suffix construction, `FileUtil.decomposePath`, `Files.exists`, `validatePath`, original `IoSupplier` creation, lazy opens, UnionFS filters/base precedence and fresh attributes remain stock. A future implementation would need to be per PathPackResources instance, limited to the exact immutable UnionPath class, concurrency-safe and bounded; unknown providers must use the original operations. It must not cancel the whole getResource method or bypass other mod injections. Cache lifetime ends with its pack instance; no entries store file existence, content or selected bases. Closing/removing packs and original-path error behavior still need complete validation.
+
+The offline audit now also compares cached versus fresh prefixes across 5 absolute/relative/dot-containing roots × 2 pack directories × 5 valid namespace forms × 4 resource suffixes. All **200** equality, hash, rendered-string and filesystem-identity comparisons match. This validates lexical value only, not arbitrary mod identity-sensitive injections, concurrent caching or the full IO/filter/error contract. No runtime cache was implemented.
+
+Decision: **internal SJH normalization remains too intrusive for this small lane; the game-side lexical-prefix candidate is viable for a bounded next code audit if root chooses it**. Its true call count, reduction in allocations and critical-path effect remain unmeasured. Preserve this candidate separately; do not substitute a blanket ResourceManager or inode cache. No new profiler is warranted solely to count the same sampled paths. Root's Sodium campaign remains the active runtime work.

@@ -32,6 +32,26 @@ public final class UnionPathNormalizationAudit {
             System.out.printf(java.util.Locale.ROOT,"isolated %s round=%d cpu_ms=%.3f bytes_per_call=%.3f%n",candidate?"normalize-original-strip":"stock-relative-normalize",round,cpuSpent/1e6,allocated/500000.0);
         }
     }
+    static void prefixAudit(UnionFileSystem fs) {
+        int matches=0;
+        for (String rootText : List.of("/", "", "/assets-root", "assets-root", "/a/../b")) {
+            Path root=fs.getPath(rootText);
+            Map<String,Path> prefixes=new HashMap<>();
+            for (String directory : List.of("assets", "data")) {
+                for (String namespace : List.of("minecraft", "decocraft", "create", "other_mod", "a.b-c")) {
+                    String key=directory+":"+namespace;
+                    Path prefix=prefixes.computeIfAbsent(key,k->root.resolve(directory).resolve(namespace));
+                    for (String leaf : List.of("models/block/chair.json", "textures/item/item.png", "one.json", "a/b/c/d/e/f.json")) {
+                        Path expected=root.resolve(directory).resolve(namespace).resolve(leaf);
+                        Path candidate=prefix.resolve(leaf);
+                        if (!candidate.equals(expected)||candidate.hashCode()!=expected.hashCode()||!candidate.toString().equals(expected.toString())||candidate.getFileSystem()!=expected.getFileSystem()) throw new AssertionError("prefix "+expected);
+                        matches++;
+                    }
+                }
+            }
+        }
+        System.out.println("Lexical namespace-prefix reuse: matches="+matches+" mismatches=0; filesystem operations untouched/unmeasured");
+    }
     static int checked;
     static void check(UnionFileSystem fs, String raw) {
         UnionPath path = (UnionPath) fs.getPath(raw);
@@ -54,6 +74,7 @@ public final class UnionPathNormalizationAudit {
         try (UnionFileSystem fs = new UnionFileSystemProvider().newFileSystem(null, dir)) {
             enumerate(fs, "", new String[]{"a", "b", ".", "..", "", " ", "textures.png", "\u00f1"}, 5);
             for (String raw : List.of("", "/", "//", "///", ".", "..", "../../a", "/../../a", "a/./b/../c", "C:/assets/minecraft/a.png", "a\\b\\..\\c", "\\assets\\minecraft", "assets/\u00f1/\ud83d\ude00.png", "/a//b///")) check(fs, raw);
+            prefixAudit(fs);
             if (args.length>0 && args[0].equals("--cost-probe")) costProbe(fs);
             System.out.println("UnionPath 3.0.8 normalized-resolution strings: matches="+checked+" mismatches=0; no game/runtime patch");
         } finally { Files.delete(dir); }
