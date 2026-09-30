@@ -10,7 +10,8 @@ New-Item -ItemType Directory -Path $root | Out-Null
 function Save($value, $path) {
     $tmp = "$path.tmp-$PID"
     [IO.File]::WriteAllText($tmp, ($value | ConvertTo-Json -Depth 12), $utf8)
-    Move-Item -LiteralPath $tmp -Destination $path -Force
+    if ([IO.File]::Exists($path)) { [IO.File]::Replace($tmp, $path, [NullString]::Value) }
+    else { [IO.File]::Move($tmp, $path) }
 }
 function ConfigValue($file, $key) {
     $m = @([regex]::Matches([IO.File]::ReadAllText($file), '(?m)^' + [regex]::Escape($key) + '=(.*)\r?$'))

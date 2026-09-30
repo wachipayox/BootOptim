@@ -29,7 +29,7 @@ $Utf8 = New-Object System.Text.UTF8Encoding($false)
 function Fail([string]$m) { throw "BOOTOPTIM_REMOTE_INVALID: $m" }
 function Full([string]$p) { if ([string]::IsNullOrWhiteSpace($p)) { return $null }; [IO.Path]::GetFullPath($p) }
 function Sha([string]$p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToUpperInvariant() }
-function Save([object]$o,[string]$p) { $d=Split-Path -Parent $p; New-Item -ItemType Directory -Force -Path $d|Out-Null; $t="$p.tmp-$PID"; [IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8); Move-Item -LiteralPath $t -Destination $p -Force }
+function Save([object]$o,[string]$p) { $d=Split-Path -Parent $p; New-Item -ItemType Directory -Force -Path $d|Out-Null; $t="$p.tmp-$PID"; [IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8); if([IO.File]::Exists($p)){[IO.File]::Replace($t,$p,[NullString]::Value)}else{[IO.File]::Move($t,$p)} }
 function Load([string]$p) { if(-not(Test-Path -LiteralPath $p -PathType Leaf)){Fail "missing state $p"}; Get-Content -LiteralPath $p -Raw|ConvertFrom-Json }
 
 function BootOptim-Kind([string]$p) {
@@ -184,7 +184,7 @@ switch($Action){
 }
 {$_ -in @('Postflight','Recover')}{
     $st=Load $stateFile;if([int]$st.schema-ne3){Fail "unsupported transaction schema $($st.schema)"};if($Action-eq'Postflight' -and $st.phase-notin@('finished','invalid')){Fail "Postflight refuses phase $($st.phase)"}
-    Stop-Owned ([int]$st.javaPid) ([string]$st.javaCreationDate) 'Java' $st $ForceStopOwned;Stop-Owned ([int]$st.prismPid) ([string]$st.prismCreationDate) 'Prism' $st $ForceStopOwned
+    Stop-Owned ([int]$st.javaPid) ([string]$st.javaCreationDate) 'Java' $st -force:$ForceStopOwned;Stop-Owned ([int]$st.prismPid) ([string]$st.prismCreationDate) 'Prism' $st -force:$ForceStopOwned
     if(@(Prism-Procs $st.prismExe).Count){Fail 'Prism still running; restoration waits until Prism is fully closed'};if(@(Target-Java $st.gameRoot $st.instanceRoot).Count){Fail 'target Java still running; restoration refuses live files'}
     try{Unregister-ScheduledTask -TaskName $st.taskName -Confirm:$false -ErrorAction SilentlyContinue}catch{}
     if(-not(Test-Path -LiteralPath $st.jarBackup -PathType Leaf) -or (Sha $st.jarBackup)-ne$st.originalJarSha256){Fail 'original JAR backup is missing or changed'}

@@ -75,5 +75,5 @@ foreach($case in @('success','failure','menu-repeat','quoted-config')) {
  }
  Write-Output "PASS $case evidence, flag matrix, config restoration and lock cleanup"
 }
-Remove-Item Env:BOOTOPTIM_SWEEP_TEST_FAIL
+Remove-Item Env:BOOTOPTIM_SWEEP_TEST_FAIL -ErrorAction SilentlyContinue
 Write-Output ('Offline fixture retained at '+$sandbox)

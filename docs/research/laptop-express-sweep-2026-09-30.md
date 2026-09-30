@@ -180,3 +180,16 @@ Fresh corrected campaign: `express-sweep-20260930-pfix`, local bundle parent
 `C:/BootOptimBench/express-sweep-20260930-pfix/results`. Packaged JAR is unchanged;
 the fixes only affect script staging/process ownership. Preserve rejected campaigns
 and partial evidence. Do not edit a running campaign's JAR, plan or helpers.
+
+Additional harness-only failures: `pfix` refused the stale lock before staging;
+`live` started Prism but Windows PowerShell 5 could not overwrite the existing
+state JSON with Move-Item -Force. Recovery also passed switch parameters
+positionally, leaving force false. This campaign is invalid, not a mod/performance
+result. Owned Java was stopped with parent/session/path/creation checks. Recovery
+then verified exact original cfg/JAR hashes. Atomic File.Replace now uses
+[NullString]::Value (PS5 otherwise converts null backup path to an invalid empty
+string); all three real Save functions pass 100 consecutive writes locally AND
+on the physical laptop. Recovery binds both force switches explicitly by name.
+Four controller scenarios and process-path tests also pass. Fresh authorized
+campaign `express-sweep-20260930-final` uses the unchanged combined diagnostic JAR
+and Oracle21.0.9. Do not assume success until its measuring state is verified.
