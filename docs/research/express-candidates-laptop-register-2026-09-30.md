@@ -41,7 +41,10 @@ A combined **diagnostic-only** JAR is now prepared on `codex/laptop-express-swee
 Hosted 36728663450 passed initial startup but closed before the automatic menu
 reload: it is NOT a completed sweep validation. Shutdown ownership and explicit
 hosted lifecycle rejection are corrected; seven regression checks and build pass.
-Wait for the corrected hosted endpoint gate and user signal before laptop use.
+Corrected hosted 36731187366 at `bccb5ee5` completed both full cycles, two reloads
+each, preserved pack order and closed after the final marker: lifecycle gate PASS.
+This is not speed evidence; MCEF video initialization shifted between endpoints.
+User signal and actual Windows preflight still required before laptop use.
 Before a future campaign fetch integration, re-read the PR bodies/results and
 verify actual sources and flags. Build an isolated candidate branch containing
 only intended optimization code, excluding repeat automation, JFR/per-quad

@@ -82,8 +82,8 @@ passed success, failure-after-one-run and menu-repeat scenarios: independent
 flag matrix, five separate outputs, fail-fast, original config restoration and
 lock cleanup. Five offline summary tests passed, including effective resource
 fallback and partial failure rejection. No game or SSH was used in these tests.
-Next: corrected hosted control/all-enabled smoke with the automatic menu-repeat
-endpoint, then the user's signal before touching the laptop. Do not call the full remote
+Corrected hosted control/all-enabled automatic menu-repeat gate passed below.
+Next: the user's signal before touching the laptop. Do not call the full remote
 Windows task lifecycle physically validated merely from local doubles or Linux CI.
 
 ### Hosted gate review: 36728663450 (2026-09-30)
@@ -110,8 +110,39 @@ existing behavior. The hosted runner also rejects an opted-in express campaign
 unless the exact initial/presented/repeat/final stage sequence and generation
 count are present. Seven offline tests cover premature closure, failed repeat,
 duplicate final marker, extra generation and invalid endpoint order. Build passed.
-The corrected hosted cycle is pending; do not launch the laptop from the old green
-status. No laptop contact occurred during this review.
+The original green status alone must not authorize a laptop campaign; the corrected
+cycle below is the runtime gate. No laptop contact occurred during this review.
+
+### Corrected hosted gate: 36731187366 (2026-09-30)
+
+Source `bccb5ee5baccc4f90714fa3218b21fc244671652`: build, startup, PowerShell
+syntax and exact-pack jobs PASS. Both latest.logs contain the exact six-stage
+sequence: initial created, initial complete, menu presented, menu reload requested,
+menu reload complete, finished; shutdown follows finished. Each has exactly two
+actual ResourceManager generations with the fixture's effective pack order intact,
+no resource fallback and zero BootOptim Mixin failures. Candidate activation for
+Decocraft V2, FerriteCore capacity (both generations) and Sodium is recorded.
+The independent offline lifecycle validator also passed the downloaded logs.
+
+| Variant | Initial complete JVM ms | Rendered menu JVM ms | Menu invocation-to-future ms | Finished JVM ms | Whole-process GC ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| All OFF | 88,364 | 91,241 | 31,257.673 | 159,654 | 6,265 |
+| All ON | 90,812 | 124,515 | 30,860.052 | 161,488 | 6,846 |
+
+Origin is hosted Linux exact-pack, not physical laptop or in-world F3+T. These
+independent single processes validate composition/lifecycle, not speed or attribution.
+MCEF's first video consumer initialized for about 31.724 / 30.810 seconds at
+different points: after the repeat in control versus before presentation in
+candidate. Consequently the rendered-menu delta is especially confounded by native
+video timing and the randomly selected background. Existing fixture EMF model
+creation warnings remain; this gate is not visual equivalence of the user's newer
+FancyMenu fork. No optimization promotion follows from these runs.
+
+Evidence: [Actions run](https://github.com/wachipayox/BootOptim/actions/runs/36731187366),
+downloaded artifacts under `C:\BootOptimBench\analysis-reload-20260930\express-sweep-36731187366`
+and `express-endpoint-review.json`. Packaged local bundle hash below is unchanged.
+Physical Windows scheduled-task dispatch/recovery remains unvalidated until the
+authorized laptop sweep. No SSH/laptop staging or launch has occurred.
 
 Local bundle: `C:\BootOptimBench\artifacts\express-sweep-20260930\bundle`.
 Packaged JAR SHA256:
