@@ -124,3 +124,16 @@ are still required before promotion. Detailed instrumentation in this pair
 is intentionally excluded from performance conclusions. Artifacts are
 under the adjacent `semantic/` directory. The low-telemetry mixed timing is
 still the current economic result; no measured physical F3+T reduction yet.
+
+## Repeated-reload economic gate
+
+The branch now includes #297's validated default-off hosted reload harness
+and strict separate-generation report. Its independent smoke passed two
+stock reloads in one JVM; the optional AnalogAudio welcome is declined
+without a config change. This allows V2's economic gate to measure actual
+repeated reloads, instead of extrapolating first-startup improvements to
+F3+T. The next paired run has three alternating same-VM process pairs,
+two repeats per process, detailed corner telemetry disabled on both sides,
+and only V2 substitution true/false differing. The stage/end completion
+marker remains. No FerriteCore capacity candidate is enabled in this V2
+comparison. Physical in-world visual and timing gates remain outstanding.
