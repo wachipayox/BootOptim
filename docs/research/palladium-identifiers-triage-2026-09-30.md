@@ -27,6 +27,13 @@ Read existing `jdk.ExecutionSample` events only; no new recording or game run:
 
 Paths are below `C:/BootOptimBench/rrls-menu-ready-stage-20260924/`. The second trace contains five sampled stacks including the getter handler, three with `String.join` at the leaf. Most leaf join samples belong to `cpw.mods.niofs.union.UnionPath.toString`, not repeated variant getter reconstruction. These are sampled stack counts across the existing recording, **not exclusive milliseconds, savings, or comparable A/B timing**. The traces do not establish a large Palladium getter budget.
 
+The second trace's exact sampled filesystem caller chains (leaf first) are:
+
+- 16: `String.join -> String.join -> UnionPath.toString -> UnionFileSystem.toRealPath -> UnionFileSystem.findFirstFiltered`.
+- 1: `String.join -> String.join -> UnionPath.toString -> Guava Joiner.toString -> Guava Joiner.appendTo`.
+
+Of the first chain, four samples occur on resource workers at request-relative 1.211–1.642 s, eleven on `Worker-ResourceReload-0` at 2.904–8.889 s, and one on Render thread at 11.442 s. The Joiner chain is a resource-worker sample at 0.649 s. The recording exposes five frames for these events; no deeper owner is inferred from this chain. Constructor/build overlap and sample counts still cannot establish an exclusive filesystem saving.
+
 ## Decision and reopening
 
 Do not implement the blind variant cache. Do not disable Palladium's deduplication or replace its Guava lifetime/counter behavior on this evidence. A no-cache single-property join shortcut and in-place constructor loop are plausible narrow source changes; neither has a measured critical-path benefit. Their domain is smaller than the original aggregate String.join attribution suggested.
