@@ -59,5 +59,52 @@ neither constitutes a shipped optimization.
 Local `gradlew.bat build --no-daemon` passed, including the packaged bootstrap.
 All 11 repeated-reload parser checks passed using
 `python test_repeat_reload_summary.py` from `scripts/exact-pack`.
-Hosted paired evidence is pending. Do not merge the diagnostic mechanism
+Hosted paired evidence is recorded below. Do not merge the diagnostic mechanism
 or claim a reload win from the smoke or from fewer arithmetic operations.
+
+## Completed comparison: run 36718631775
+
+[Actions](https://github.com/wachipayox/BootOptim/actions/runs/36718631775)
+passed build, client startup and all three paired exact-pack VMs at diagnostic
+commit `b691584d`. All six processes completed initial plus two repeated
+reloads. Exactly three bake markers appear per process, each with 6,280,704
+eligible calls; candidate activation appears once in each candidate and never
+in controls. Reload origins/endpoints and ordinal checks passed. The fixture
+contract passed, every block atlas remains 8192x8192x2 and there are zero
+BootOptim Mixin failures. This proves runtime compatibility in the hosted
+software pack, not visual in-world equivalence.
+
+Candidate minus control; negative means shorter. Times in milliseconds:
+
+| VM pair | Process order | Repeat 1 bake | Repeat 2 bake | Repeat 1 complete reload | Repeat 2 complete reload |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 1 | control then candidate | +19.289 | -41.778 | -3068.073 | -338.508 |
+| 2 | candidate then control | -401.246 | -325.418 | +154.722 | +18.958 |
+| 3 | control then candidate | -253.274 | -208.293 | -1180.107 | -364.118 |
+| Paired median | | -253.274 | -208.293 | -1180.107 | -338.508 |
+
+Unpaired repeat medians (control/candidate): repeat 1 complete reload
+31.979/30.987 seconds; repeat 2 28.548/28.209 seconds. The whole-reload deltas
+are positive in the reverse-order pair and negative in both candidate-second
+pairs, so an order/warm-run effect remains a confound. In pair 1, first bake
+actually regresses 19 ms while the complete reload improves 3.068 seconds;
+that entire improvement cannot be attributed to classifier arithmetic.
+The bake improvements in five of six repeat intervals are encouraging but
+small, with observed variability. They are whole bake wall time, not exclusive
+classifier CPU. Initial bake paired median delta is -68.452 ms; startup paired
+median is -103 ms, with individual deltas +1892/-1683/-103 ms. No coherent
+startup win is established.
+
+Disposition: keep PR #299 default off and unpromoted; it is a small promising
+candidate, **not an established end-to-end reload win** and not a solution to
+the physical 17–19 second F3+T delay. Do not close this CPU-sensitive front
+merely from its small hosted value. Retain the flag for the eventual physical
+low-end comparison once the user authorizes that hardware; do not request or
+perform laptop runs now. Diagnostic PR #300 stays separate from production.
+
+Downloaded artifacts and checked interval/count JSON are under
+`C:\BootOptimBench\analysis-reload-20260930\sodium-paired-36718631775`.
+Reproduce by pairing `paired-results/{control,candidate}-N/result.json` and
+extracting all `BOOTOPTIM_SODIUM_QUAD_BAKE` markers from their `latest.log`;
+reject missing/duplicate ordinals, mismatched candidate booleans or counts,
+invalid repeat origins and nonzero BootOptim errors before computing deltas.
