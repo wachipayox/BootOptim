@@ -19,6 +19,7 @@ public final class ClientStartupHooks {
         }
 
         installed = true;
+        ExpressSweepEndpoint.install();
         NeoForge.EVENT_BUS.addListener(ClientStartupHooks::onScreenOpening);
     }
 
