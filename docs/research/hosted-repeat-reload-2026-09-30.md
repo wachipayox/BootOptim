@@ -14,13 +14,14 @@ Normal interactive sessions remain unaffected.
 
 The first main-menu marker/report remains exactly the original startup
 endpoint. Instead of exiting immediately, the benchmark waits for the stock
-overlay to disappear and 40 ready client ticks on the title, invokes the
+overlay to disappear and two ready seconds on the title, invokes the
 stock `Minecraft.reloadResourcePacks()` and measures until its returned
-future completes. It never blocks the client tick, changes resources or
+future completes. It never blocks the render frame, changes resources or
 listeners, modifies callbacks, moves GL work or publishes a partial model
 generation. A worker completion is handed back through a volatile immutable
-record; follow-up requests occur on the client thread. Between reloads it
-waits for the normal overlay/fade and another 40 ready ticks. Any failed
+record; follow-up requests occur in the render-frame post event, on the
+render thread even with Ixeris installed. Between reloads it
+waits for the normal overlay/fade and another two ready seconds. Any failed
 future stops the diagnostic. An unexpected world also aborts it.
 
 There are only begin/end markers per repeat, plus arm/done. Monotonic
@@ -39,6 +40,28 @@ does not silently overwrite a startup metric. Seven parser tests cover
 successful duration extraction, ordinary startup, failure, duplicate,
 truncation, extra reload and invalid origin; local packaging passes. Hosted
 runtime validation is pending.
+
+## First hosted failure and correction
+
+[Run 36687765308](https://github.com/wachipayox/BootOptim/actions/runs/36687765308)
+reached the existing main-menu marker at 86.924 seconds and armed the harness,
+but invoked **zero repeat reloads**. The timeout dump shows a live render
+thread drawing `com.palm1.analogaudio.client.gui.LavaplayerWelcomeScreen`,
+not a model-preparation deadlock. That screen replaces the title because
+the fixture lacks optional Lavaplayer binaries. This result is invalid for
+repeat-reload performance; its logs/dump are retained at
+`C:/BootOptimBench/hosted-repeat-reload-20260930/failed-v1/`.
+
+Exact installed AnalogAudio 0.1.0 bytecode proves that the welcome screen's
+`onClose()` is identical to its decline button: return to `lastScreen`, with
+no download or config write. The opt-in CI harness now calls that method
+once for this exact screen class after the overlay disappears. Unknown
+screens are never dismissed. Readiness uses monotonic seconds after rendered
+frames instead of tick count, and a 180-second per-phase limit logs the
+screen/overlay class and fails rather than silently waiting for the full
+process timeout. No interactive setting or fixture resource selection is
+changed. FerriteCore's concurrent smoke was cancelled because it used the
+same invalid harness; it provided no candidate-performance evidence.
 
 ## Next candidate premise
 
