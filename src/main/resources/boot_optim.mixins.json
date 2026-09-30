@@ -12,6 +12,8 @@
     "client.McefFirstConsumerDeferMixin",
     "client.McefScreenInitTaskMixin",
     "client.ModelBakeryDecocraftReuseMixin",
+    "client.MultipartUnionScopeMixin",
+    "client.MultiPartValidatedUnionMixin",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",

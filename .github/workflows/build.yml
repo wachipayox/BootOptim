@@ -22,6 +22,9 @@ jobs:
       - name: Test benchmark resource contract
         run: python3 -m unittest discover -s tools/laptop-bench -p 'test_*.py' -v
 
+      - name: Test validated dependency union
+        run: python3 scripts/test_validated_dependency_union.py
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 

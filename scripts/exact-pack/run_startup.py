@@ -185,6 +185,11 @@ def main() -> None:
             raise SystemExit(f"Exact-pack run reached marker but startup report is missing: {startup_log}")
 
         latest_text = latest_log.read_text(encoding="utf-8", errors="replace")
+        if "-Dboot_optim.verifyMultipartUnion=true" in os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", ""):
+            import re
+            union = re.findall(r"BOOTOPTIM_MULTIPART_UNION success=true enabled=true verify=true attempts=(\d+) hits=(\d+).*?mismatches=(\d+)", latest_text)
+            if len(union) != 1 or int(union[0][0]) <= 0 or int(union[0][1]) <= 0 or int(union[0][2]) != 0:
+                raise SystemExit("Multipart union semantic gate missing, inactive, ambiguous or mismatched.")
         mixin_failures = (
             "InvalidInjectionException",
             "Mixin apply for mod boot_optim failed",
