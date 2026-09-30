@@ -205,3 +205,23 @@ comments: their dynamic loading locks are not evidence of the active path.
 
 Artifacts: C:/BootOptimBench/analysis-reload-20260930/discovery-36773873263.
 CPU savings and physicalF3+T budget remain unmeasured; clocks/wrappers add cost.
+
+
+## Source contract and concrete-type census
+
+Both stock MultiPart and MultiVariant retain the supplied List directly; their
+getSelectors/getVariants expose that same mutable list. final fields therefore
+do NOT make their dependency topology immutable. Selector and Variant are also
+subclassable. A persistent dependency result cache is unsafe without a proven
+mutation/callback domain, even when model identity repeats. Do not use the high
+state count as proof of cache eligibility.
+
+The same DETAIL scope now records concrete class, calls, distinct model identities
+and exclusive dependency wall per class. It calls every current original operation;
+the identity map is a short-lived profiling census, never reused resource data.
+No extra per-call clocks: class budgets partition the existing dependency bucket.
+Map/census overhead falls outside that bucket; source timing remains diagnostic.
+References die with loadAll scope finally cleanup. This distinguishes the already
+rejected multipart direct loop from potentially different MultiVariant or custom
+owners before designing another candidate. Real helper census once-only/identity,
+failed-scope/partition tests and local packaged build PASS. Hosted census pending.

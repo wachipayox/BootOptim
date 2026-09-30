@@ -116,11 +116,21 @@ public class CheckDiscovery {
   double discovery=0; for(int i=2;i<=5;i++) {require((double)detail[i]>=0);discovery+=(double)detail[i];}
   require(Math.abs(discovery-(double)work[5])<0.00001);
   for(int i=6;i<=9;i++) require(detail[i].equals(1L));
+  Object repeated=new Object();
+  ModelGroupingProfiler.loadAll(()->{
+   ModelGroupingProfiler.phase(Phase.DISCOVERY,()->{
+    require(ModelGroupingProfiler.dependencies(repeated,()->token)==token);
+    require(ModelGroupingProfiler.dependencies(repeated,()->token)==token);
+    return token;
+   });
+  });
+  Object[] census=LogUtils.records.get(6);
+  require(census[0].equals("java.lang.Object") && census[1].equals(2L) && census[2].equals(1L));
   RuntimeException expected=new RuntimeException();
   try {ModelGroupingProfiler.loadAll(()->ModelGroupingProfiler.discoveryPhase(Phase.MODEL_LOOKUP,()->{throw expected;})); throw new AssertionError();}
   catch(RuntimeException actual){require(actual==expected);}
   ModelGroupingProfiler.loadAll(()->{});
-  require(LogUtils.records.get(8)[1].equals(false));
+  require(LogUtils.records.get(12)[1].equals(false));
   System.out.println("PASS discovery partition, identity, once-only calls and cleanup");
  }
 }

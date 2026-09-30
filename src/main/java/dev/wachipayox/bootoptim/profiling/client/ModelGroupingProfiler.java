@@ -2,6 +2,8 @@ package dev.wachipayox.bootoptim.profiling.client;
 
 import com.mojang.logging.LogUtils;
 import java.util.function.Supplier;
+import java.util.IdentityHashMap;
+import java.util.Map;
 
 /** Diagnostic only: attribute current-call grouping without caching or skipping callbacks. */
 public final class ModelGroupingProfiler {
@@ -53,6 +55,9 @@ public final class ModelGroupingProfiler {
                             success, available && scope.phaseCalls[6] > 0 && scope.phaseCalls[7] > 0 && scope.phaseCalls[8] > 0,
                             scope.phaseNs[6] / 1e6, scope.phaseNs[7] / 1e6, scope.phaseNs[8] / 1e6, scope.phaseNs[2] / 1e6,
                             scope.phaseCalls[6], scope.phaseCalls[7], scope.phaseCalls[8], scope.phaseCalls[2]);
+                    scope.dependencyTypes.forEach((type, cost) -> LogUtils.getLogger().info(
+                            "BOOTOPTIM_DEPENDENCY_TYPE class={} calls={} distinct_models={} dependency_wall_ms={}",
+                            type.getName(), cost.calls, cost.distinct, cost.wallNs / 1e6));
                 }
             }
         }
@@ -98,6 +103,23 @@ public final class ModelGroupingProfiler {
         return DETAIL ? phase(phase, original) : original.get();
     }
 
+    /** Identity/count census belongs to the diagnostic scope, never a dependency-result cache. */
+    public static <T> T dependencies(Object model, Supplier<T> original) {
+        Scope scope = DETAIL ? CURRENT.get() : null;
+        if (scope == null) return original.get();
+        DependencyType cost = scope.dependencyTypes.computeIfAbsent(model.getClass(), ignored -> new DependencyType());
+        cost.calls++;
+        if (scope.dependencyModels.put(model, Boolean.TRUE) == null) cost.distinct++;
+        long before = scope.phaseNs[Phase.DEPENDENCIES.ordinal()];
+        try {
+            return phase(Phase.DEPENDENCIES, original);
+        } finally {
+            cost.wallNs += scope.phaseNs[Phase.DEPENDENCIES.ordinal()] - before;
+        }
+    }
+
+    private static final class DependencyType { long calls, distinct, wallNs; }
+
     private static final class Scope {
         long calls;
         long nested;
@@ -107,5 +129,7 @@ public final class ModelGroupingProfiler {
         long measuredNs;
         final long[] phaseNs = new long[Phase.values().length];
         final long[] phaseCalls = new long[Phase.values().length];
+        final Map<Class<?>, DependencyType> dependencyTypes = new IdentityHashMap<>();
+        final Map<Object, Boolean> dependencyModels = new IdentityHashMap<>();
     }
 }

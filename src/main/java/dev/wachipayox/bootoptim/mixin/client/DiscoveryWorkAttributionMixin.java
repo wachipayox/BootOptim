@@ -18,7 +18,7 @@ abstract class DiscoveryWorkAttributionMixin {
     @WrapOperation(method = "registerModelAndLoadDependencies", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/resources/model/UnbakedModel;getDependencies()Ljava/util/Collection;"), require = 0)
     private Collection<ResourceLocation> bootoptim$dependencies(UnbakedModel model, Operation<Collection<ResourceLocation>> original) {
-        return ModelGroupingProfiler.discoveryPhase(Phase.DEPENDENCIES, () -> original.call(model));
+        return ModelGroupingProfiler.dependencies(model, () -> original.call(model));
     }
 
     @WrapOperation(method = "registerModelAndLoadDependencies", at = @At(value = "INVOKE",
