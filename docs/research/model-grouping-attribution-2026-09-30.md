@@ -177,3 +177,31 @@ callsites success=true available=true before choosing a concrete optimization.
 Per-call diagnostic wall includes instrumentation overhead and is not CPU or
 end-to-end saving. PR304's within-JVM trial runs independently while this analysis
 progresses. User explicitly requested this concurrent local investigation.
+
+
+## Confirmed discovery owner result — 2026-09-30
+
+Source7148c749 exact-pack workflow_dispatch36773873263 PASS. All new callsites
+observed available=true/success=true on Worker-ResourceReload-2; zero BootOptim
+Mixin failures, atlas8192x8192x2, JVM-origin menu93167ms. This is attribution,
+not a performance comparison. Whole loadAll4881.438419ms, reaggregated discovery
+1969.485034ms splits exactly into dependencies1293.108099ms (313687 calls),
+getModel203.574963ms (893408 calls), registration156.810262ms (313687 calls),
+callback residual315.991710ms. Counts of dependency/registration/discovery match.
+
+The two-map-lookup getModel hypothesis now has at most ~204ms inclusive budget,
+not a multi-second owner. Prioritize dependency enumeration, ~66% of callback
+wall in this instrumented run, rather than introducing a broad cache or
+bypassing ModelBakery hooks. #295's unchanged direct multipart loop is still
+not a new optimization: it already removed per-selector temporary sets and
+streams, and its hosted paired order effect failed to prove a win. New possible
+premises must distinguish current callback/collection costs by exact model
+type and prove which operations can be reduced without retaining mutable data
+or skipping subclass/hooks. A generation-scoped immutable topology plan is
+architecturally distinct but requires a callback/mutation contract first;
+no implementation is justified yet. ModernFix5.27.14 dynamic_resources mixins
+are present in the installed JAR but actual pack config lists only defaultfalse
+comments: their dynamic loading locks are not evidence of the active path.
+
+Artifacts: C:/BootOptimBench/analysis-reload-20260930/discovery-36773873263.
+CPU savings and physicalF3+T budget remain unmeasured; clocks/wrappers add cost.
