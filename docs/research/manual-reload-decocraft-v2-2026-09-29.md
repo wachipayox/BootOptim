@@ -81,3 +81,27 @@ Artifacts are preserved under
 The user's instance and laptop were not staged or launched in this experiment.
 
 PR: [#296](https://github.com/wachipayox/BootOptim/pull/296).
+
+## 2026-09-30: low-telemetry repeat
+
+[Paired run 36686757130](https://github.com/wachipayox/BootOptim/actions/runs/36686757130)
+completed three pairs with corner counters/fingerprints disabled. Within-pair
+candidate-minus-control menu deltas were -1.272 / -1.491 / +2.022 seconds;
+reload-to-FancyMenu deltas were -1.512 / -0.854 / +0.662 seconds. Panorama
+differences were -0.401 / +0.294 / +0.406 seconds. All runtime contracts
+passed and each candidate's fixed marker reports the supported V2 mode.
+These results are promising in two pairs (including candidate-first) but
+mixed. Do not subtract panorama wall to manufacture an independent bake
+speedup or claim that physical F3+T became faster. Counts remain zero by
+design in this benchmark. Artifacts are under the adjacent `low-telemetry/`
+directory. No promotion or physical installation follows from this result.
+
+An independent semantic diagnostic now reports final raw non-UV vertex data
+plus metadata, and exact logical U/V inputs to the original sprite mapping
+calls. It invokes each original mapping once in place. This separates raw
+geometry/logical UV from the old inverse-atlas/q1e6 fingerprint, which can
+be sensitive to atlas placement and float rounding. New hooks are disabled
+with detailed profiling, and the matcher checks the pinned single U/V
+callsite. A profiled control/candidate pair is semantic-only; its timing is
+not an economic comparison. Build passes; runtime semantic validation is
+pending.

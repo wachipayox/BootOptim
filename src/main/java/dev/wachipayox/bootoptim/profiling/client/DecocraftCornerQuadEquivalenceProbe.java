@@ -21,6 +21,11 @@ public final class DecocraftCornerQuadEquivalenceProbe {
     private static final AtomicLong QUAD_SUM = new AtomicLong();
     private static final AtomicLong META_XOR = new AtomicLong();
     private static final AtomicLong META_SUM = new AtomicLong();
+    private static final AtomicLong NON_UV_XOR = new AtomicLong();
+    private static final AtomicLong NON_UV_SUM = new AtomicLong();
+    private static final LongAdder UV_CALLS = new LongAdder();
+    private static final AtomicLong LOGICAL_UV_XOR = new AtomicLong();
+    private static final AtomicLong LOGICAL_UV_SUM = new AtomicLong();
 
     private DecocraftCornerQuadEquivalenceProbe() {}
 
@@ -36,9 +41,13 @@ public final class DecocraftCornerQuadEquivalenceProbe {
             count++;
             TextureAtlasSprite sprite = quad.getSprite();
             long quadHash = 0xcbf29ce484222325L;
+            long nonUvHash = 0xcbf29ce484222325L;
             int[] vertices = quad.getVertices();
             for (int i = 0; i < vertices.length; i++) {
                 quadHash = mix(quadHash, logicalVertexValue(i & 7, vertices[i], sprite));
+                if ((i & 7) != 4 && (i & 7) != 5) {
+                    nonUvHash = mix(nonUvHash, Integer.toUnsignedLong(vertices[i]));
+                }
             }
             long metadata = 0xcbf29ce484222325L;
             metadata = mix(metadata, quad.getTintIndex());
@@ -46,6 +55,9 @@ public final class DecocraftCornerQuadEquivalenceProbe {
             metadata = mix(metadata, quad.isShade() ? 1 : 0);
             metadata = mix(metadata, sprite.contents().name().hashCode());
             quadHash = mix(quadHash, metadata);
+            nonUvHash = mix(nonUvHash, metadata);
+            xor(NON_UV_XOR, nonUvHash);
+            add(NON_UV_SUM, nonUvHash);
             modelQuadXor ^= quadHash;
             modelQuadSum += quadHash;
             modelMetaXor ^= metadata;
@@ -74,6 +86,21 @@ public final class DecocraftCornerQuadEquivalenceProbe {
                 hex(MODEL_XOR.getAndSet(0L)), hex(MODEL_SUM.getAndSet(0L)),
                 hex(QUAD_XOR.getAndSet(0L)), hex(QUAD_SUM.getAndSet(0L)),
                 hex(META_XOR.getAndSet(0L)), hex(META_SUM.getAndSet(0L)));
+        LOGGER.info(
+                "BOOTOPTIM_DECOCRAFT_CORNER_RAW non_uv_xor={} non_uv_sum={} uv_calls={} logical_uv_xor={} logical_uv_sum={}",
+                hex(NON_UV_XOR.getAndSet(0L)), hex(NON_UV_SUM.getAndSet(0L)), UV_CALLS.sumThenReset(),
+                hex(LOGICAL_UV_XOR.getAndSet(0L)), hex(LOGICAL_UV_SUM.getAndSet(0L)));
+    }
+
+    /** Observe exact input before atlas placement/float normalization can perturb UV hashing. */
+    public static void observeLogicalUv(TextureAtlasSprite sprite, float coordinate, int axis) {
+        if (!ENABLED) return;
+        long hash = mix(0xcbf29ce484222325L, sprite.contents().name().hashCode());
+        hash = mix(hash, axis);
+        hash = mix(hash, Integer.toUnsignedLong(Float.floatToRawIntBits(coordinate)));
+        UV_CALLS.increment();
+        xor(LOGICAL_UV_XOR, hash);
+        add(LOGICAL_UV_SUM, hash);
     }
 
     private static long logicalVertexValue(int lane, int raw, TextureAtlasSprite sprite) {

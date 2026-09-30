@@ -14,6 +14,7 @@
     "client.ModelBakeryDecocraftReuseMixin",
     "client.DecocraftBlockbenchBakeryCornerReuseMixin",
     "client.DecocraftBlockbenchCornerEquivalenceMixin",
+    "client.DecocraftBlockbenchUVProbeMixin",
     "client.DecocraftVector3Accessor",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
