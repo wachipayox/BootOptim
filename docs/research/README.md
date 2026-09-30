@@ -37,6 +37,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [FerriteCore bounded empty quad-table capacity](ferritecore-quad-capacity-2026-09-30.md) — default-off generation-cleared storage reuse to avoid rebuilding the canonical quad table each manual reload; original hash/data clearing remains, retained reference slots are bounded, and runtime economics are pending.
+
 - [Hosted same-process resource reload diagnostic](hosted-repeat-reload-2026-09-30.md) — opt-in stock menu reloads after the separate startup endpoint, with fixed monotonic request/future boundaries and strict generation/pack validation; physical in-world behavior remains a separate gate.
 
 - [MCEF screen-transition sleep during first-consumer deferral — 2026-09-28](mcef-screen-transition-sleep-2026-09-28.md) — exact-pack fast-PC watchdog attributes repeated ~1-second menu navigation gaps to MCEF's delayed automatic initializer while BootOptim keeps CEF deferred; scoped skip passed hosted startup and physical menu/world validation.

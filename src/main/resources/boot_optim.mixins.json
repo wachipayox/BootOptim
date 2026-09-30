@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.FerriteCoreQuadCapacityMixin",
     "client.FancyMenuBrowserElementFirstConsumerMixin",
     "client.FancyMenuMcefBrowserFirstConsumerMixin",
     "client.FancyMenuMcefVideoFirstConsumerMixin",
