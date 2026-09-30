@@ -249,3 +249,31 @@ saving. Lifetime GC is not a per-reload budget. Previous sweep took93.6min for5 
 this four-process startup+repeat campaign may take ~70–90min rather than20min.
 
 Combined live check: measuring valid=true, JavaPID7532 with fresh recorded creation, Prism3964/session8 and verified effective arguments. Prism preparation took several minutes; it remains outside JVM-origin measurements. Controller proceeds unattended; results pending.
+
+## Completed combined comparison — 2026-09-30
+
+express-combined-20260930 all four ABBA processes completed, originals restored
+after each; strict offline checked-summary PASS including exact all-four flags,
+all available target activation markers, unchanged enabled packs/two generations
+and process identity. Final fresh laptop cfg/JAR hashes match originals; no instance
+Prism/Java remains. Collected evidence C:/BootOptimBench/artifacts/express-combined-20260930/results.
+
+| Run order | JVM uptime → presented full-generation menu (s) | Menu reload invocation → completed future (s) | Whole process GC (s) |
+| --- | ---: | ---: | ---: |
+| control-1 | 465.276 | 422.185 | 40.653 |
+| combined-1 | 405.329 | 343.602 | 43.553 |
+| combined-2 | 391.046 | 344.473 | 37.359 |
+| control-2 | 386.835 | 311.052 | 28.437 |
+
+Candidate-minus-matched-control: first pair startup -59.947 s, reload -78.582 s;
+reverse-order pair startup +4.211 s, reload +33.421 s. Two-run medians favor combined
+by27.868 s startup /22.581 s reload, but BOTH endpoints reverse direction with order:
+control alone improves78.441 s startup and111.133 s repeat between its two runs.
+This exceeds the apparent combined benefit. HDD cache/system conditions are not
+controlled; no unique cause of the drift is proven. ABBA exposes the order confound
+rather than establishing stacked optimization gains. Outcome INCONCLUSIVE, not a
+claim that the four changes have zero physical effect or individually regressed.
+Do not sum prior exploratory savings, promote all flags, or request another identical
+uncontrolled batch as proof. Keep individual options/gates (especiallyFerrite) in the
+persistent register; any next physical design must control/cache-classify the dominant
+variance or attribute the relevant microphase with reduced telemetry. No world/F3T.

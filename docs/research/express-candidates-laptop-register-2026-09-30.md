@@ -71,3 +71,9 @@ only, no promotion. Ferrite repeat336.608 s vs control389.864 s is a promising d
 requiring paired controls; Sodium repeat432.589 s and Decocraft443.269 s show why
 startup-only ordering cannot select winners. All four options remain tracked;
 in-world visual/repeat validation still belongs on fast PC, never this laptop.
+
+Combined physical ABBA gate now complete: all four options OFF/ON, 2 matched pairs,
+strict evidence/restoration PASS. First pair menu/reload -59.947/-78.582 s, reverse pair
++4.211/+33.421 s; control improves78.441/111.133 s on its own. Stacked gains remain
+INCONCLUSIVE (order/cache/system drift), not a zero-effect closure. No promotion or
+new unchanged physical run. All four flags remain tracked, including Ferrite capacity.
