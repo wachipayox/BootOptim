@@ -113,3 +113,37 @@ unless all required callsites are observed (`success=true available=true`). Runt
 validation is pending; require this gate before choosing an optimization. No user
 PC installation and no laptop bundle modification: combined ABBA campaign remains
 separate with fixed JAR/flags. Do not infer savings from counts or diagnostic wall.
+
+## Confirmed exclusive work profile — 2026-09-30
+
+Exact-pack36757251578 /head765ed9aa PASS build, minimalstartup, actualpacksmoke.
+BootOptimMixinerrors0, atlas8192x8192x2, JVM-origin main-menu marker89835ms.
+Work marker success=true available=true; buckets sum to4710.351387 ms:
+
+| Current-call bucket | Exclusive wall ms | Observations |
+| --- | ---: | ---: |
+| Identifier/state location | 859.073155 |313687|
+| Definition parse |451.072113|11187|
+| Discovery/registration callback |1675.237816|313687|
+| Group factories |548.194971|313687|
+| Publication excluding measured children |350.962401|11076|
+| Group finalization |153.855446|11076|
+| Unmeasured remainder |671.955485|includes instrumentation/setup|
+
+Location/discovery/group counts exactly match313687; publication/finalization counts
+match11076. Diagnostic markers/callsites therefore observed coherently. Legacy
+inclusive factory interval573.653739 ms differs from exclusive548.194971 because it
+includes added measurement/wrapper overhead; do not treat cross-run differences as
+performance regressions. This was a hosted initial reload, not physical F3+T; no
+candidate or end-to-end improvement was tested. Per-call clocks/wrappers add overhead.
+Evidence C:/BootOptimBench/analysis-reload-20260930/blockstate-work-36757251578.
+Cancelled36757026976 lacked finalmixininregistration, excluded from measurements.
+
+The strongest measured remaining owner is discovery callback (~1.675s), which includes
+model registration and recursive current-call dependency work; not wholly dependency
+enumeration. Next investigation should split this owner at source and seek reduced
+operations preserving callbacks before introducing reuse. Closed#295 direct dependency
+collection remains order-confounded; this does not authorize repeating its unchanged
+candidate. Identifier lane~0.859s is secondary: vanilla already uses direct StringBuilder,
+Palladium mutableproperty cache remains unsafe/unsupported. Do not blindly cache
+identifiers or skip serializers. All diagnostic code stays out of production/laptop.
