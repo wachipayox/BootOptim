@@ -1,5 +1,7 @@
 package dev.wachipayox.bootoptim.optimization.client;
 
+import dev.wachipayox.bootoptim.profiling.client.TrialFeatureGate;
+
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.datafixers.util.Either;
 import com.mojang.logging.LogUtils;
@@ -51,6 +53,7 @@ public final class DirectGeneratedItemBaker {
     private static final Direction[] FRONT_BACK_ORDER = computeFrontBackOrder();
     private static final String TRIMMABLE_TOOLS_NAMESPACE = "trimmable_tools";
     private static final float TRIMMABLE_TOOLS_SIDE_EXPANSION = 0.01F;
+    private static final boolean LAYER_DELTA_HOIST = Boolean.getBoolean("boot_optim.generatedItemLayerDeltaHoist");
     private static final boolean ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.generatedItemDirectBake", "true"));
     private static final AtomicInteger LOGGED_FALLBACKS = new AtomicInteger();
@@ -209,6 +212,10 @@ public final class DirectGeneratedItemBaker {
         }
 
         float seamExpand = -sprite.uvShrinkRatio();
+        // Pure arithmetic only: keep every virtual metadata read and FaceBakery callback in order.
+        boolean layerDeltaHoist = LAYER_DELTA_HOIST && TrialFeatureGate.allows(TrialFeatureGate.LAYER);
+        float layerExpansionDelta = layerDeltaHoist
+                ? (1.0F - seamExpand) * TRIMMABLE_TOOLS_SIDE_EXPANSION : 0.0F;
         Topology topology = layer.topology;
         for (int orderIndex = 0; orderIndex < topology.orderSize; orderIndex++) {
             int key = topology.order[orderIndex];
@@ -317,7 +324,8 @@ public final class DirectGeneratedItemBaker {
             // its side geometry by 0.01. The direct path bypasses that temporary element graph, so
             // reproduce the exact post-seam transformed delta for its own sprite namespace.
             if (TRIMMABLE_TOOLS_NAMESPACE.equals(sprite.contents().name().getNamespace())) {
-                float transformedDelta = (1.0F - seamExpand) * TRIMMABLE_TOOLS_SIDE_EXPANSION;
+                float transformedDelta = layerDeltaHoist ? layerExpansionDelta
+                        : (1.0F - seamExpand) * TRIMMABLE_TOOLS_SIDE_EXPANSION;
                 switch (direction) {
                     case UP -> {
                         y1 = Mth.clamp(y1 + transformedDelta, 0.0F, 16.0F);
