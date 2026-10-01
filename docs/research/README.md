@@ -41,6 +41,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Palladium constructor shortcuts — 2026-10-02](palladium-constructor-shortcuts-2026-10-02.md) — actual-binary offline 20,220-case validation of an in-place constructor loop; no runtime patch because owner cost and compatible hook/source lane are unproven. Single-component join shortcut does not preserve String identity.
+
 - [Game-side lexical prefix IO audit — 2026-10-01](path-prefix-io-audit-2026-10-01.md) — actual directory/ZIP/filter/priority/dynamic-file/closed-pack contracts pass offline; no runtime or performance claim.
 
 - [Generated-item pixel-query reuse rejection — 2026-09-30, closed 2026-10-01](generated-item-pixel-query-followup-2026-09-30.md) — retired: identical topology is insufficient when alpha callbacks change from 12 to 4 and change order; no runtime candidate retained. Reopen only with a changed, proven purity premise.
