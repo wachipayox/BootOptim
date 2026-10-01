@@ -1,0 +1,62 @@
+name: ModLauncher fork probe
+
+on:
+  push:
+    branches:
+      - 'agent94/modlauncher-post-accept-audit-20260909'
+  workflow_dispatch:
+
+jobs:
+  build-probe:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout BootOptim tooling
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Checkout pinned ModLauncher
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/McModLauncher/modlauncher.git "$RUNNER_TEMP/modlauncher"
+          git -C "$RUNNER_TEMP/modlauncher" checkout --detach 901c6ea849ae21ee7d464cd97113e77a6101a734
+          test "$(git -C "$RUNNER_TEMP/modlauncher" rev-parse HEAD)" = 901c6ea849ae21ee7d464cd97113e77a6101a734
+
+      - name: Apply version-pinned diagnostic patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/modlauncher-fork-probe/apply_probe.py "$RUNNER_TEMP/modlauncher"
+          grep -q 'BOOTOPTIM_ML_FORK' "$RUNNER_TEMP/modlauncher/src/main/java/cpw/mods/modlauncher/BootOptimForkTrace.java"
+
+      - name: Build fork probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/modlauncher"
+          ./gradlew build --no-daemon --console=plain
+
+      - name: Verify artifact identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar_path="$(find "$RUNNER_TEMP/modlauncher/build/libs" -maxdepth 1 -type f -name 'modlauncher-*.jar' ! -name '*sources*' | head -n 1)"
+          test -n "$jar_path"
+          unzip -p "$jar_path" META-INF/MANIFEST.MF | tr -d '\r' | tee "$RUNNER_TEMP/modlauncher-fork-manifest.txt"
+          grep -qx 'BootOptim-Fork-Probe: agent94-post-accept-v2' "$RUNNER_TEMP/modlauncher-fork-manifest.txt"
+          grep -qx 'BootOptim-Upstream-Commit: 901c6ea849ae21ee7d464cd97113e77a6101a734' "$RUNNER_TEMP/modlauncher-fork-manifest.txt"
+          jar tf "$jar_path" | grep -qx 'cpw/mods/modlauncher/BootOptimForkTrace.class'
+          cp "$jar_path" "$GITHUB_WORKSPACE/modlauncher-agent94-post-accept-probe.jar"
+
+      - name: Upload diagnostic fork artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: modlauncher-agent94-post-accept-probe-${{ github.sha }}
+          path: modlauncher-agent94-post-accept-probe.jar
+          if-no-files-found: error
+          retention-days: 14
