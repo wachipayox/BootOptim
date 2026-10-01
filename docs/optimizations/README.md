@@ -8,6 +8,7 @@ Before adding a new entry, verify the implementation is actually present on `age
 
 | Optimization | Scope | Default | Main mechanism |
 | --- | --- | --- | --- |
+| [FerriteCore bounded empty quad storage](compatibility/ferritecore-bounded-quad-storage.md) | Exact FerriteCore 7.0.3 stock quad set | Enabled on guarded path in promotion PR | Preserve cleared bounded table capacity for subsequent reloads |
 | Persistent mod scan cache | Global / FML discovery | Enabled | Reuse versioned mod metadata scan results across warm launches |
 | Asynchronous scan-cache writes | Global / cache persistence | Enabled with scan cache | Keep cold-cache persistence off FML scan workers |
 | [FancyMenu panorama preload overlap](compatibility/fancymenu-panorama-preload.md) | FancyMenu 3.9.x | Enabled when compatible target exists | Start existing async panorama PNG suppliers before FancyMenu serially waits for them |

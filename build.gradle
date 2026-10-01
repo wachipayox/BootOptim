@@ -18,6 +18,23 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// Storage equivalence audit is a build-only source set; it is never packaged.
+sourceSets {
+    ferriteAudit {
+        java.srcDir('tools/reload-bench')
+        java.include('FerriteCapacityEquivalence.java')
+        compileClasspath = sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath = output + compileClasspath
+    }
+}
+var ferriteCapacityEquivalence = tasks.register('ferriteCapacityEquivalence', JavaExec) {
+    dependsOn tasks.named('ferriteAuditClasses')
+    classpath = sourceSets.ferriteAudit.runtimeClasspath
+    mainClass = 'FerriteCapacityEquivalence'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check').configure { dependsOn ferriteCapacityEquivalence }
+
 evaluationDependsOn(':bootstrap')
 
 sourceSets.main.resources {
