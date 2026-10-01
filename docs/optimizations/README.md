@@ -1,5 +1,7 @@
 # BootOptim production optimization catalog
 
+Bounded clean promotion pending final gates: [FerriteCore late quad presizing](compatibility/ferritecore-late-quad-presize.md).
+
 This directory is the source of truth for optimizations the project intends to ship or retain. Historical experiments and rejected ideas belong under `docs/research/` instead.
 
 Before adding a new entry, verify the implementation is actually present on `agent/integration-current` or in the promotion PR that adds the documentation. A successful experiment in another branch is not production by itself.
