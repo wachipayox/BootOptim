@@ -1,5 +1,7 @@
 # BootOptim research ledger
 
+- [Ferrite exact quad-hash arithmetic — 2026-10-02](ferrite-quad-hash-arithmetic-2026-10-02.md) — active isolated semantic trial; no storage change or demonstrated game saving, no production promotion.
+
 Final Ferrite late-presize decision: [retired after physical gate — 2026-10-01](ferrite-presize-final-decision-2026-10-01.md). This supersedes the earlier hosted segment-retain/pending-promotion status; no active Ferrite candidate remains.
 
 Current binary dispositions: [owner candidate final decisions — 2026-10-01](owner-candidate-final-decisions-2026-10-01.md). This supersedes older default-off/pending-laptop registers for Decocraft V2, layer arithmetic, multipart union and persistent Ferrite empty storage.
