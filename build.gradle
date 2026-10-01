@@ -22,7 +22,7 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 sourceSets {
     ferriteAudit {
         java.srcDir('tools/reload-bench')
-        java.include('FerritePresizeEquivalence.java')
+        java.include('FerritePresizeEquivalence.java', 'MeasuredQuadSetEquivalence.java')
         compileClasspath = sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath = output + compileClasspath
     }
@@ -34,6 +34,13 @@ var ferritePresizeEquivalence = tasks.register('ferritePresizeEquivalence', Java
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
 }
 tasks.named('check').configure { dependsOn ferritePresizeEquivalence }
+var measuredQuadSetEquivalence = tasks.register('measuredQuadSetEquivalence', JavaExec) {
+    dependsOn tasks.named('ferriteAuditClasses')
+    classpath = sourceSets.ferriteAudit.runtimeClasspath
+    mainClass = 'MeasuredQuadSetEquivalence'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check').configure { dependsOn measuredQuadSetEquivalence }
 
 evaluationDependsOn(':bootstrap')
 

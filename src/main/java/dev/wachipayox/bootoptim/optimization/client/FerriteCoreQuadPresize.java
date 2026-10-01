@@ -3,6 +3,8 @@ package dev.wachipayox.bootoptim.optimization.client;
 import it.unimi.dsi.fastutil.objects.ObjectOpenCustomHashSet;
 import net.neoforged.fml.ModList;
 import org.slf4j.LoggerFactory;
+import dev.wachipayox.bootoptim.profiling.client.MeasuredQuadSet;
+import dev.wachipayox.bootoptim.profiling.client.TrialFeatureGate;
 
 /** FerriteCore 7.0.3: retain an integer hint, never empty storage across preparation. */
 public final class FerriteCoreQuadPresize {
@@ -26,12 +28,13 @@ public final class FerriteCoreQuadPresize {
     }
 
     private static boolean exact(ObjectOpenCustomHashSet<?> set) {
-        return set.getClass() == ObjectOpenCustomHashSet.class;
+        return set.getClass() == ObjectOpenCustomHashSet.class
+                || (TrialFeatureGate.ENABLED && set.getClass() == MeasuredQuadSet.class);
     }
 
     /** Called after original clear; original zero-argument trim is untouched. */
     public static void remember(ObjectOpenCustomHashSet<?> set, int previous, boolean active) {
-        pending = active && previous > 0 && exact(set) && set.isEmpty()
+        pending = active && TrialFeatureGate.allows(TrialFeatureGate.FERRITE) && previous > 0 && exact(set) && set.isEmpty()
                 ? Math.min(previous, MAX_EXPECTED) : 0;
         if (pending > 0) LoggerFactory.getLogger("BootOptim/FerriteQuadPresize").info(
                 "BOOTOPTIM_FERRITE_QUAD_PRESIZE stage=remember expected={} retained_model_data=false", pending);
