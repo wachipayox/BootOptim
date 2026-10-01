@@ -3,6 +3,7 @@ package dev.wachipayox.bootoptim.bootstrap;
 import cpw.mods.modlauncher.api.IEnvironment;
 import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
+import dev.wachipayox.bootoptim.trace.StructuredBootTrace;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.util.List;
@@ -11,8 +12,8 @@ import java.util.Set;
 /**
  * Earliest BootOptim entry point available from the mods directory.
  *
- * <p>This class intentionally depends only on JDK and ModLauncher API types because it is loaded in
- * ModLauncher's SERVICE layer, before the regular BootOptim NeoForge mod.</p>
+ * <p>This class intentionally depends only on JDK, ModLauncher API and the shared JDK-only trace core because it is
+ * loaded in ModLauncher's SERVICE layer, before the regular BootOptim NeoForge mod.</p>
  */
 public final class EarlyStartupProbeService implements ITransformationService {
     private static final String PROFILE_PROPERTY = "boot_optim.profileStartup";
@@ -66,7 +67,18 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
-        return List.of();
+        // ModLauncher reaches this callback only after scan completion and GAME resource registration. In trace modes,
+        // use that already-existing SERVICE callback as the first safe observable edge into the launch/game-layer
+        // transition. Default/off mode still installs no diagnostic transformer and emits no transition phase/task.
+        var trace = StructuredBootTrace.global();
+        if (!trace.isEnabled()) return List.of();
+
+        long callbackTask = ModLauncherTransitionTraceHooks.beginTransition();
+        try {
+            return List.of(new MinecraftBootstrapTraceTransformer(), new FmlLoadingTraceTransformer());
+        } finally {
+            ModLauncherTransitionTraceHooks.endTransformersCallback(callbackTask);
+        }
     }
 
     private static void mark(String phase) {
