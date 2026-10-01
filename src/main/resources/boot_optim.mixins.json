@@ -4,6 +4,8 @@
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "client.FerriteCoreQuadPresizeCleanupMixin",
+    "client.FerriteCoreQuadPresizeInsertMixin",
     "client.SodiumQuadFlagClassifierMixin",
     "client.SodiumQuadCoordinateBridgeMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",

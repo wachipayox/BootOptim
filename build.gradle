@@ -18,6 +18,23 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// Actual table identity/lifetime audit, never packaged in the mod.
+sourceSets {
+    ferriteAudit {
+        java.srcDir('tools/reload-bench')
+        java.include('FerritePresizeEquivalence.java')
+        compileClasspath = sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath = output + compileClasspath
+    }
+}
+var ferritePresizeEquivalence = tasks.register('ferritePresizeEquivalence', JavaExec) {
+    dependsOn tasks.named('ferriteAuditClasses')
+    classpath = sourceSets.ferriteAudit.runtimeClasspath
+    mainClass = 'FerritePresizeEquivalence'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check').configure { dependsOn ferritePresizeEquivalence }
+
 evaluationDependsOn(':bootstrap')
 
 sourceSets.main.resources {
