@@ -18,6 +18,23 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// Diagnostic helper audit is compiled separately and never packaged into the mod.
+sourceSets {
+    phaseAudit {
+        java.srcDir('tools/reload-bench')
+        java.include('MeasuredQuadSetEquivalence.java')
+        compileClasspath = sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath = output + compileClasspath
+    }
+}
+var ferritePhaseEquivalence = tasks.register('ferritePhaseEquivalence', JavaExec) {
+    dependsOn tasks.named('phaseAuditClasses')
+    classpath = sourceSets.phaseAudit.runtimeClasspath
+    mainClass = 'MeasuredQuadSetEquivalence'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check').configure { dependsOn ferritePhaseEquivalence }
+
 evaluationDependsOn(':bootstrap')
 
 sourceSets.main.resources {

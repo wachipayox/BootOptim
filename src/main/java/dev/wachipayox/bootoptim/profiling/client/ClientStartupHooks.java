@@ -19,6 +19,7 @@ public final class ClientStartupHooks {
         }
 
         installed = true;
+        FerritePhaseTrial.install();
         NeoForge.EVENT_BUS.addListener(ClientStartupHooks::onScreenOpening);
     }
 
@@ -27,7 +28,7 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle() && !TrialFeatureGate.ENABLED) {
             Minecraft.getInstance().stop();
         }
     }

@@ -184,6 +184,14 @@ def main() -> None:
         if not startup_log.is_file():
             raise SystemExit(f"Exact-pack run reached marker but startup report is missing: {startup_log}")
 
+        phase_trial = "-Dboot_optim.benchmark.ferritePhaseTrials=true" in os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "")
+        if phase_trial:
+            # Console is collected after process exit and retains generations whose latest.log rolled.
+            checked = subprocess.run([sys.executable, "tools/laptop-bench/check_ferrite_phase.py",
+                                      str(console_log), "--output", "ferrite-phase-result.json"], check=False)
+            if checked.returncode:
+                raise SystemExit("Ferrite phase trial failed strict endpoint/owner validation")
+
         latest_text = latest_log.read_text(encoding="utf-8", errors="replace")
         mixin_failures = (
             "InvalidInjectionException",
@@ -198,7 +206,7 @@ def main() -> None:
                 [sys.executable, "tools/laptop-bench/check_resource_selection.py",
                  "--reference", str(selection_reference),
                  "--options", str(root / "run-pack-benchmark" / "options.txt"),
-                 "--log", str(latest_log)],
+                 "--log", str(console_log if phase_trial else latest_log)],
                 cwd=root, stdout=report, check=False,
             )
         if resource_check.returncode != 0:
