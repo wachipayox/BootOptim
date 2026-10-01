@@ -29,6 +29,12 @@ sourceSets.main.resources {
 repositories {
 }
 
+dependencies {
+    // Shared JDK-only trace schema/API for the regular mod. Bootstrap compiles the same source tree
+    // into its own SERVICE-visible output; see bootstrap/build.gradle.
+    implementation project(':trace-core')
+}
+
 var packBenchmarkDirectory = project.file('run-pack-benchmark')
 var externalPackDirectory = providers.gradleProperty('bootoptimPackDir')
         .orElse(providers.environmentVariable('BOOTOPTIM_PACK_DIR'))
@@ -124,6 +130,11 @@ neoForge {
             gameDirectory = packBenchmarkDirectory
             systemProperty 'boot_optim.profileStartup', 'true'
             systemProperty 'boot_optim.benchmark.exitOnTitle', 'true'
+            // Trace-core is initialized by the early SERVICE layer, before the
+            // regular mod can resolve any game-directory state. Give that
+            // layer the authoritative pack-local destination explicitly so a
+            // profile never writes into Gradle's repository working directory.
+            systemProperty 'boot_optim.bootTrace.path', project.file('run-pack-benchmark/logs/bootoptim-trace.jsonl').absolutePath
             systemProperty 'connector.clean.path', connectorCleanMinecraft.absolutePath
 
             [packBenchmarkBaseJvmArgs, packBenchmarkExtraJvmArgs].each { argsProvider ->
@@ -170,7 +181,8 @@ neoForge {
         "${mod_id}" {
             sourceSet(sourceSets.main)
         }
-        // Keep the early transformation service on a distinct path in dev, mirroring the packaged wrapper.
+        // Keep the early transformation service on one distinct development path, mirroring the packaged wrapper.
+        // Its source-set output already contains the shared trace class compiled from trace-core's single source tree.
         'boot_optim_bootstrap' {
             sourceSet(project(':bootstrap').sourceSets.main)
         }
