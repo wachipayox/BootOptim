@@ -57,18 +57,18 @@ def check(text):
         return {'valid': False, 'issues': issues, 'observations': rows}
     # C1,B1 and B2,C2: two opposite-order contrasts in the same JVM.
     pairs = [(rows[0], rows[1]), (rows[3], rows[2])]
-    deltas = [{k: (b[k] - a[k]) / (1e6 if k.endswith('_ns') else 1)
+    deltas = [{(k[:-3] + '_ms' if k.endswith('_ns') else k): (b[k] - a[k]) / (1e6 if k.endswith('_ns') else 1)
                for k in ('owner_cpu_ns', 'growth_cpu_ns', 'owner_wall_ns', 'growth_calls', 'reload_wall_ns', 'gc_ms', 'heap_used_bytes')}
               for a, b in pairs]
     work_spread = (max(r['previous_unique'] for r in rows) / min(r['previous_unique'] for r in rows)) - 1
     if work_spread > .01:
         return {'valid': False, 'issues': ['Unique quad workload differs by more than 1%'], 'observations': rows}
-    saved = all(d['owner_cpu_ns'] < 0 for d in deltas)
+    saved = all(d['owner_cpu_ms'] < 0 for d in deltas)
     fewer = all(d['growth_calls'] < 0 for d in deltas)
     # Phase result is explicit. Whole-reload and GC are adjacent evidence, not an unrelated noise veto.
     return {'valid': True, 'issues': [], 'observations': rows,
             'candidate_minus_control': deltas,
-            'median_owner_cpu_saved_ms': -statistics.median(d['owner_cpu_ns'] for d in deltas),
+            'median_owner_cpu_saved_ms': -statistics.median(d['owner_cpu_ms'] for d in deltas),
             'segment_verdict': 'retain_segment_mechanism' if saved and fewer else 'retire_segment_mechanism',
             'scope': 'Actual nonoverlapping rehash + clear + trim intervals, one JVM, two controls/two candidates; final promotion also requires semantic and attributable heap/GC checks'}
 

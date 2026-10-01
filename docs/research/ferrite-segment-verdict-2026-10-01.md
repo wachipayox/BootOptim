@@ -1,3 +1,15 @@
+# Final physical disposition supersedes historical pending status below
+
+Persistent empty storage is REJECTED/RETIRED as-is. Authoritative integration
+ledger: [owner-candidate-final-decisions-2026-10-01.md](owner-candidate-final-decisions-2026-10-01.md), PR314.
+Physical campaign completed valid, originals restored, CPU saved218.750/250ms,
+but candidate reload+55.160/+277.010seconds and GC+35.738/+133.467seconds.
+Not proof every global delta is the4MiB table, but indirect physical gate failed.
+#298/#310 closed; no indefinite disabled lane. New bounded late-presizing
+premise stores an integer and allocates only on first insertion; distinct from
+this retired implementation. Parser contrasts now explicitly label ms; raw
+observations remain ns. Eleven parser tests pass and hosted/physical logs
+reprocess valid into separate units-corrected files, preserving original evidence.
 # FerriteCore owner-first verdict — 2026-10-01
 
 Status: **ACTIVE BOUNDED VALIDATION**, not production. Integration base refreshed

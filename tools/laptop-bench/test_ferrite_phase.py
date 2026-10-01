@@ -21,6 +21,14 @@ def fixture(candidate_cpu=0, global_candidate_wall=90000000000):
 
 
 class PhaseTest(unittest.TestCase):
+    def test_explicit_contrast_units_preserve_raw_ns(self):
+        r = check(fixture())
+        self.assertEqual(r['observations'][0]['growth_cpu_ns'], 500000000)
+        d = r['candidate_minus_control'][0]
+        self.assertEqual(d['growth_cpu_ms'], -500)
+        self.assertEqual(d['reload_wall_ms'], 70000)
+        self.assertFalse(any(k.endswith('_ns') for k in d))
+
     def test_owner_first_unrelated_global_noise_not_veto(self):
         r = check(fixture())
         self.assertTrue(r['valid'])
