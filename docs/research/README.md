@@ -39,6 +39,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Game-side lexical prefix IO audit — 2026-10-01](path-prefix-io-audit-2026-10-01.md) — actual directory/ZIP/filter/priority/dynamic-file/closed-pack contracts pass offline; no runtime or performance claim.
+
 - [Generated-item pixel-query reuse rejection — 2026-09-30, closed 2026-10-01](generated-item-pixel-query-followup-2026-09-30.md) — retired: identical topology is insufficient when alpha callbacks change from 12 to 4 and change order; no runtime candidate retained. Reopen only with a changed, proven purity premise.
 
 - [Segment-first binary decision policy — 2026-10-01](segment-first-decision-policy-2026-10-01.md) — current user override: two controls/two candidates, actual optimized-segment evidence first, attributable indirect costs next, then integration or documented removal; no indefinite experimental retention.
