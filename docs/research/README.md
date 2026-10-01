@@ -89,3 +89,5 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 ## Project rule
 
 A large count reduction is not sufficient evidence of startup improvement. BootOptim optimizes time-to-main-menu, so experiments must ultimately be judged by their contribution to the real critical path. CPU work that is cheap per call or hidden under another concurrent gate can be worth documenting without being worth shipping.
+
+- [JEI index edge-promotion audit — 2026-10-02](jei-index-edge-promotion-audit-2026-10-02.md) — rejects skipping repeated eight-edge hash-map clones: exact-binary checker proves changed callback traversal order; no runtime candidate or performance claim.
