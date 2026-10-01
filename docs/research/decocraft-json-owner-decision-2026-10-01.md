@@ -94,6 +94,57 @@ unchanged; the next run enables trials and disables verification.
 
 ## Decision and residual risks
 
+## Timed hosted result and physical dispatch
+
+Exact-pack36918270181 on `b4024d31` passed all nine owner generations and
+eighteen prerequisites, eight primer/observation endpoints, unchanged packs,
+atlas and zero BootOptim Mixin errors. The downloaded console was independently
+rechecked with the strict parser. Raw artifacts:
+`C:/BootOptimBench/analysis-reload-20261001/json-timed-36918270181`.
+
+| Observation | Full task CPU ms | Full task-wall sum ms | Nested open CPU ms | Reload wall ms | GC ms | End used heap bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| C1 | 253.104062 | 1158.517420 | 168.310491 | 29855.905418 | 2114 | 5775597408 |
+| B1 | 134.619029 | 807.313120 | 50.139478 | 28956.819751 | 1967 | 5738249880 |
+| B2 | 127.642759 | 499.814509 | 50.232764 | 28660.870444 | 1947 | 5761258504 |
+| C2 | 254.816562 | 902.031420 | 171.543142 | 28672.152012 | 2099 | 5536147976 |
+
+Full owner CPU saves 118.485033/127.173803 ms (46.81%/49.91%); task-wall
+saves 351.204300/402.216911 ms. Nested open CPU accounts for most of this
+reduction and is NOT added again. Complete reload wall moves -899.085667/
+-11.281568 ms, GC -147/-152 ms, end heap -37347528/+225110528 bytes. This
+does not establish a stable whole-reload saving or a retained-array leak:
+live end-heap snapshots include much more than the 3,129,313 payload bytes.
+
+Model prerequisite wall C1/B1/B2/C2 is 3948.846258/3645.967671/3383.639993/
+3606.377565 ms; states is 792.754810/920.149708/896.153779/813.698897 ms.
+The state future regresses while complete owner CPU improves; future time
+includes other packs, concurrency and unrelated tasks and is not an exclusive
+Decocraft budget. No sum of these futures is interpreted as critical path.
+The first B primer pays one corpus fill: 98.385738 ms CPU/240.591154 ms wall;
+it is explicitly unmeasured conditioning, not a proved initial-startup win.
+
+Physical gate uses the frozen **push-build** artifact from36918264903,
+artifact11190641760, source `b4024d3183d81af35d2acb18e696f73a9c259104`, SHA-256
+`E3FCBEE0D3A7AD770A363A328BD42197E124C827316CEE17B51D5A2A560C1BA1`.
+Bundle is `C:/BootOptimBench/artifacts/decocraft-json-20261001-ready/bundle`.
+The laptop was identity-checked and free of Java/running BootOptim tasks and
+campaign lock before dispatch. Campaign `decocraft-json-20261001` is started
+through `BootOptimSweep-decocraft-json-20261001`, menu-only, Oracle21.0.9
+with the user's unchanged runtime/GC tuning and preserved production switches.
+No worlds or laptop F3+T. The controller performs transactional ownership,
+four-hour owned-JVM timeout, complete rolled-log collection after exit and
+automatic original JAR/config restoration. New controller offline tests pass
+both success and incomplete-run recovery/config/lock cases; the reused prior
+controller fixes retain atomic state writes, normalized owned-process paths,
+and explicit recovery switch binding.
+
+Physical result is pending; do not edit its frozen bundle/JAR/scripts/config
+or read timed logs while the owned JVM lives. Only metadata/status is read
+until completion. Windows per-thread CPU clock quantization must be declared
+when interpreting the full-task sums. Do not promote or retire until those
+strict owner/workload/indirect gates and restoration hashes are reviewed.
+
 Primary decision compares full owner CPU/task-wall in both contrasts, not
 open counts alone. Then inspect model/state prerequisite wall, corpus build,
 retained storage, GC and whole reload for attributable regressions. Hosted
