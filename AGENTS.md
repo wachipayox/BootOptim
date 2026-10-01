@@ -1,5 +1,26 @@
 # BootOptim agent operating guide
 
+## Current user decision policy (2026-10-01)
+
+The user explicitly replaced indefinite default-off retention for optimization
+experiments. Read `docs/research/segment-first-decision-policy-2026-10-01.md`.
+Use two control and two candidate observations, with the same optimized segment
+and equivalent workload. Judge that segment first; inspect other phases when
+the mechanism can affect them indirectly (especially retained heap/GC, I/O,
+callbacks, scheduling or startup versus reload). An unrelated runner-wide
+wall-time shift must not veto a demonstrated segment improvement.
+
+Close each bounded investigation with production integration or rejection and
+removal from the active candidate/test lane. Rejected mechanisms must have a
+durable entry on `agent/integration-current`, including evidence and reopening
+criteria. Do not delete historical evidence. A concrete salvage fix may justify
+a new bounded validation; an experimental switch must not remain indefinitely
+without a decision. Invalid measurements are not proof of a win or of no effect:
+repair the measurement boundary before deciding. Safety and runtime validation
+requirements remain in force. This policy supersedes older instructions to keep
+these undecided mechanisms default-off indefinitely or require a whole-startup
+gain despite a verified CPU saving in their intended segment.
+
 This file is mandatory project context for any AI/automation working on BootOptim. Its purpose is to prevent duplicated research, lost optimizations, accidental work on stale branches, and conclusions based on incomplete repository history.
 
 ## Mandatory first steps before changing code
