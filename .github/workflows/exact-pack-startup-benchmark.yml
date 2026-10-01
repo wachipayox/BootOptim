@@ -390,6 +390,7 @@ jobs:
           path: |
             result.json
             resource-selection-check.json
+            decocraft-json-check.json
             resource-selection-reference.txt
             exact-pack-console.log
             exact-pack-thread-dump.log

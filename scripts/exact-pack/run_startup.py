@@ -184,7 +184,13 @@ def main() -> None:
         if not startup_log.is_file():
             raise SystemExit(f"Exact-pack run reached marker but startup report is missing: {startup_log}")
 
-        latest_text = latest_log.read_text(encoding="utf-8", errors="replace")
+        extra_args = os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "").split()
+        json_trials = "-Dboot_optim.benchmark.decocraftJsonTrials=true" in extra_args
+        json_verify = "-Dboot_optim.experimentDecocraftModelArchiveBatchVerify=true" in extra_args
+        # Finite repeated reloads can roll latest.log. Console is immutable and
+        # complete after exit; never collect/read it during the measured process.
+        measurement_log = console_log if json_trials else latest_log
+        latest_text = measurement_log.read_text(encoding="utf-8", errors="replace")
         mixin_failures = (
             "InvalidInjectionException",
             "Mixin apply for mod boot_optim failed",
@@ -198,18 +204,27 @@ def main() -> None:
                 [sys.executable, "tools/laptop-bench/check_resource_selection.py",
                  "--reference", str(selection_reference),
                  "--options", str(root / "run-pack-benchmark" / "options.txt"),
-                 "--log", str(latest_log)],
+                 "--log", str(measurement_log)],
                 cwd=root, stdout=report, check=False,
             )
         if resource_check.returncode != 0:
             raise SystemExit("Exact-pack resource contract failed; see resource-selection-check.json.")
+
+        if json_trials or json_verify:
+            command = [sys.executable, "tools/laptop-bench/check_decocraft_json_trial.py", str(measurement_log)]
+            if json_verify:
+                command.append("--semantic")
+            with (root / "decocraft-json-check.json").open("w", encoding="utf-8") as report:
+                gate = subprocess.run(command, stdout=report, check=False, cwd=root)
+            if gate.returncode != 0:
+                raise SystemExit("Decocraft JSON owner gate failed; see decocraft-json-check.json.")
 
         summary = subprocess.run(
             [
                 sys.executable,
                 "scripts/exact-pack/summarize_startup.py",
                 "single",
-                "--latest", str(latest_log),
+                "--latest", str(measurement_log),
                 "--startup", str(startup_log),
                 "--variant", args.variant,
                 "--iteration", str(args.iteration),

@@ -29,7 +29,7 @@ $Utf8 = New-Object System.Text.UTF8Encoding($false)
 function Fail([string]$m) { throw "BOOTOPTIM_REMOTE_INVALID: $m" }
 function Full([string]$p) { if ([string]::IsNullOrWhiteSpace($p)) { return $null }; [IO.Path]::GetFullPath($p) }
 function Sha([string]$p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToUpperInvariant() }
-function Save([object]$o,[string]$p) { $d=Split-Path -Parent $p; New-Item -ItemType Directory -Force -Path $d|Out-Null; $t="$p.tmp-$PID"; [IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8); Move-Item -LiteralPath $t -Destination $p -Force }
+function Save([object]$o,[string]$p) { $d=Split-Path -Parent $p; New-Item -ItemType Directory -Force -Path $d|Out-Null; $t="$p.tmp-$PID"; [IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8); if([IO.File]::Exists($p)){[IO.File]::Replace($t,$p,[NullString]::Value)}else{[IO.File]::Move($t,$p)} }
 function Load([string]$p) { if(-not(Test-Path -LiteralPath $p -PathType Leaf)){Fail "missing state $p"}; Get-Content -LiteralPath $p -Raw|ConvertFrom-Json }
 
 function BootOptim-Kind([string]$p) {
@@ -69,7 +69,7 @@ function Prism-Procs([string]$exe) {
 }
 function Target-Java([string]$game,[string]$root) {
     $all=@(Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'")
-    @($all|Where-Object{$c=[string]$_.CommandLine;$c -and (($c.IndexOf($game,[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge0))})
+    @($all|Where-Object{$c=([string]$_.CommandLine).Replace('/','\');$c -and (($c.IndexOf($game.Replace('/','\'),[StringComparison]::OrdinalIgnoreCase)-ge0)-or($c.IndexOf($root.Replace('/','\'),[StringComparison]::OrdinalIgnoreCase)-ge0))})
 }
 
 function Ensure-Wts {
@@ -136,7 +136,7 @@ function Stop-Owned([int]$id,[string]$created,[string]$kind,[object]$st,[switch]
 }
 function Register-BenchTask([object]$st,[string]$stateFile) {
     $invoke="& '"+$st.runner.Replace("'","''")+"' -StateFile '"+$stateFile.Replace("'","''")+"'";$b64=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($invoke));$ps="$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $a=New-ScheduledTaskAction -Execute $ps -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $b64";$pr=New-ScheduledTaskPrincipal -UserId $st.interactiveUser -LogonType Interactive -RunLevel Limited;$set=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Seconds ([int]$st.timeoutSeconds+180))
+    $a=New-ScheduledTaskAction -Execute $ps -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $b64";$pr=New-ScheduledTaskPrincipal -UserId $st.interactiveUser -LogonType Interactive -RunLevel Limited;$set=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Seconds ([int]$st.timeoutSeconds+480))
     Register-ScheduledTask -TaskName $st.taskName -Action $a -Principal $pr -Settings $set -Force|Out-Null
 }
 
@@ -184,7 +184,7 @@ switch($Action){
 }
 {$_ -in @('Postflight','Recover')}{
     $st=Load $stateFile;if([int]$st.schema-ne3){Fail "unsupported transaction schema $($st.schema)"};if($Action-eq'Postflight' -and $st.phase-notin@('finished','invalid')){Fail "Postflight refuses phase $($st.phase)"}
-    Stop-Owned ([int]$st.javaPid) ([string]$st.javaCreationDate) 'Java' $st $ForceStopOwned;Stop-Owned ([int]$st.prismPid) ([string]$st.prismCreationDate) 'Prism' $st $ForceStopOwned
+    Stop-Owned ([int]$st.javaPid) ([string]$st.javaCreationDate) 'Java' $st -force:$ForceStopOwned;Stop-Owned ([int]$st.prismPid) ([string]$st.prismCreationDate) 'Prism' $st -force:$ForceStopOwned
     if(@(Prism-Procs $st.prismExe).Count){Fail 'Prism still running; restoration waits until Prism is fully closed'};if(@(Target-Java $st.gameRoot $st.instanceRoot).Count){Fail 'target Java still running; restoration refuses live files'}
     try{Unregister-ScheduledTask -TaskName $st.taskName -Confirm:$false -ErrorAction SilentlyContinue}catch{}
     if(-not(Test-Path -LiteralPath $st.jarBackup -PathType Leaf) -or (Sha $st.jarBackup)-ne$st.originalJarSha256){Fail 'original JAR backup is missing or changed'}
