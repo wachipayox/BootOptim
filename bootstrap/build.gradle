@@ -12,6 +12,12 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// SERVICE-layer development runs load bootstrap directly from its source-set output rather than
+// from the distributable wrapper JAR. Compile the single shared trace-core source tree into that
+// same output so the class identity is available in the SERVICE module in both environments.
+// trace-core remains its own JDK-only library for the regular mod; there is still one source of truth.
+sourceSets.main.java.srcDir(rootProject.file('trace-core/src/main/java'))
+
 neoForge {
     version = rootProject.neo_version
     addModdingDependenciesTo sourceSets.main
@@ -32,6 +38,8 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.named('jar', Jar).configure {
+    // sourceSets.main already contains the shared trace source, so the normal Jar task emits those
+    // classes directly in the bootstrap module; no second copy step or writer implementation exists.
     manifest {
         attributes(
                 'Automatic-Module-Name': 'dev.wachipayox.bootoptim.bootstrap',
