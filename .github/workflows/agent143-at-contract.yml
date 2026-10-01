@@ -1,0 +1,35 @@
+name: Agent143 AccessTransformers contract
+
+on:
+  push:
+    branches:
+      - agent143/at-incremental-contract-20260913
+    paths:
+      - '.github/workflows/agent143-at-contract.yml'
+      - 'at-incremental-contract/**'
+  pull_request:
+    branches:
+      - agent/integration-current
+    paths:
+      - '.github/workflows/agent143-at-contract.yml'
+      - 'at-incremental-contract/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+      - name: Run AccessTransformers 10.0.1 differential contract
+        run: ./gradlew -p at-incremental-contract test --no-daemon
