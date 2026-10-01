@@ -8,4 +8,30 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
+// Agent146 draft-only experiment: materialize the exact pinned AccessTransformers source
+// candidate before any NeoForge dependency is resolved. This branch never adds a second AT
+// module; every request for the stock coordinate is substituted by the single candidate JAR.
+def agent146Prepare = file('scripts/agent146/prepare_at_runtime.sh')
+if (!agent146Prepare.isFile()) {
+    throw new GradleException("Agent146 AT preparation script is missing: ${agent146Prepare}")
+}
+def agent146Result = providers.exec {
+    commandLine 'bash', agent146Prepare.absolutePath
+}.result.get()
+if (agent146Result.exitValue != 0) {
+    throw new GradleException("Agent146 AT preparation failed with exit ${agent146Result.exitValue}")
+}
+def agent146Repo = file('.agent146-at-runtime/repo')
+
+gradle.beforeProject { p ->
+    p.repositories {
+        maven { url = uri(agent146Repo) }
+    }
+    p.configurations.configureEach {
+        resolutionStrategy.dependencySubstitution {
+            substitute module('net.neoforged:accesstransformers') using module('net.neoforged:accesstransformers:10.0.1-agent146') because 'Agent146 exact-source AT candidate'
+        }
+    }
+}
+
 include 'bootstrap'
