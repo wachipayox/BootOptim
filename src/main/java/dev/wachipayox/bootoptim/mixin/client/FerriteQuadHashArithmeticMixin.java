@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.mixin.client;
 
 import dev.wachipayox.bootoptim.optimization.client.FerriteQuadHashArithmetic;
 import dev.wachipayox.bootoptim.optimization.client.FerriteQuadHashTrial;
+import dev.wachipayox.bootoptim.optimization.client.FerriteHashReplay;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,7 +14,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class FerriteQuadHashArithmeticMixin {
     @Inject(method = "betterIntArrayHash([I)I", at = @At("HEAD"), cancellable = true, require = 0)
     private static void bootoptim$hash(int[] values, CallbackInfoReturnable<Integer> result) {
-        if (!FerriteQuadHashTrial.VERIFY && FerriteQuadHashTrial.eligible(values))
+        FerriteHashReplay.capture(values);
+        if (!FerriteQuadHashTrial.VERIFY && FerriteQuadHashTrial.eligible(values) && FerriteQuadHashTrial.selected())
             result.setReturnValue(FerriteQuadHashArithmetic.hash(values));
     }
 

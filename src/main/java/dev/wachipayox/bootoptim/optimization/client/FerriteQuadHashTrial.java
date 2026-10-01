@@ -9,10 +9,21 @@ public final class FerriteQuadHashTrial {
     public static final boolean REQUESTED = Boolean.getBoolean("boot_optim.ferriteStripedHash");
     public static final boolean VERIFY = Boolean.getBoolean("boot_optim.ferriteStripedHashVerify");
     private static final AtomicLong CHECKS = new AtomicLong();
+    private static final ThreadLocal<Boolean> REPLAY_MODE = new ThreadLocal<>();
     private FerriteQuadHashTrial() {}
 
     public static boolean eligible(int[] values) {
         return REQUESTED && values != null && values.length == 32 && Version.SUPPORTED;
+    }
+
+    public static void selectReplay(Boolean candidate) {
+        if (candidate == null) REPLAY_MODE.remove(); else REPLAY_MODE.set(candidate);
+    }
+
+    public static boolean selected() {
+        if (!FerriteHashReplay.ENABLED) return true;
+        Boolean override = REPLAY_MODE.get();
+        return override == null || override;
     }
 
     public static void verify(int candidate, int original) {

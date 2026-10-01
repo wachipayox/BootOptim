@@ -1,6 +1,6 @@
 # Ferrite quad hash arithmetic — 2026-10-02
 
-Status: **ACTIVE, semantic runtime gate next; no demonstrated game saving**.
+Status: **ACTIVE, hosted semantic gate passed; actual-method replay next; no demonstrated game saving**.
 User selected point 5 of the current planning list (original shortlist point 8).
 Authority refreshed to `agent/integration-current@411e17cbfe4739cdcab14bf14321c7901cb1c775`.
 Isolated branch `codex/ferrite-quad-internals-20261002`. No physical instance,
@@ -100,3 +100,37 @@ separate candidate transcription. This does not prove actual Mixin execution.
 JEI was delegated separately to a native bounded subagent. Its concrete edge-map
 clone-skipping proposal is a semantic NO-GO because callback traversal order
 changes. That evidence lives in the separate JEI audit branch/PR.
+
+## Hosted semantic result and bounded next gate
+
+PR #322 source `8a3fc71c`: Build and absent-mod client startup pass.
+Exact-pack [36928578223](https://github.com/wachipayox/BootOptim/actions/runs/36928578223)
+passes. Raw artifacts `C:/BootOptimBench/analysis-reload-20261002/ferrite-hash-semantic-36928578223`.
+Actual target logs `active version=7.0.3 verify=true`, comparison markers 1 and
+8192 with zero mismatch. Original method remains enabled and every eligible
+RETURN is compared, not only marker calls. Menu reached, zero BootOptim Mixin
+errors; ordered pack selection valid, blocks atlas 8192x8192 levels 2. The
+90,609-ms menu diagnostic observation is NOT a performance comparison.
+
+The bounded next diagnostic adapts existing Sodium owner replay instead of
+creating another per-call profiler. With `boot_optim.ferriteHashReplay=true`
+and verify=false it copies every 2048th eligible actual hash input during the
+first generation, capped at 4096 arrays; no mutable original arrays are retained.
+After successful reload, overlay removal and two stable menu seconds, it invokes
+the **actual transformed private hash method** through one MethodHandle in both
+arms. A thread-local override selects stock/candidate, leaving other threads'
+mode unchanged. Both arms include adapters, injection guards and callbacks.
+
+First compare every captured input through both actual paths, then equal
+alternating warmups, then C1/B1/B2/C2 with approximately 8M calls per block,
+same corpus and checksum. CPU and wall clocks surround blocks, never individual
+hashes. GC totals accompany observations; clear snapshot references and stop
+the diagnostic client in finally. Require >=256 captured arrays, exact supported
+target, four observations, equal calls/checksums and finished marker. Capture,
+cloning, warmup and rendering/startup time are excluded from replay observations.
+
+This is pack-array replay CPU of the transformed hash, not whole deduplication,
+stock world latency, a full hardware population or actual reload critical wall.
+The sparse capture includes growth rehash invocations and is scheduling-dependent;
+do not use the sampled count to infer original call frequency or multiply the
+result into an asserted real-game saving. No actual-owner result exists yet.
