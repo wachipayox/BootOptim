@@ -204,6 +204,18 @@ def main() -> None:
         if resource_check.returncode != 0:
             raise SystemExit("Exact-pack resource contract failed; see resource-selection-check.json.")
 
+        extra_args = os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "").split()
+        json_trials = "-Dboot_optim.benchmark.decocraftJsonTrials=true" in extra_args
+        json_verify = "-Dboot_optim.experimentDecocraftModelArchiveBatchVerify=true" in extra_args
+        if json_trials or json_verify:
+            command = [sys.executable, "tools/laptop-bench/check_decocraft_json_trial.py", str(latest_log)]
+            if json_verify:
+                command.append("--semantic")
+            with (root / "decocraft-json-check.json").open("w", encoding="utf-8") as report:
+                gate = subprocess.run(command, stdout=report, check=False, cwd=root)
+            if gate.returncode != 0:
+                raise SystemExit("Decocraft JSON owner gate failed; see decocraft-json-check.json.")
+
         summary = subprocess.run(
             [
                 sys.executable,

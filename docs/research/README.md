@@ -41,6 +41,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Decocraft full JSON owner decision gate — 2026-10-01](decocraft-json-owner-decision-2026-10-01.md) — current PR285 follow-up: actual read/parse/close CPU, separate nested input cost, finite 2C2B+primers; not production or a claimed win.
+
 - [Game-side lexical prefix IO audit — 2026-10-01](path-prefix-io-audit-2026-10-01.md) — actual directory/ZIP/filter/priority/dynamic-file/closed-pack contracts pass offline; no runtime or performance claim.
 
 - [Generated-item pixel-query reuse rejection — 2026-09-30, closed 2026-10-01](generated-item-pixel-query-followup-2026-09-30.md) — retired: identical topology is insufficient when alpha callbacks change from 12 to 4 and change order; no runtime candidate retained. Reopen only with a changed, proven purity premise.
