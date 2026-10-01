@@ -5,6 +5,7 @@ import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -21,8 +22,6 @@ public final class EarlyStartupProbeService implements ITransformationService {
             || Boolean.getBoolean(BENCHMARK_PROPERTY);
 
     public EarlyStartupProbeService() {
-        // ModLauncher's GAMEDIR is not populated yet while SERVICE implementations are constructed.
-        // Delay every filesystem decision until initialize(IEnvironment), which runs after argument parsing.
         BootOptimRuntimeInfo.version();
         mark("transformation_service_construct");
     }
@@ -66,7 +65,16 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
-        return List.of();
+        // Diagnostic-only. Off/default remains exactly the integration behavior: no transformers.
+        List<ITransformer<?>> diagnostics = new ArrayList<>(3);
+        if (Boolean.getBoolean("boot_optim.modlauncherForkTrace")) {
+            diagnostics.add(new MinecraftBootstrapForkProfileTransformer());
+        }
+        if (Boolean.getBoolean("boot_optim.mixinLifecycleTrace")) {
+            diagnostics.add(new MinecraftMainLifecycleTransformer());
+            diagnostics.add(new MinecraftVersionLifecycleTransformer());
+        }
+        return diagnostics.isEmpty() ? List.of() : List.copyOf(diagnostics);
     }
 
     private static void mark(String phase) {
