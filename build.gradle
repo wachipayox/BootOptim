@@ -18,6 +18,25 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// Build-only audits, never part of the shipped mod.
+sourceSets {
+    phaseAudit {
+        java.srcDir('tools/reload-bench')
+        java.include('MeasuredQuadSetEquivalence.java', 'FerritePresizeEquivalence.java')
+        compileClasspath = sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath = output + compileClasspath
+    }
+}
+['MeasuredQuadSetEquivalence', 'FerritePresizeEquivalence'].each { auditClass ->
+    var audit = tasks.register(auditClass, JavaExec) {
+        dependsOn tasks.named('phaseAuditClasses')
+        classpath = sourceSets.phaseAudit.runtimeClasspath
+        mainClass = auditClass
+        javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    }
+    tasks.named('check').configure { dependsOn audit }
+}
+
 evaluationDependsOn(':bootstrap')
 
 sourceSets.main.resources {

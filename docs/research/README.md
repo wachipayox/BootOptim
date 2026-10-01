@@ -1,6 +1,8 @@
 # BootOptim research ledger
 
 Current binary dispositions: [owner candidate final decisions — 2026-10-01](owner-candidate-final-decisions-2026-10-01.md). This supersedes older default-off/pending-laptop registers for Decocraft V2, layer arithmetic, multipart union and persistent Ferrite empty storage.
+Bounded follow-up: [FerriteCore late presizing](ferrite-late-presize-2026-10-01.md),
+keeping only a count through preparation after retiring persistent empty storage.
 
 This directory is the durable memory for startup-performance research. Its purpose is to prevent the project from repeatedly rediscovering the same bottleneck, optimization idea, or negative result after profiling branches are closed or left unmerged.
 
