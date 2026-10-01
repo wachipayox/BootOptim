@@ -1,6 +1,6 @@
 # FerriteCore late quad presizing
 
-Status: **CLEAN PROMOTION, final runtime/physical gates pending — not integrated**.
+Status: **CLEAN PROMOTION, automated/PC runtime gates passed; physical memory gate pending — not integrated**.
 This is the bounded salvage of the retired persistent-empty-storage #298/#310.
 Do not merge the profiler from #315 or retain an indefinite experimental lane.
 
@@ -49,3 +49,27 @@ Source base refreshed to214293eb600f4a0eefbb68fd74042bac9158b1c2 including
 production Sodium and the final retirement ledger. Prior old-laptop result
 confirms growth CPU matters but does not validate this altered memory lifetime.
 Never send high-volume per-insertion CPU clocks to the laptop as its baseline.
+
+## Clean runtime gates completed (2026-10-01)
+
+Clean source `7ced76e7295714f3fe22f72d61fd552a198a7d8f`: Build
+36883596472/36883606683, absent-mod startup36883606662 and exact-pack
+36883606629 all pass. The hosted one-generation smoke exercises support and
+remember(479905), **not** the subsequent reservation. Resource order/normal
+atlas/zero BootOptim Mixin failures hold.
+
+The user's fast-PC world/F3+T trial exercises the clean stock-set reservation:
+`stage=reserve expected=479042 success=true`, followed by original cleanup.
+Two resource generations, zero resource/BootOptim Mixin failures and normal
+shutdown17:34:21; user reports everything visually correct. Pack/config was
+not edited by this trial; only the owned JAR was removed after close and hash
+verification. Evidence/journal:
+`C:/BootOptimBench/artifacts/ferrite-clean-pc-20261001`.
+This is semantic/runtime evidence, not comparative CPU or reload-wall evidence.
+
+Final bounded gate: physical menu-only C1/B1/B2/C2 with same-mode primers,
+growth/clear/trim clocks only and explicit unmeasured insertion fields.
+This checks the changed allocation lifetime against the preceding low-end
+failure, without millions of per-insertion CPU clock reads. Integrate or
+retire after valid segment/indirect evidence; this draft is not a default-off
+holding pattern.
