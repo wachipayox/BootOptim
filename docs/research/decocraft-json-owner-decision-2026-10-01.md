@@ -76,6 +76,22 @@ owner/trial agreement. Missing CPU support, failed reload, unknown workload
 or duplicate endpoints reject evidence. Pack selection/origin/stale-JVM
 validation remains the existing exact-pack harness's separate gate.
 
+## Current semantic gate
+
+Hosted exact-pack36916914835 on `ed020506` passed, as did both builds and
+the no-Decocraft startup gate. All 10,809 eligible calls matched stock text:
+hits=verified=tasks=opens=10,809, fallback=0, one corpus fill, CPU available,
+two successful prerequisites, original 8192x8192x2 atlas and zero BootOptim
+Mixin errors. The offline semantic validator was rerun against downloaded
+artifacts and passed. This deliberately double-read run is not performance
+evidence (its 89,366 ms menu uptime is not an A/B observation).
+
+Before timed dispatch, collection is hardened to consume the complete console
+after exit for repeated reloads, avoiding `latest.log` rollover. This changes
+only harness/documentation, not any verified runtime blob. The strict result
+JSON is included in hosted artifacts. Runtime mode/property gate remains
+unchanged; the next run enables trials and disables verification.
+
 ## Decision and residual risks
 
 Primary decision compares full owner CPU/task-wall in both contrasts, not
