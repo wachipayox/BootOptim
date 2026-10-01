@@ -389,6 +389,7 @@ jobs:
           name: exact-pack-result-${{ matrix.variant || format('paired-{0}', matrix.pair) }}-${{ matrix.iteration || matrix.pair }}
           path: |
             result.json
+            sodium-replay-result.json
             resource-selection-check.json
             resource-selection-reference.txt
             exact-pack-console.log

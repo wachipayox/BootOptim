@@ -184,6 +184,12 @@ def main() -> None:
         if not startup_log.is_file():
             raise SystemExit(f"Exact-pack run reached marker but startup report is missing: {startup_log}")
 
+        if "-Dboot_optim.benchmark.sodiumPhaseReplay=true" in os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", ""):
+            replay = subprocess.run([sys.executable, "tools/laptop-bench/check_sodium_replay.py",
+                                     str(console_log), "--output", "sodium-replay-result.json"], check=False)
+            if replay.returncode:
+                raise SystemExit("Sodium owner replay failed strict generation/corpus/clock validation")
+
         latest_text = latest_log.read_text(encoding="utf-8", errors="replace")
         mixin_failures = (
             "InvalidInjectionException",
