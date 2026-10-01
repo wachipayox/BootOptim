@@ -68,4 +68,45 @@ or whole-load clocks are not relabeled as exclusive owner evidence. Preserve
 the existing completed artifacts, then integrate or remove each active lane
 under #307; do not repeat the interrupted broad 21-step laptop suite.
 
-No new performance result is claimed until the actual pack trial completes.
+## Completed actual-owner hosted comparison
+
+[Run 36838525543](https://github.com/wachipayox/BootOptim/actions/runs/36838525543)
+on source `ef149f041fc8a28faeb29ef4954a8212d0704bf1` passed Build, minimal
+startup, strict owner endpoint/capacity/clock checks, all nine resource generations
+and unchanged pack selection. Measurements below exclude primers and startup.
+
+| Observation | Growth calls | Growth CPU ms | Clear + trim CPU ms | Net owner CPU ms | Reload wall ms | GC ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| C1 | 19 | 175.703 | 1.097 | 176.800 | 27783.742 | 1877 |
+| B1 | 0 | 0 | 1.054 | 1.054 | 26533.910 | 1836 |
+| B2 | 0 | 0 | 1.049 | 1.049 | 26149.267 | 1754 |
+| C2 | 19 | 138.561 | 1.057 | 139.618 | 26995.053 | 2077 |
+
+Net owner CPU saved **175.746 / 138.570 ms**, midpoint 157.158 ms, in the two
+opposite-order contrasts. Actual unique inputs 479823–479905 (0.0171% spread).
+All four candidate transitions retained 1048576 empty slots; controls trimmed
+to one. Thus this mechanism demonstrably removes growth CPU in its actual game
+segment even though it fell below the old whole-bake 200 ms screening floor.
+Current explicit user policy allows this verified CPU removal to be retained.
+
+Full-reload contrasts −1249.832/−845.785 ms and GC −41/−323 ms are adjacent
+observations, not all attributable to the table. End-of-reload heap contrasts
+were +217015016 / −136942576 bytes; these opposite signs are not a proof of a
+retained-heap leak. The exact candidate owns one empty 1048577-slot reference
+array (about 4 MiB with compressed references), cleared every generation.
+Inspect physical memory behavior before final production promotion; do not
+claim the entire global delta as FerriteCore time saved.
+
+**Segment disposition: retain.** Next bounded gate is physical owner/GC comparison
+using the same frozen hosted-validated artifact, then a clean uninstrumented
+production implementation with its safety catalog. No indefinite disabled
+experiment is intended. Other candidate mechanisms remain separate decisions.
+
+Artifacts: `C:/BootOptimBench/analysis-reload-20261001/ferrite-phase-36838525543`.
+The physical controller now has an explicit `ferrite-phase` mode and Java-version
+parameter (preserve the actual laptop's 21.0.9; no silent migration). It captures
+rotated dated logs after owned JVM exit, excludes duplicate debug and stale
+archives, checks exact lifecycle boundaries and restores original JAR/config.
+Eight PS5 controller success/failure fixtures, rolled-log ordering/filter test,
+path guards and 100-write atomic-state tests pass locally. These are controller
+tests, not physical performance evidence.
