@@ -18,6 +18,23 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+sourceSets {
+    ownerAudit {
+        java.srcDir('tools/reload-bench')
+        java.include('OwnerScopeEquivalence.java')
+        compileClasspath = sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath = output + compileClasspath
+    }
+}
+var ownerScopeEquivalence = tasks.register('ownerScopeEquivalence', JavaExec) {
+    dependsOn tasks.named('ownerAuditClasses')
+    classpath = sourceSets.ownerAudit.runtimeClasspath
+    mainClass = 'OwnerScopeEquivalence'
+    systemProperty 'boot_optim.benchmark.segmentOwnerTrials', 'true'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check').configure { dependsOn ownerScopeEquivalence }
+
 evaluationDependsOn(':bootstrap')
 
 sourceSets.main.resources {

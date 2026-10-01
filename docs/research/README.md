@@ -37,6 +37,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Remaining Decocraft/layer/multipart owner decisions — 2026-10-01](remaining-owner-verdicts-2026-10-01.md) — bounded two-control/two-candidate actual containing-method CPU scopes, separate primers, no whole-bake attribution or indefinite flags.
+
 - [Generated-item pixel-query reuse rejection — 2026-09-30, closed 2026-10-01](generated-item-pixel-query-followup-2026-09-30.md) — retired: identical topology is insufficient when alpha callbacks change from 12 to 4 and change order; no runtime candidate retained. Reopen only with a changed, proven purity premise.
 
 - [Segment-first binary decision policy — 2026-10-01](segment-first-decision-policy-2026-10-01.md) — current user override: two controls/two candidates, actual optimized-segment evidence first, attributable indirect costs next, then integration or documented removal; no indefinite experimental retention.

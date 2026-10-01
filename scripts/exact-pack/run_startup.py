@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import http.server
+import json
 import os
 import signal
 import subprocess
@@ -185,12 +186,18 @@ def main() -> None:
             raise SystemExit(f"Exact-pack run reached marker but startup report is missing: {startup_log}")
 
         latest_text = latest_log.read_text(encoding="utf-8", errors="replace")
+        owner_mode = '-Dboot_optim.benchmark.segmentOwnerTrials=true' in os.environ.get('BOOTOPTIM_PACK_EXTRA_JVM_ARGS', '')
+        if owner_mode:
+            owner_check = subprocess.run([sys.executable, 'tools/laptop-bench/check_owner_trials.py',
+                str(console_log), '--output', str(root / 'owner-trial-result.json')], cwd=root, check=False)
+            if owner_check.returncode != 0:
+                raise SystemExit('Invalid owner trial; see owner-trial-result.json')
         mixin_failures = (
             "InvalidInjectionException",
             "Mixin apply for mod boot_optim failed",
             "Mixin prepare for mod boot_optim failed",
         )
-        if any(pattern in latest_text for pattern in mixin_failures):
+        if any(pattern in (console_text if owner_mode else latest_text) for pattern in mixin_failures):
             raise SystemExit("BootOptim Mixin failure detected in exact-pack latest.log.")
 
         with selection_report.open("w", encoding="utf-8") as report:
@@ -198,7 +205,7 @@ def main() -> None:
                 [sys.executable, "tools/laptop-bench/check_resource_selection.py",
                  "--reference", str(selection_reference),
                  "--options", str(root / "run-pack-benchmark" / "options.txt"),
-                 "--log", str(latest_log)],
+                 "--log", str(console_log if owner_mode else latest_log)],
                 cwd=root, stdout=report, check=False,
             )
         if resource_check.returncode != 0:
@@ -209,7 +216,7 @@ def main() -> None:
                 sys.executable,
                 "scripts/exact-pack/summarize_startup.py",
                 "single",
-                "--latest", str(latest_log),
+                "--latest", str(console_log if owner_mode else latest_log),
                 "--startup", str(startup_log),
                 "--variant", args.variant,
                 "--iteration", str(args.iteration),
@@ -220,6 +227,11 @@ def main() -> None:
         )
         if summary.returncode != 0:
             raise SystemExit(f"Exact-pack summarizer failed with exit {summary.returncode}")
+        if owner_mode:
+            data = json.loads(result_json.read_text(encoding='utf-8'))
+            data['measurement_mode'] = 'diagnostic_owner_scopes'
+            data['startup_performance_evidence'] = False
+            result_json.write_text(json.dumps(data, indent=2), encoding='utf-8')
     finally:
         if process is not None:
             terminate_tree(process)
