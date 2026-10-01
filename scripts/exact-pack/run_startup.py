@@ -9,6 +9,7 @@ import threading
 from pathlib import Path
 
 MARKER = "BOOTOPTIM_STARTUP phase=main_menu"
+CONNECTOR_WARM_FLAG = "-Dboot_optim.profileConnectorWarm=true"
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -60,17 +61,10 @@ def capture_thread_dump(path: Path) -> None:
     except Exception as exc:
         path.write_text(f"jps failed: {exc}\n", encoding="utf-8")
         return
-
     for pid in pids:
         lines.append(f"===== JVM {pid} =====\n")
         try:
-            dump = subprocess.run(
-                ["jcmd", pid, "Thread.print"],
-                capture_output=True,
-                text=True,
-                timeout=15,
-                check=False,
-            )
+            dump = subprocess.run(["jcmd", pid, "Thread.print"], capture_output=True, text=True, timeout=15, check=False)
             lines.append(dump.stdout)
             if dump.stderr:
                 lines.append(dump.stderr)
@@ -86,14 +80,6 @@ def tail(path: Path, count: int = 250) -> str:
 
 
 def wait_for_process(process: subprocess.Popen, timeout_seconds: int) -> tuple[bool, str]:
-    """Wait without touching benchmark logs while the timed process is alive.
-
-    The pack benchmark enables ``exitOnTitle`` in the Gradle run configuration,
-    so process termination is the live synchronization point. Reading the
-    console once per second would add filesystem observer noise to the very
-    storage/cache behavior the benchmark is meant to measure. Endpoint and
-    marker validation happens only after this function returns.
-    """
     try:
         process.wait(timeout=timeout_seconds)
         return True, f"process_exit_{process.returncode}"
@@ -101,16 +87,26 @@ def wait_for_process(process: subprocess.Popen, timeout_seconds: int) -> tuple[b
         return False, "timeout"
 
 
+def maybe_run_connector_warm_profile() -> bool:
+    extra = os.environ.get("BOOTOPTIM_PACK_EXTRA_JVM_ARGS", "")
+    if CONNECTOR_WARM_FLAG not in extra:
+        return False
+    script = Path(__file__).with_name("run_connector_warm_profile.py")
+    completed = subprocess.run([sys.executable, str(script), *sys.argv[1:]], cwd=Path.cwd(), check=False)
+    if completed.returncode != 0:
+        raise SystemExit(completed.returncode)
+    return True
+
+
 def main() -> None:
+    if maybe_run_connector_warm_profile():
+        return
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--variant", required=True)
     parser.add_argument("--iteration", required=True, type=int)
     parser.add_argument("--timeout", type=int, default=1200)
-    parser.add_argument(
-        "--rerun-tasks",
-        action="store_true",
-        help="Force Gradle's pack preparation task to run again; useful for same-VM paired diagnostics.",
-    )
+    parser.add_argument("--rerun-tasks", action="store_true")
     args = parser.parse_args()
 
     root = Path.cwd()
@@ -124,8 +120,6 @@ def main() -> None:
     for path in (console_log, thread_dump, result_json, selection_report, selection_reference):
         path.unlink(missing_ok=True)
 
-    # Snapshot the fixture contract before launch; never derive expectations from
-    # options that Minecraft may have rewritten after a failed resource reload.
     fixture_root = os.environ.get("BOOTOPTIM_PACK_DIR", "").strip()
     if not fixture_root:
         raise SystemExit("BOOTOPTIM_PACK_DIR is required for resource contract validation.")
@@ -139,17 +133,9 @@ def main() -> None:
         command = [gradle, "runPackBenchmarkClient", "--no-daemon", "--console=plain"]
         if args.rerun_tasks:
             command.append("--rerun-tasks")
-        print(
-            f"Launching exact-pack benchmark variant={args.variant} iteration={args.iteration} "
-            f"timeout={args.timeout}s",
-            flush=True,
-        )
+        print(f"Launching exact-pack benchmark variant={args.variant} iteration={args.iteration} timeout={args.timeout}s", flush=True)
         with console_log.open("w", encoding="utf-8", errors="replace") as output:
-            kwargs = {
-                "stdout": output,
-                "stderr": subprocess.STDOUT,
-                "cwd": root,
-            }
+            kwargs = {"stdout": output, "stderr": subprocess.STDOUT, "cwd": root}
             if os.name == "nt":
                 kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
             else:
@@ -162,62 +148,34 @@ def main() -> None:
             if process is not None:
                 terminate_tree(process)
             print(tail(console_log), file=sys.stderr)
-            raise SystemExit(
-                f"Exact-pack benchmark did not reach the main-menu marker within {args.timeout} seconds."
-            )
+            raise SystemExit(f"Exact-pack benchmark did not reach the main-menu marker within {args.timeout} seconds.")
 
-        # This is the first console read. The process is already gone, so this
-        # validation cannot perturb the measured startup interval.
         console_text = console_log.read_text(encoding="utf-8", errors="replace")
         if MARKER not in console_text:
             print(tail(console_log), file=sys.stderr)
-            raise SystemExit(
-                f"Exact-pack benchmark exited without the main-menu marker ({reason})."
-            )
-
-        # The process has exited, so log collection and endpoint validation are
-        # now safe. Do not infer success from process exit alone: the summary
-        # and resource-contract checks below remain authoritative.
-
+            raise SystemExit(f"Exact-pack benchmark exited without the main-menu marker ({reason}).")
         if not latest_log.is_file():
             raise SystemExit(f"Exact-pack run reached marker but latest.log is missing: {latest_log}")
         if not startup_log.is_file():
             raise SystemExit(f"Exact-pack run reached marker but startup report is missing: {startup_log}")
 
         latest_text = latest_log.read_text(encoding="utf-8", errors="replace")
-        mixin_failures = (
-            "InvalidInjectionException",
-            "Mixin apply for mod boot_optim failed",
-            "Mixin prepare for mod boot_optim failed",
-        )
+        mixin_failures = ("InvalidInjectionException", "Mixin apply for mod boot_optim failed", "Mixin prepare for mod boot_optim failed")
         if any(pattern in latest_text for pattern in mixin_failures):
             raise SystemExit("BootOptim Mixin failure detected in exact-pack latest.log.")
 
         with selection_report.open("w", encoding="utf-8") as report:
-            resource_check = subprocess.run(
-                [sys.executable, "tools/laptop-bench/check_resource_selection.py",
-                 "--reference", str(selection_reference),
-                 "--options", str(root / "run-pack-benchmark" / "options.txt"),
-                 "--log", str(latest_log)],
-                cwd=root, stdout=report, check=False,
-            )
+            resource_check = subprocess.run([
+                sys.executable, "tools/laptop-bench/check_resource_selection.py",
+                "--reference", str(selection_reference), "--options", str(root / "run-pack-benchmark" / "options.txt"),
+                "--log", str(latest_log)], cwd=root, stdout=report, check=False)
         if resource_check.returncode != 0:
             raise SystemExit("Exact-pack resource contract failed; see resource-selection-check.json.")
 
-        summary = subprocess.run(
-            [
-                sys.executable,
-                "scripts/exact-pack/summarize_startup.py",
-                "single",
-                "--latest", str(latest_log),
-                "--startup", str(startup_log),
-                "--variant", args.variant,
-                "--iteration", str(args.iteration),
-                "--output", str(result_json),
-            ],
-            cwd=root,
-            check=False,
-        )
+        summary = subprocess.run([
+            sys.executable, "scripts/exact-pack/summarize_startup.py", "single",
+            "--latest", str(latest_log), "--startup", str(startup_log), "--variant", args.variant,
+            "--iteration", str(args.iteration), "--output", str(result_json)], cwd=root, check=False)
         if summary.returncode != 0:
             raise SystemExit(f"Exact-pack summarizer failed with exit {summary.returncode}")
     finally:
