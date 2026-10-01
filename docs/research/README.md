@@ -38,6 +38,7 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 ## Research index
 
 - [FerriteCore actual-segment verdict — 2026-10-01](ferrite-segment-verdict-2026-10-01.md) — bounded two-control/two-candidate exact rehash/clear/trim clocks, retained-state primers, indirect heap/GC checks; supersedes whole-bake inference.
+- [Segment-first binary decision policy — 2026-10-01](segment-first-decision-policy-2026-10-01.md) — current user override: two controls/two candidates, actual optimized-segment evidence first, attributable indirect costs next, then integration or documented removal; no indefinite experimental retention.
 
 - [MCEF screen-transition sleep during first-consumer deferral — 2026-09-28](mcef-screen-transition-sleep-2026-09-28.md) — exact-pack fast-PC watchdog attributes repeated ~1-second menu navigation gaps to MCEF's delayed automatic initializer while BootOptim keeps CEF deferred; scoped skip passed hosted startup and physical menu/world validation.
 
