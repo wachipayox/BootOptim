@@ -1,6 +1,6 @@
 # Ferrite quad hash arithmetic — 2026-10-02
 
-Status: **ACTIVE, hosted semantic gate passed; actual-method replay next; no demonstrated game saving**.
+Status: **RETIRED after valid actual-method replay; no demonstrated game saving**.
 User selected point 5 of the current planning list (original shortlist point 8).
 Authority refreshed to `agent/integration-current@411e17cbfe4739cdcab14bf14321c7901cb1c775`.
 Isolated branch `codex/ferrite-quad-internals-20261002`. No physical instance,
@@ -152,3 +152,39 @@ The replay's finally owns stop after either four observations or explicit failur
 Add initial observe/completion markers to distinguish shutdown from missing
 reload endpoint. Normal launches and other benchmark auto-exit remain unchanged.
 Do not count the generic green status or86.935s startup as a performance vote.
+
+## Final bounded decision — 2026-10-02
+
+Repaired source f7f0dc71, exact-pack36930925715, Build and absent-mod startup
+pass. Strict replay checker accepts all markers, four observations and equal
+7,999,800 calls/checksum7634933463799225984. Both actual transformed arms use
+the same sampled pack-array snapshot, adapters and guards; GC total remains
+5174ms throughout the four blocks. CPU block origin/return as defined above.
+
+| Observation | Actual hash replay CPU ms | Block wall ms |
+| --- | ---: | ---: |
+| C1 | 414.154628 | 414.161628 |
+| B1 | 413.023753 | 413.019744 |
+| B2 | 422.587228 | 422.575510 |
+| C2 | 415.360182 | 415.360129 |
+
+Opposite-order CPU savings are +1.130875/-7.227046ms; wall likewise
++1.141884/-7.215381ms. **Retire this four-accumulator runtime variant** under
+the user-defined two-control/two-candidate segment-first policy. No consistent
+owner improvement and no physical campaign/promotion warranted. The previously
+passed semantic gate remains valid; retirement is economic, not a claim of
+wrong hashes or zero possible benefit on every processor. No seconds-scale
+reload saving follows from this replay. Do not keep an indefinite disabled mod
+option or repeat this same premise. Keep offline checker, commit history and
+raw artifacts in analysis-reload-20261002/ferrite-hash-replay-36930925715.
+
+All trial/replay runtime classes, Mixin registration and auto-exit modifications
+are removed from the branch's final tree. The pure arithmetic helper is now
+only `tools/reload-bench/FerriteQuadHashArithmetic.java`, for reproducible offline
+checks; it is not packaged. The original experiment remains in commit history.
+
+Reopen only with a different proven operation reduction or a demonstrated flaw
+in the valid replay protocol, not favorable synthetic numbers. Existing
+production Sodium/Decocraft/indexed changes and retired Ferrite storage verdicts
+remain unchanged. The user requested results/direction and no new front;
+no new campaign or runtime candidate was started after this result.

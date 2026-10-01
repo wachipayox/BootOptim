@@ -1,6 +1,6 @@
 # BootOptim research ledger
 
-- [Ferrite exact quad-hash arithmetic — 2026-10-02](ferrite-quad-hash-arithmetic-2026-10-02.md) — active isolated semantic trial; no storage change or demonstrated game saving, no production promotion.
+- [Ferrite exact quad-hash arithmetic — 2026-10-02](ferrite-quad-hash-arithmetic-2026-10-02.md) — retired after actual-method C/B/B/C replay; inconsistent CPU benefit, runtime candidate removed, offline evidence retained.
 
 Final Ferrite late-presize decision: [retired after physical gate — 2026-10-01](ferrite-presize-final-decision-2026-10-01.md). This supersedes the earlier hosted segment-retain/pending-promotion status; no active Ferrite candidate remains.
 

@@ -27,8 +27,7 @@ public final class ClientStartupHooks {
             return;
         }
 
-        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()
-                && !dev.wachipayox.bootoptim.optimization.client.FerriteHashReplay.ENABLED) {
+        if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
             Minecraft.getInstance().stop();
         }
     }
