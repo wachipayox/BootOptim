@@ -21,8 +21,6 @@ public final class EarlyStartupProbeService implements ITransformationService {
             || Boolean.getBoolean(BENCHMARK_PROPERTY);
 
     public EarlyStartupProbeService() {
-        // ModLauncher's GAMEDIR is not populated yet while SERVICE implementations are constructed.
-        // Delay every filesystem decision until initialize(IEnvironment), which runs after argument parsing.
         BootOptimRuntimeInfo.version();
         mark("transformation_service_construct");
     }
@@ -66,6 +64,10 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
     @Override
     public List<? extends ITransformer<?>> transformers() {
+        // Agent 94 diagnostic only. Off/default remains exactly the integration behavior: no transformers.
+        if (Boolean.getBoolean("boot_optim.modlauncherForkTrace")) {
+            return List.of(new MinecraftBootstrapForkProfileTransformer());
+        }
         return List.of();
     }
 
