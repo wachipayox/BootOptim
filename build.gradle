@@ -35,6 +35,7 @@ var externalPackDirectory = providers.gradleProperty('bootoptimPackDir')
 var packBenchmarkJavaVersion = providers.environmentVariable('BOOTOPTIM_PACK_JAVA_VERSION')
 var packBenchmarkBaseJvmArgs = providers.environmentVariable('BOOTOPTIM_PACK_BASE_JVM_ARGS')
 var packBenchmarkExtraJvmArgs = providers.environmentVariable('BOOTOPTIM_PACK_EXTRA_JVM_ARGS')
+var allPacketsAgentJar = project.file('all-packets-agent/build/libs/bootoptim-all-packets-agent.jar')
 var connectorCleanMinecraft = project.file('build/createCleanArtifact/minecraft-renamed.jar')
 
 // IntelliJ launches the root project but MOD_CLASSES also points at the bootstrap subproject outputs.
@@ -134,6 +135,9 @@ neoForge {
                             .each { jvmArgument it }
                 }
             }
+
+            // Diagnostic branch only: observe exact Create 6.0.10 AllPackets without changing its calls.
+            jvmArgument "-javaagent:${allPacketsAgentJar.absolutePath}"
         }
 
         server {
@@ -179,6 +183,7 @@ neoForge {
 
 tasks.named('runPackBenchmarkClient').configure {
     dependsOn preparePackBenchmark
+    dependsOn ':all-packets-agent:jar'
 
     if (packBenchmarkJavaVersion.isPresent()) {
         var requestedJavaVersion = Integer.parseInt(packBenchmarkJavaVersion.get())
