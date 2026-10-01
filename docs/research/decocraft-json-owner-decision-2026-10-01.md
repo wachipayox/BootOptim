@@ -158,3 +158,52 @@ active candidate and record the binary decision on integration. Do not
 leave an unspecified default-off option or repeatedly run the old confounded
 experiment. Existing Sodium, quarter-turn, direct generated-item and indexed
 variant production changes remain untouched.
+# Physical final evidence — 2026-10-02
+
+Campaign decocraft-json-20261001 finished successfully at2026-10-01T22:01:17Z
+and was collected only after owned process exit. Strict JSON-owner parser and
+ordered-resource check both accept nine generations/four measured observations,
+stock initial and four separate same-mode primers. Frozen b4024d31 remains
+the timed source, not later documentation/controller commits. Physical laptop,
+Oracle21.0.9, configured6G/user tuning, menu-only. Origin is stock
+reloadResourcePacks request to returned-future completion; task CPU and summed
+task wall are separate from that critical-path interval. Raw evidence:
+`C:/BootOptimBench/artifacts/decocraft-json-20261001-ready/results`.
+
+| Observation | Full read/parse/close task CPU ms | Summed task wall ms | Whole reload ms | GC ms |
+| --- | ---: | ---: | ---: | ---: |
+| C1 | 1375.000 | 53704.6777 | 539435.5509 | 184228 |
+| B1 | 421.875 | 613.8284 | 550999.0167 | 186727 |
+| B2 | 421.875 | 582.5781 | 391311.3377 | 61016 |
+| C2 | 1500.000 | 57981.8927 | 391118.4186 | 54405 |
+
+Every observation has10809tasks/opens. Both candidates hit10809 batch inputs,
+retain3129313encoded payload bytes (not total heap cost), and perform no fill
+inside the measured observation. Primers/cold fill are not counted as savings.
+Actual task CPU saves953.125/1078.125ms (~69.3/71.9%); Windows resolution15.625ms.
+Nested open CPU saves906.25/968.75ms and MUST NOT be added again. Task-wall sum
+saves53.091/57.399seconds, but concurrent/waiting task sums are NOT seconds
+removed from the game critical path. Whole reload instead is+11.563466/+0.192919s;
+GC+2499/+6611ms, endheap-702356968/+140985904bytes. These do not establish total
+startup/F3+T improvement or causal attribution of all global drift to this cache.
+
+Disposition: **retain the guarded exact-input batching mechanism for a clean
+production promotion on demonstrated CPU removal**, with the explicit limitation
+that current tests do not prove faster end-to-end loading. Hosted full-task CPU
+already saved118.485/127.174ms, coherently confirmed here on physical hardware.
+Unlike retired capacity retention, this evidence attacks current repeated input
+reads with a small bounded payload and does not justify a global table policy.
+This is a deliberate CPU-retention product decision, NOT a claim that existing
+diagnostic code is integrated or that all performance gates can be skipped.
+
+No production merge yet: strip diagnostic instrumentation/controller/replay code,
+preserve exact archive/source-root guards, stock parser/callbacks and fail-open,
+then package/absent-mod startup/hosted semantic gate on the clean artifact.
+No new physical run is requested here and the user explicitly asked not to
+start another optimization front. Original JAR/config transaction reports
+restored; independent current remote hashes on collection exactly match original
+cfgA9744BF7A4C5660F6B58A6FE1FE9309A91ECACC2AC2189BF099DD2A145AA1ECC and
+JAR379BC509EFD43A0D2EDF7CFB6BC1E2F99DD1601B3D8E3AB43B00C70F6DEA4989.
+All earlier "physical pending" paragraphs below are historical, superseded
+by this final completed gate and clean-promotion disposition.
+
