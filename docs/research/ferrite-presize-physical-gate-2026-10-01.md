@@ -60,3 +60,34 @@ then physical menu-only comparison if the laptop is free. Freeze tested **push**
 artifact, not PR merge artifact. Integrate clean#316 or retire with evidence on
 integration; invalid measurement must first be repaired. No physical dispatch
 as of this entry. Diagnostic code will not ship.
+
+## Hosted sparse adapter result and physical dispatch
+
+[Run36887635648](https://github.com/wachipayox/BootOptim/actions/runs/36887635648)
+passes on9372b1f68861e93928505266da43d1abbc116f89; Build, absent-mod startup
+and tooling also pass. Strict parser validates9generations/4observations,
+timing_scope=growth_cleanup,1,250,596insertions each, unique479823..479905,
+one empty slot in both arms, growth19/1/1/19 and explicit insertion clocks=-1.
+Resource selection unchanged,8192x8192x2atlas,0BootOptim Mixin failures.
+
+| Observation | Growth+cleanup CPU ms | Reload wall ms | GC ms | End heap bytes |
+| --- | ---: | ---: | ---: | ---: |
+| C1 | 179.498879 | 28209.349086 | 1839 | 5354970016 |
+| B1 | 1.512000 | 27891.491424 | 1970 | 6003301384 |
+| B2 | 1.462714 | 27183.957792 | 1939 | 5709067344 |
+| C2 | 169.748619 | 27481.413845 | 1895 | 5905532840 |
+
+CPU savings177.986879/168.285905ms; these do not measure whole insertion or
+replace#315's guard-inclusive owner result. Adjacent wall−317.857662/
+−297.456053ms, GC+131/+44ms, heap+648331368/−196465496bytes. No causal
+attribution of all global delta. Raw evidence:
+`C:/BootOptimBench/analysis-reload-20261001/ferrite-sparse-36887635648`.
+
+Physical preflight found expected DESKTOP-8D4B389, no Java, no running benchmark
+task and no instance lock. Fresh campaignferrite-presize-20261001 dispatched
+with frozen PUSH Build36887626259 artifact11175109053, SHA256
+F1B1A3805091F2DEE8A18106FE9979217B11569E142735359FED5E85002AB29D.
+Bundle: `C:/BootOptimBench/artifacts/ferrite-presize-20261001-ready`.
+Remote task: BootOptimSweep-ferrite-presize-20261001. This supersedes the
+preceding no-dispatch pointer; physical result still pending. Do not mutate the
+frozen bundle/instance during this campaign or collect timed logs before exit.
