@@ -39,4 +39,37 @@ are math only, so a whole-startup delta is not the primary gate.
 `check_sodium_replay.py` rejects wrong process/order, missing/malformed clocks,
 corpus changes, mismatch checksums, absent activation and extra resource reloads.
 Hosted validation uses full console after process exit. No laptop or PC instance
-was staged by this probe. No new performance result until runtime completes.
+was staged by this probe. No startup/full-reload performance result is claimed.
+
+## Completed hosted actual-owner result
+
+[Exact-pack run 36841073385](https://github.com/wachipayox/BootOptim/actions/runs/36841073385)
+passed on source `b0160453606c0cbeb97c56dae9592e5972d7563e`, as did package
+and minimal-startup CI. The initial generation made 6283708 eligible calls;
+the replay used 3069 real references/original directions with stock/candidate
+flags equal before timing. Each measured block made exactly 7997814 calls and
+returned checksum 21903430. No resource fallback or additional generation.
+
+| Block | CPU ms | Elapsed ms | Cumulative GC ms |
+| --- | ---: | ---: | ---: |
+| C1 | 422.178 | 422.169 | 4511 |
+| B1 | 360.310 | 360.344 | 4511 |
+| B2 | 359.052 | 359.053 | 4511 |
+| C2 | 421.993 | 421.998 | 4511 |
+
+Both opposite-order contrasts save **61.868 / 62.940 ms CPU** (14.65% / 14.92%)
+for the same warmed actual-owner workload. GC did not occur during these blocks.
+The replay is evidence of lower classifier cost, not a measurement of actual
+reload wall saved, cold JIT cost or a promise to shorten reload by this amount.
+Other model owners and startup capture cannot be added to these savings.
+
+**Segment disposition: retain.** Prepare a clean production change with the
+unchanged compatibility/read-order guards; neither capture nor replay nor trial
+masks may be shipped. Complete uninstrumented startup/pack/visual validation.
+This bounded promotion replaces the historical indefinite default-off posture
+of #299/#300 under policy #307; it does not merge the diagnostic branch.
+
+Artifacts: `C:/BootOptimBench/analysis-reload-20261001/sodium-owner-36841073385`.
+The checker originally divided nanoseconds into milliseconds but left `_ns`
+suffixes on contrast keys. Corrected to `cpu_ms`/`wall_ms`; raw observations
+retain actual `_ns`. This changes units labeling only, not the numerical verdict.

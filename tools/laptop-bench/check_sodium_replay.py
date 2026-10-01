@@ -39,10 +39,10 @@ def check(text):
     if issues:
         return {'valid': False, 'issues': issues, 'observations': rows}
     pairs = [(rows[0], rows[1]), (rows[3], rows[2])]
-    deltas = [{k: (b[k]-a[k]) / (1e6 if k.endswith('_ns') else 1)
+    deltas = [{k.replace('_ns', '_ms'): (b[k]-a[k]) / (1e6 if k.endswith('_ns') else 1)
                for k in ('cpu_ns', 'wall_ns', 'gc_total_ms')} for a, b in pairs]
     # Clock/read/write overhead and warmup are equal; warmed method block only, not reload wall.
-    saving = all(d['cpu_ns'] < 0 for d in deltas)
+    saving = all(d['cpu_ms'] < 0 for d in deltas)
     return {'valid': True, 'issues': [], 'observations': rows, 'candidate_minus_control': deltas,
             'segment_verdict': 'retain_segment_mechanism' if saving else 'retire_segment_mechanism',
             'scope': 'Actual transformed getQuadFlags and candidate guard, identical real-pack corpus replay; excludes initial capture, other bake owners and real reload scheduling'}

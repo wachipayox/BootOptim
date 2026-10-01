@@ -21,6 +21,12 @@ class ReplayTest(unittest.TestCase):
     def test_retire(self):
         self.assertEqual(check(fixture(500000000))['segment_verdict'], 'retire_segment_mechanism')
 
+    def test_explicit_contrast_units(self):
+        result = check(fixture())
+        self.assertEqual(result['observations'][0]['cpu_ns'], 400000000)
+        for contrast in result['candidate_minus_control']:
+            self.assertEqual(contrast, {'cpu_ms': -100.0, 'wall_ms': 0.0, 'gc_total_ms': 0.0})
+
     def test_changed_flags(self):
         self.assertFalse(check(fixture().replace('checksum=999', 'checksum=888', 1))['valid'])
 
