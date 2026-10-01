@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'tools/laptop-bench/remote_laptop_*.ps1'
+      - 'tools/laptop-bench/p02_correlate.py'
       - '.github/workflows/remote-laptop-tooling.yml'
 
 permissions:
@@ -20,7 +21,9 @@ jobs:
           $failed = $false
           foreach ($path in @(
             'tools/laptop-bench/remote_laptop_transaction.ps1',
-            'tools/laptop-bench/remote_laptop_interactive_run.ps1'
+            'tools/laptop-bench/remote_laptop_interactive_run.ps1',
+            'tools/laptop-bench/remote_laptop_host_trace.ps1',
+            'tools/laptop-bench/remote_laptop_p02_probe.ps1'
           )) {
             $tokens = $null
             $errors = $null
@@ -36,3 +39,6 @@ jobs:
             }
           }
           if ($failed) { throw 'Remote laptop PowerShell syntax validation failed' }
+      - name: Compile Python correlation parser
+        shell: powershell
+        run: python -m py_compile tools/laptop-bench/p02_correlate.py
