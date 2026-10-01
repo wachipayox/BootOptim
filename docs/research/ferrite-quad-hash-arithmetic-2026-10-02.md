@@ -134,3 +134,21 @@ stock world latency, a full hardware population or actual reload critical wall.
 The sparse capture includes growth rehash invocations and is scheduling-dependent;
 do not use the sampled count to infer original call frequency or multiply the
 result into an asserted real-game saving. No actual-owner result exists yet.
+
+## Rejected measurement and repaired shutdown contract
+
+Run36929924845 on e9e6019d passed generic Build/Startup/hosted menu gates but
+is **INVALID as replay performance evidence**: zero corpus/observation/finished
+markers. Strict `check_ferrite_hash_replay.py` rejects it. Existing
+`ClientStartupHooks` called stop immediately at the main-menu opening because
+the replay opt-in had not disabled stock benchmark exit. Console confirms
+main_menu followed by shutdown, before two stable seconds or any replay.
+This is a diagnostic lifecycle defect, not Ferrite performance/correctness failure.
+Raw artifacts: `C:/BootOptimBench/analysis-reload-20261002/ferrite-hash-replay-36929924845`.
+
+Repair follows the established Sodium replay contract: keep main-menu marker,
+but suppress that immediate stop only when this finite replay opt-in is enabled.
+The replay's finally owns stop after either four observations or explicit failure.
+Add initial observe/completion markers to distinguish shutdown from missing
+reload endpoint. Normal launches and other benchmark auto-exit remain unchanged.
+Do not count the generic green status or86.935s startup as a performance vote.

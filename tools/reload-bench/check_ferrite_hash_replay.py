@@ -9,6 +9,10 @@ def check(text):
     issues = []
     if 'BOOTOPTIM_FERRITE_HASH_REPLAY stage=invalid' in text:
         issues.append('runtime declared invalid')
+    if text.count('BOOTOPTIM_FERRITE_HASH_REPLAY stage=observing_initial') != 1:
+        issues.append('need one client initial reload observer')
+    if text.count('BOOTOPTIM_FERRITE_HASH_REPLAY stage=initial_complete success=true') != 1:
+        issues.append('need one successful client initial reload completion')
     corpus = re.findall(r'BOOTOPTIM_FERRITE_HASH_REPLAY stage=corpus seen=(\d+) samples=(\d+) semantic_equal=true', text)
     if len(corpus) != 1 or int(corpus[0][1]) < 256:
         issues.append('need one sufficiently populated actual corpus')

@@ -35,9 +35,13 @@ public final class FerriteHashReplay {
         if (!ENABLED || Minecraft.getInstance() == null
                 || Minecraft.getInstance().getResourceManager() != manager || !INITIAL.compareAndSet(false, true)) return;
         NeoForge.EVENT_BUS.addListener(FerriteHashReplay::frame);
+        LoggerFactory.getLogger("BootOptim/FerriteHashReplay").info(
+                "BOOTOPTIM_FERRITE_HASH_REPLAY stage=observing_initial");
         reload.done().whenComplete((ignored, failure) -> {
             synchronized (INPUTS) { collecting = false; }
             failed = failure != null; ready = true;
+            LoggerFactory.getLogger("BootOptim/FerriteHashReplay").info(
+                    "BOOTOPTIM_FERRITE_HASH_REPLAY stage=initial_complete success={}", failure == null);
         });
     }
 
