@@ -73,3 +73,38 @@ uninstrumented and physical memory/GC gates; never run per-insertion CPU timers
 on the old laptop as a normal performance load. A physical adaptation must
 strip those high-volume clocks or demonstrate its observer overhead first.
 No physical campaign dispatched for this candidate yet.
+
+## Completed hosted owner result
+
+[Exact-pack run 36880289246](https://github.com/wachipayox/BootOptim/actions/runs/36880289246)
+passes on `8f881e7e`. Build and absent-mod startup pass. Strict owner parser
+validates nine generations, exact activation and all four observations. Pack
+selection valid, stock atlas8192x8192x2, zero BootOptim Mixin errors.
+
+| Observation | Insertions | Owner CPU ms | Growth CPU ms | Growth calls | Empty slots | Reload wall ms | GC ms | End heap bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| C1 | 1250596 | 2231.823102 | 153.502241 | 19 | 1 | 31794.583754 | 2137 | 5458835360 |
+| B1 | 1250596 | 2005.836799 | 0.239587 | 1 | 1 | 31308.721208 | 1875 | 6000906992 |
+| B2 | 1250596 | 2012.820220 | 0.243364 | 1 | 1 | 30897.096714 | 1826 | 5891177512 |
+| C2 | 1250596 | 2178.549746 | 161.408432 | 19 | 1 | 30419.259290 | 1978 | 5512295680 |
+
+Opposite-order primary owner CPU saves **225.986303 / 165.729526 ms**, midpoint
+195.857915 ms, including helper/first reserve/insertion/clear/stock trim. Unique
+479823..479905; candidate hints bounded479905/479830, no empty table retained.
+Growth saves153.262654/161.165068ms; these nested numbers are explanatory and
+NOT added to owner savings. All 1,250,596 insertions have the same clock placement.
+Absolute owner CPU includes observer overhead; do not publish it as an
+uninstrumented budget or all-reload critical-path benefit.
+
+Adjacent full reload−485.863/+477.837ms, GC−262/−152ms, end heap
++542071632/+378881832bytes. Final table is one slot/no keys in both arms; this
+does not establish a retained-array leak or attribute all end heap to this
+mechanism. Physical memory/GC gate remains necessary given the preceding
+implementation's low-end result. No global seconds-saved claim.
+
+Segment verdict **retain**, bounded next step clean production source without
+measured subclass, insertion clocks, mask/driver/parser logic. Then uninstrumented
+runtime and physical gate; this is not permission to merge profiling code or
+keep an indefinite disabled experiment. Original persistent-capacity variant
+remains retired. Artifacts:
+`C:/BootOptimBench/analysis-reload-20261001/ferrite-presize-36880289246`.
