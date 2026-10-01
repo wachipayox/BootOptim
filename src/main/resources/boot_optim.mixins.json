@@ -12,6 +12,8 @@
     "client.McefFirstConsumerDeferMixin",
     "client.McefScreenInitTaskMixin",
     "client.ModelBakeryDecocraftReuseMixin",
+    "client.ModelManagerDecocraftArchiveBatchMixin",
+    "client.PathPackResourcesRootAccessor",
     "client.CitResewnTypeItemModelCacheMixin",
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
