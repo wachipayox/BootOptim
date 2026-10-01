@@ -1,0 +1,37 @@
+name: Agent119 Decocraft seam inspect
+
+on:
+  push:
+    branches:
+      - agent119/decocraft-early-primitive-20260911
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download pinned Decocraft 3.0.11
+        run: |
+          curl --fail --location --retry 3 \
+            'https://cdn.modrinth.com/data/IZJSgKZe/versions/Z8xm2POI/decocraft-3.0.11-1.21.1-neoforge.jar' \
+            --output decocraft.jar
+          sha256sum decocraft.jar
+      - name: Inspect exact loader and bake seams
+        run: |
+          for c in \
+            'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader$BBGeometry' \
+            'com.razz.decocraft.models.bbmodel.BBModelGeometryLoader' \
+            'com.razz.decocraft.models.bbmodel.BlockbenchModel' \
+            'com.razz.decocraft.models.bbmodel.BlockbenchBakery' \
+            'com.razz.decocraft.models.bbmodel.BBModel'
+          do
+            echo "===== $c ====="
+            javap -classpath decocraft.jar -p -c -s -l "$c"
+          done
