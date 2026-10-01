@@ -35,6 +35,10 @@ var externalPackDirectory = providers.gradleProperty('bootoptimPackDir')
 var packBenchmarkJavaVersion = providers.environmentVariable('BOOTOPTIM_PACK_JAVA_VERSION')
 var packBenchmarkBaseJvmArgs = providers.environmentVariable('BOOTOPTIM_PACK_BASE_JVM_ARGS')
 var packBenchmarkExtraJvmArgs = providers.environmentVariable('BOOTOPTIM_PACK_EXTRA_JVM_ARGS')
+var fmlChainProfileRequested = packBenchmarkExtraJvmArgs.isPresent()
+        && packBenchmarkExtraJvmArgs.get().readLines().collect { it.trim() }.contains('-Dboot_optim.fmlChainProfile=true')
+var fmlChainAgentJar = project.file('fml-chain-agent/build/libs/bootoptim-fml-chain-agent.jar')
+var fmlChainTraceFile = new File(packBenchmarkDirectory, 'bootoptim-fml-chain.jsonl')
 var connectorCleanMinecraft = project.file('build/createCleanArtifact/minecraft-renamed.jar')
 
 // IntelliJ launches the root project but MOD_CLASSES also points at the bootstrap subproject outputs.
@@ -134,6 +138,13 @@ neoForge {
                             .each { jvmArgument it }
                 }
             }
+
+            // Diagnostic-only: a requested FML chain profile adds the isolated javaagent to this run only.
+            // Normal builds/startup runs do not load the agent and retain the stock JVM command line.
+            if (fmlChainProfileRequested) {
+                jvmArgument "-javaagent:${fmlChainAgentJar.absolutePath}"
+                jvmArgument "-Dboot_optim.fmlChainProfile.output=${fmlChainTraceFile.absolutePath}"
+            }
         }
 
         server {
@@ -179,6 +190,9 @@ neoForge {
 
 tasks.named('runPackBenchmarkClient').configure {
     dependsOn preparePackBenchmark
+    if (fmlChainProfileRequested) {
+        dependsOn ':fml-chain-agent:jar'
+    }
 
     if (packBenchmarkJavaVersion.isPresent()) {
         var requestedJavaVersion = Integer.parseInt(packBenchmarkJavaVersion.get())

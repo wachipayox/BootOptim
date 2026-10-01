@@ -1,0 +1,213 @@
+name: Agent111 Create Block Entity Entries
+
+on:
+  push:
+    branches:
+      - agent111/create-registration-families-20260910
+
+permissions:
+  contents: read
+
+env:
+  EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+  EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+  EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+  MCEF_JAVA_CEF_COMMIT: a78e832f9f13c2c688caea3d04d8b84fcd238d94
+  MCEF_PLATFORM: linux_amd64
+  MCEF_CACHE_KEY: mcef-jcef-a78e832f9f13c2c688caea3d04d8b84fcd238d94-linux-amd64-v1
+  DISPLAY: ':99'
+  LIBGL_ALWAYS_SOFTWARE: 'true'
+  GALLIUM_DRIVER: llvmpipe
+  MESA_GL_VERSION_OVERRIDE: '4.6'
+  MESA_GLSL_VERSION_OVERRIDE: '460'
+  BOOTOPTIM_MCEF_MIRROR_PORT: '18765'
+  BOOTOPTIM_PACK_JAVA_VERSION: '25'
+  BOOTOPTIM_PACK_BASE_JVM_ARGS: |-
+    -Xmx6G
+    -XX:+UnlockExperimentalVMOptions
+    -XX:+UseG1GC
+    -XX:G1NewSizePercent=20
+    -XX:G1ReservePercent=20
+    -XX:MaxGCPauseMillis=50
+    -XX:G1HeapRegionSize=32M
+    -XX:ActiveProcessorCount=4
+    -Dmcef.java.cef.commit=a78e832f9f13c2c688caea3d04d8b84fcd238d94
+  BOOTOPTIM_PACK_EXTRA_JVM_ARGS: |-
+    -Dboot_optim.fmlChainProfile=true
+    -Dboot_optim.fmlChainProfile.expectedFmlVersion=4.0.43
+    -Dboot_optim.fmlChainProfile.expectedCreateVersion=6.0.10
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install display and CEF dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            xvfb mesa-utils libgl1-mesa-dri libglx-mesa0 \
+            libgtk-3-0 libnss3 libnspr4 libxss1 libasound2 \
+            libatk1.0-0 libatk-bridge2.0-0 libdrm2 libgbm1 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 \
+            libxfixes3 libx11-xcb1 libxshmfence1 libcups2 \
+            libatspi2.0-0 libpango-1.0-0 libpangocairo-1.0-0 fonts-liberation
+          Xvfb "$DISPLAY" -screen 0 1280x720x24 -nolisten tcp > xvfb.log 2>&1 &
+          ready=0
+          for _ in $(seq 1 20); do
+            if glxinfo -B > glxinfo.txt 2>&1; then ready=1; break; fi
+            sleep 0.25
+          done
+          test "$ready" = 1
+          grep -qi llvmpipe glxinfo.txt
+
+      - name: Setup compile JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Remember JDK 21
+        shell: bash
+        run: echo "BOOTOPTIM_JDK21=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Setup runtime JDK 25.0.4
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25.0.4'
+          distribution: oracle
+
+      - name: Remember JDK 25
+        shell: bash
+        run: echo "BOOTOPTIM_JDK25=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Pin Gradle JDKs
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.gradle"
+          echo "org.gradle.java.installations.paths=$BOOTOPTIM_JDK21,$BOOTOPTIM_JDK25" >> "$HOME/.gradle/gradle.properties"
+
+      - name: Build and syntax-check diagnostic tooling
+        shell: bash
+        run: |
+          ./gradlew :fml-chain-agent:jar test bootstrap:test
+          python -m py_compile \
+            tools/fml-chain/analyze_fml_chain.py \
+            tools/fml-chain/analyze_create_families.py \
+            tools/fml-chain/analyze_create_block_entities.py
+
+      - name: Download and verify exact pack
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .exact-pack-cache
+          gh release download "$EXACT_PACK_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$EXACT_PACK_ASSET" --dir .exact-pack-cache --clobber
+          path=.exact-pack-cache/bootoptim-exact-pack.zip
+          actual=$(sha256sum "$path" | awk '{print $1}')
+          test "$actual" = "$EXACT_PACK_SHA256"
+
+      - name: Restore pinned Linux JCEF cache
+        id: mcef-cache
+        uses: actions/cache@v4
+        with:
+          path: .mcef-jcef
+          key: ${{ env.MCEF_CACHE_KEY }}
+
+      - name: Download and verify pinned Linux JCEF
+        if: steps.mcef-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .mcef-jcef
+          mkdir -p .mcef-jcef
+          base="https://mcef-download.cinemamod.com/java-cef-builds/$MCEF_JAVA_CEF_COMMIT"
+          checksum=.mcef-jcef/${MCEF_PLATFORM}.tar.gz.sha256
+          archive=.mcef-jcef/${MCEF_PLATFORM}.tar.gz
+          curl --fail --location --retry 5 --retry-all-errors "$base/${MCEF_PLATFORM}.tar.gz.sha256" -o "$checksum"
+          curl --fail --location --retry 5 --retry-all-errors "$base/${MCEF_PLATFORM}.tar.gz" -o "$archive"
+          expected=$(tr -d '\r' < "$checksum" | awk 'NR==1 {print $1}')
+          actual=$(sha256sum "$archive" | awk '{print $1}')
+          test -n "$expected"
+          test "$actual" = "$expected"
+          tar -xzf "$archive" -C .mcef-jcef
+          rm -f "$archive"
+          test -f ".mcef-jcef/$MCEF_PLATFORM/jcef_helper"
+
+      - name: Stage JCEF and prepare fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ".mcef-jcef/$MCEF_PLATFORM/jcef_helper"
+          rm -rf build/mcef-libraries .mcef-mirror
+          mkdir -p build/mcef-libraries
+          cp -a .mcef-jcef/. build/mcef-libraries/
+          chmod +x "build/mcef-libraries/$MCEF_PLATFORM/jcef_helper"
+          mirror_root="$PWD/.mcef-mirror"
+          mirror_dir="$mirror_root/java-cef-builds/$MCEF_JAVA_CEF_COMMIT"
+          mkdir -p "$mirror_dir"
+          cp ".mcef-jcef/${MCEF_PLATFORM}.tar.gz.sha256" "$mirror_dir/${MCEF_PLATFORM}.tar.gz.sha256"
+          echo "BOOTOPTIM_MCEF_MIRROR_ROOT=$mirror_root" >> "$GITHUB_ENV"
+          python scripts/exact-pack/prepare_fixture.py \
+            --zip .exact-pack-cache/bootoptim-exact-pack.zip \
+            --sha256 "$EXACT_PACK_SHA256" \
+            --extract .exact-pack-run \
+            --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
+
+      - name: Launch exact pack to main menu
+        shell: bash
+        run: python scripts/exact-pack/run_startup.py --variant smoke --iteration 1 --timeout 1200
+
+      - name: Analyze FML DAG, Create families, and block-entity entries
+        shell: bash
+        run: |
+          python tools/fml-chain/analyze_create_families.py \
+            --input run-pack-benchmark/bootoptim-fml-chain.jsonl \
+            --json-output create-families-summary.json \
+            --markdown-output create-families-summary.md
+          python tools/fml-chain/analyze_create_block_entities.py \
+            --input run-pack-benchmark/bootoptim-fml-chain.jsonl \
+            --json-output create-block-entities-summary.json \
+            --markdown-output create-block-entities-summary.md
+          cat create-families-summary.md >> "$GITHUB_STEP_SUMMARY"
+          printf '\n\n' >> "$GITHUB_STEP_SUMMARY"
+          cat create-block-entities-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent111-create-block-entity-entries
+          path: |
+            result.json
+            resource-selection-check.json
+            resource-selection-reference.txt
+            exact-pack-console.log
+            create-families-summary.json
+            create-families-summary.md
+            create-block-entities-summary.json
+            create-block-entities-summary.md
+            run-pack-benchmark/bootoptim-fml-chain.jsonl
+            run-pack-benchmark/logs/latest.log
+            run-pack-benchmark/logs/bootoptim-startup.log
+            run-pack-benchmark/config/boot_optim.properties
+            run-pack-benchmark/config/fml.toml
+            run-pack-benchmark/config/mcef/mcef.properties
+            run-pack-benchmark/options.txt
+            glxinfo.txt
+          if-no-files-found: ignore
+          retention-days: 14
