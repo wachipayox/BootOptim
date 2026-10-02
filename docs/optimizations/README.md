@@ -6,6 +6,8 @@ Before adding a new entry, verify the implementation is actually present on `age
 
 ## Current catalog
 
+[Exact Decocraft model JSON batching](compatibility/decocraft-model-json-batch.md): default enabled on its strict guarded path. Actual CPU removal is demonstrated; no total startup/reload gain claimed. Clean packaging, startup and exact-pack gates passed in production PR #325.
+
 | Optimization | Scope | Default | Main mechanism |
 | --- | --- | --- | --- |
 | [Sodium face-axis quad classification](compatibility/sodium-quad-classifier.md) | Exact BakedQuad + Sodium 0.8.12-beta.1+mc1.21.1 | Enabled on guarded path in promotion PR | Replace normal-axis extrema with equivalent sentinel-aware plane checks |
@@ -26,3 +28,4 @@ A retention audit on 2026-09-03 verified that the six pre-MCEF production mechan
 ## Promotion rules
 
 Production optimizations must preserve/fail open to original behavior, document version/shape assumptions, expose a kill switch when appropriate, and survive build/startup CI plus exact-pack validation when runtime behavior changes. A production catalog entry records current product intent; the research ledger keeps the complete historical evidence, including earlier reject decisions that may later be overridden deliberately.
+
