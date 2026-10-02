@@ -64,5 +64,3 @@ abstract class FilePackOrderedPrefixIndexMixin {
         }
     }
 }
-
-
