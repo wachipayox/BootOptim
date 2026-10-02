@@ -1,6 +1,6 @@
 # Exact Decocraft model JSON batching
 
-Status: clean promotion candidate, **not integrated until its PR is merged**.
+Status: production promotion #325; integrated when that PR is merged.
 Default enabled on the guarded path; kill switch
 `-Dboot_optim.decocraftModelArchiveBatch=false`. Minecraft1.21.1 exact
 ModelManager model/state reader callsites. Optional Decocraft archive corpus,
@@ -44,3 +44,9 @@ artifact must independently pass packaging, absent-mod startup and exact-pack
 runtime activation/menu/ordered-pack/atlas/no-Mixin gates before merge. Physical
 original JAR/config restored and independently hash-verified. Any later world/
 resourcepack visual gate belongs to the fast PC; no laptop world trial.
+
+Clean artifact c19db134 hosted run37067395886 PASS: ready10809/3129313
+expected digest, exact ordered14packs, atlas8192x8192x2, main_menu88193ms,
+zero BootOptim Mixin errors. Build37067395878 and absent-mod startup37067395908
+PASS. Smoke time is health evidence only, not an A/B performance result.
+
