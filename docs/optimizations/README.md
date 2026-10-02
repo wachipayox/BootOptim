@@ -6,6 +6,8 @@ Before adding a new entry, verify the implementation is actually present on `age
 
 ## Current catalog
 
+Clean promotion pending: [exact Decocraft model JSON batching](compatibility/decocraft-model-json-batch.md). Actual CPU removal is demonstrated; no total startup/reload gain claimed, not yet integrated.
+
 | Optimization | Scope | Default | Main mechanism |
 | --- | --- | --- | --- |
 | [Sodium face-axis quad classification](compatibility/sodium-quad-classifier.md) | Exact BakedQuad + Sodium 0.8.12-beta.1+mc1.21.1 | Enabled on guarded path in promotion PR | Replace normal-axis extrema with equivalent sentinel-aware plane checks |
