@@ -4,6 +4,7 @@
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "client.FilePackResourceQueryBudgetMixin",
     "client.ModelManagerDecocraftArchiveBatchMixin",
     "client.PathPackResourcesRootAccessor",
     "client.SodiumQuadFlagClassifierMixin",
