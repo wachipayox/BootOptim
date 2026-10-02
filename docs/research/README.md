@@ -91,3 +91,5 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 ## Project rule
 
 A large count reduction is not sufficient evidence of startup improvement. BootOptim optimizes time-to-main-menu, so experiments must ultimately be judged by their contribution to the real critical path. CPU work that is cheap per call or hidden under another concurrent gate can be worth documenting without being worth shipping.
+
+- [Exact ZIP query owner budget](resource-query-budget-2026-10-02.md): diagnostic closes missing exact-repetition and callback-excluded CPU evidence from #182; no resource cache.
