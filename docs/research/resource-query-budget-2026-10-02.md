@@ -35,3 +35,24 @@ Only then use 2 controls/2 candidates and physical storage validation if needed.
 
 Local initial Gradle daemon failed Windows UDP bind; IPv4 JVM override allowed
 compilation. This is tooling behavior, not a game or candidate failure.
+
+## Hosted disposition
+Run37068780641@7faee03d PASS: 788 exact rows, 900 successful calls,
+900 valid CPU observations, 44644 callback outputs, zero failed calls,
+ordered packs valid, atlas8192x8192x2, menu90695ms, Mixin0.
+Owner CPU510.565594ms; inclusive wall1079.326465ms, callback-excluded
+wall1040.025274ms (task sums, not critical path). Third+ only12calls,
+all empty textures/fluid lookups: ownerCPU6.113751ms, GlowingTrim5.176982ms.
+REJECT exact repeated-query memo: insufficient eligible work. Diagnostic
+runtime removed from the active branch; no hidden default-off profiler retained.
+
+Different-query prefix lookup is a separate changed premise. GlowingTrim74calls
+ownerCPU428.806791ms, outputs39601. Offline pinned fixture central-directory
+replay21916entries/74query multiset verifies2173prefixes ordered equality;
+stock/snapshot/sortedprefix checksum9193906643919661600 identical. Windows
+12repetition CPU quantized15.625ms: stock1000/968.75ms, snapshot140.625/187.5ms,
+index15.625/0ms. These are synthetic warm replay results, not game deltas,
+first index fill/heap/GC/multithread contention unproven, unordered query
+multiset not a scheduling replay. Supports only a bounded candidate smoke.
+Do not use6.1ms to close all unique-query indexing or physical HDD effects.
+Rawquery-budget-summary.json in analysis-reload-20261002/resource-query-37068780641.
