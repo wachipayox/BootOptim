@@ -30,3 +30,20 @@ First-buildCPU/retainedheap/GC/contention and actual owner CPU2C2B remain pendin
 After smoke choose bounded owner comparison; physical HDD only after semantic
 and hosted premise pass. No user instance/laptop changes. Candidate must reach
 integrate/remove decision; never retain indefinitely as forgotten experiment.
+
+## Semantic gate and owner comparison
+Hosted37070128828@9394ebc8 passed29index builds and900verified queries, zero
+fallbacks, exact ordered pack selection, atlas8192x8192x2 and Mixin0. Menu89076ms
+is diagnostic health only. Raw analysis-reload-20261003/zip-prefix-semantic-37070128828.
+
+Reuse #326's identical callback-excluded CPU diagnostic for both modes; this
+is an extension of that measurement, not a second profiler. Hosted2C2B next,
+zipPrefixIndex true versus false, verify false in both. Whole listResources
+owner includes first index build/query selection, synchronization and original
+remaining filtering; callback work subtracted in both. All output counts/query
+counts must match and CPU calls cover the successful queries. Diagnostic map
+and callback timing overhead in both; small changes need physical confirmation.
+Report initial build and retained collection cost as included/indirect, not
+infer steady-state-only benefit. Unknown pack subclasses continue stock.
+Reject on mismatch/fallback/selection regression; no claim from global runner
+variation alone. Clean promotion must remove this profiling code.
