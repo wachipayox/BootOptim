@@ -258,3 +258,20 @@ var strictPathTransformContract = tasks.register('strictPathTransformContract', 
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
 }
 tasks.named('check') { dependsOn strictPathTransformContract }
+
+var ancestryContractClasses = layout.buildDirectory.dir('classes/modelAncestryContract')
+var compileModelAncestryContract = tasks.register('compileModelAncestryContract', JavaCompile) {
+    dependsOn tasks.named('classes')
+    source = files('tools/research/ModelAncestryProfilerContract.java')
+    classpath = sourceSets.main.runtimeClasspath
+    destinationDirectory = ancestryContractClasses
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+var modelAncestryContract = tasks.register('modelAncestryContract', JavaExec) {
+    dependsOn compileModelAncestryContract
+    classpath = files(ancestryContractClasses) + sourceSets.main.runtimeClasspath
+    mainClass = 'ModelAncestryProfilerContract'
+    jvmArgs '-Dboot_optim.profileModelAncestry=true'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check') { dependsOn modelAncestryContract }

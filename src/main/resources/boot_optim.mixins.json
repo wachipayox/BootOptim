@@ -7,6 +7,8 @@
   "client": [
     "client.FilePackOrderedPrefixIndexMixin",
     "client.FileUtilStrictPathSegmentMixin",
+    "client.BlockModelAncestryProfileMixin",
+    "client.ModelBakeryAncestryPhaseMixin",
     "client.ModelManagerDecocraftArchiveBatchMixin",
     "client.PathPackResourcesRootAccessor",
     "client.SodiumQuadFlagClassifierMixin",
