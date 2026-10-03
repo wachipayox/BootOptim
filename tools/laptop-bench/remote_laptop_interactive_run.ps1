@@ -5,7 +5,18 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $Utf8=New-Object System.Text.UTF8Encoding($false)
 
-function Save([object]$o){$t="$StateFile.tmp-$PID";[IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8);if([IO.File]::Exists($StateFile)){[IO.File]::Replace($t,$StateFile,[NullString]::Value)}else{[IO.File]::Move($t,$StateFile)}}
+function Replace-AtomicWithSharingRetry([string]$temp,[string]$destination) {
+    for($attempt=0;$attempt -lt 100;$attempt++) {
+        try { [IO.File]::Replace($temp,$destination,[NullString]::Value); return }
+        catch {
+            $base=$_.Exception.GetBaseException()
+            $code=$base.HResult -band 0xffff
+            if($base -isnot [IO.IOException] -or $code -notin @(32,33) -or $attempt -eq 99) { throw }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+}
+function Save([object]$o){$t="$StateFile.tmp-$PID";[IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8);if([IO.File]::Exists($StateFile)){Replace-AtomicWithSharingRetry $t $StateFile}else{[IO.File]::Move($t,$StateFile)}}
 function Load{Get-Content -LiteralPath $StateFile -Raw|ConvertFrom-Json}
 function Fail([object]$s,[string]$m){$s.valid=$false;$s.reason=$m;$s.phase='invalid';Save $s;throw "BOOTOPTIM_REMOTE_INVALID: $m"}
 function Text-Sha256([string]$text){$h=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($text)))).Replace('-','')}finally{$h.Dispose()}}

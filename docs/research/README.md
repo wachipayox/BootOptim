@@ -97,3 +97,5 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 - [ZIP prefix final decision and clean promotion](zip-prefix-final-decision-2026-10-03.md): physical and hosted owner CPU evidence, mixed global/GC effects, strict lifetime guards.
 
 - [Lexical PathPackResources prefix final decision](path-prefix-reuse-candidate-2026-10-03.md): retired after hosted and physical gates; small replay ceiling does not measure candidate net CPU; no forgotten runtime flag.
+
+- [Laptop atomic state sharing recovery](laptop-atomic-state-sharing-2026-10-03.md): bounded retry of transient Windows read-handle contention; physical four-run harness passed.
