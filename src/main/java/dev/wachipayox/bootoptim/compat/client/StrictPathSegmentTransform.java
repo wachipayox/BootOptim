@@ -1,4 +1,4 @@
-package dev.wachipayox.bootoptim.mixin;
+package dev.wachipayox.bootoptim.compat.client;
 
 import java.util.ArrayList;
 import org.objectweb.asm.Opcodes;

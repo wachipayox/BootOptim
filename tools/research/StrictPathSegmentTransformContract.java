@@ -1,4 +1,4 @@
-import dev.wachipayox.bootoptim.mixin.StrictPathSegmentTransform;
+import dev.wachipayox.bootoptim.compat.client.StrictPathSegmentTransform;
 import java.lang.reflect.Method;
 import java.util.regex.Pattern;
 import org.objectweb.asm.ClassWriter;
