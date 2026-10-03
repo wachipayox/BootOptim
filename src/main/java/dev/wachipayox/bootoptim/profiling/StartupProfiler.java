@@ -51,6 +51,7 @@ public final class StartupProfiler {
         if (PROFILING_ENABLED) {
             logPhase("main_menu");
         }
+        dev.wachipayox.bootoptim.profiling.client.ResourceResolutionBudget.report();
         return true;
     }
 

@@ -99,3 +99,4 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 - [Lexical PathPackResources prefix final decision](path-prefix-reuse-candidate-2026-10-03.md): retired after hosted and physical gates; small replay ceiling does not measure candidate net CPU; no forgotten runtime flag.
 
 - [Laptop atomic state sharing recovery](laptop-atomic-state-sharing-2026-10-03.md): bounded retry of transient Windows read-handle contention; physical four-run harness passed.
+- [Point-resource resolution distribution](resource-resolution-owner-2026-10-03.md): diagnostic provider-search/key/depth owner census; distinct from ZIP enumeration and lexical prefix replay.
