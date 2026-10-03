@@ -99,3 +99,6 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 - [Lexical PathPackResources prefix final decision](path-prefix-reuse-candidate-2026-10-03.md): retired after hosted and physical gates; small replay ceiling does not measure candidate net CPU; no forgotten runtime flag.
 
 - [Laptop atomic state sharing recovery](laptop-atomic-state-sharing-2026-10-03.md): bounded retry of transient Windows read-handle contention; physical four-run harness passed.
+
+- [Strict path-segment scan and physical decision](strict-path-segment-scan-2026-10-03.md): retained guarded pure-operation CPU removal, clean promotion pending gates.
+- [Point-resource resolution and mutable CIT owner](resource-resolution-owner-2026-10-03.md): completed #332, no result/model cache promoted.

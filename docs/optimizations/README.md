@@ -31,3 +31,5 @@ Production optimizations must preserve/fail open to original behavior, document 
 
 
 Clean promotion: [ordered ZIP prefix lookup](compatibility/ordered-zip-prefix-index.md), guarded default-on, CPU reduction retained; no total-time win claimed.
+
+Clean promotion: [strict resource-path segment scan](compatibility/strict-path-segment-scan.md), guarded default-on, exact measured helper; physical CPU removal retained, no TTMM claim.
