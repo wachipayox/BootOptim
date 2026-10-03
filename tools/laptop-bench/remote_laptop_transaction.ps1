@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('Preflight','Stage','Run','Status','Postflight','Recover')]
@@ -26,10 +26,21 @@ $WrapperMarker = 'dev/wachipayox/bootoptim/bootstrap/DiscoveryStartLocator.class
 $InnerModMarker = 'dev/wachipayox/bootoptim/BootOptim.class'
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 
+function Replace-AtomicWithSharingRetry([string]$temp,[string]$destination) {
+    for($attempt=0;$attempt -lt 100;$attempt++) {
+        try { [IO.File]::Replace($temp,$destination,[NullString]::Value); return }
+        catch {
+            $base=$_.Exception.GetBaseException()
+            $code=$base.HResult -band 0xffff
+            if($base -isnot [IO.IOException] -or $code -notin @(32,33) -or $attempt -eq 99) { throw }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+}
 function Fail([string]$m) { throw "BOOTOPTIM_REMOTE_INVALID: $m" }
 function Full([string]$p) { if ([string]::IsNullOrWhiteSpace($p)) { return $null }; [IO.Path]::GetFullPath($p) }
 function Sha([string]$p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToUpperInvariant() }
-function Save([object]$o,[string]$p) { $d=Split-Path -Parent $p; New-Item -ItemType Directory -Force -Path $d|Out-Null; $t="$p.tmp-$PID"; [IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8); if([IO.File]::Exists($p)){[IO.File]::Replace($t,$p,[NullString]::Value)}else{[IO.File]::Move($t,$p)} }
+function Save([object]$o,[string]$p) { $d=Split-Path -Parent $p; New-Item -ItemType Directory -Force -Path $d|Out-Null; $t="$p.tmp-$PID"; [IO.File]::WriteAllText($t,($o|ConvertTo-Json -Depth 10),$Utf8); if([IO.File]::Exists($p)){Replace-AtomicWithSharingRetry $t $p}else{[IO.File]::Move($t,$p)} }
 function Load([string]$p) { if(-not(Test-Path -LiteralPath $p -PathType Leaf)){Fail "missing state $p"}; Get-Content -LiteralPath $p -Raw|ConvertFrom-Json }
 
 function BootOptim-Kind([string]$p) {
