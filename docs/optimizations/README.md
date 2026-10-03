@@ -29,3 +29,5 @@ A retention audit on 2026-09-03 verified that the six pre-MCEF production mechan
 
 Production optimizations must preserve/fail open to original behavior, document version/shape assumptions, expose a kill switch when appropriate, and survive build/startup CI plus exact-pack validation when runtime behavior changes. A production catalog entry records current product intent; the research ledger keeps the complete historical evidence, including earlier reject decisions that may later be overridden deliberately.
 
+
+Clean promotion: [ordered ZIP prefix lookup](compatibility/ordered-zip-prefix-index.md), guarded default-on, CPU reduction retained; no total-time win claimed.
