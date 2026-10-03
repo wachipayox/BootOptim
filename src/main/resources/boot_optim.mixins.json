@@ -4,6 +4,7 @@
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "client.PathPrefixBudgetMixin",
     "client.FilePackOrderedPrefixIndexMixin",
     "client.ModelManagerDecocraftArchiveBatchMixin",
     "client.PathPackResourcesRootAccessor",
@@ -26,3 +27,4 @@
     "defaultRequire": 0
   }
 }
+
