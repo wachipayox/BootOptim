@@ -12,6 +12,8 @@ def validate(log):
     d = dict(re.findall(r"(\w+)=(\S+)", rows[0]))
     if d.get("status") != "complete" or d.get("equivalent") != "true" or d.get("truncated") != "false":
         raise ValueError("incomplete/inconsistent corpus")
+    if int(d.get("rewritten", "0")) != int(d["calls"]):
+        raise ValueError("instruction replacement inactive or partial")
     if int(d["inflight"]) != 0 or int(d["skipped"]) != 0:
         raise ValueError("unfinished or skipped observations")
     if not 0 < int(d["rows"]) <= int(d["calls"]) <= 10_000_000:

@@ -16,6 +16,7 @@ public final class StrictPathSegmentBudget {
     private static final ConcurrentHashMap<String, Entry> SEGMENTS = new ConcurrentHashMap<>();
     private static final AtomicBoolean CLOSED = new AtomicBoolean();
     private static final LongAdder INFLIGHT = new LongAdder(), SKIPPED = new LongAdder();
+    private static final LongAdder REWRITTEN = new LongAdder();
     private static volatile boolean truncated;
     private static long retainedChars;
     private static volatile boolean sink;
@@ -26,6 +27,7 @@ public final class StrictPathSegmentBudget {
         Entry(boolean observed) { this.observed = observed; }
     }
     private StrictPathSegmentBudget() {}
+    public static void rewritten() { if (!CLOSED.get()) REWRITTEN.increment(); }
     public static void record(Pattern pattern, String segment, boolean result) {
         if (!ENABLED) return;
         INFLIGHT.increment();
@@ -50,10 +52,10 @@ public final class StrictPathSegmentBudget {
         var logger = LogUtils.getLogger();
         var cpu = ManagementFactory.getThreadMXBean();
         long count = SEGMENTS.values().stream().mapToLong(e -> e.calls.sum()).sum();
-        if (truncated || INFLIGHT.sum() != 0 || SKIPPED.sum() != 0 || count == 0 || count > 10_000_000
+        if (truncated || INFLIGHT.sum() != 0 || SKIPPED.sum() != 0 || count == 0 || count != REWRITTEN.sum() || count > 10_000_000
                 || !cpu.isCurrentThreadCpuTimeSupported() || !cpu.isThreadCpuTimeEnabled()) {
-            logger.info("BOOTOPTIM_STRICT_SEGMENT status=unavailable calls={} inflight={} skipped={} truncated={}",
-                    count, INFLIGHT.sum(), SKIPPED.sum(), truncated);
+            logger.info("BOOTOPTIM_STRICT_SEGMENT status=unavailable calls={} rewritten={} inflight={} skipped={} truncated={}",
+                    count, REWRITTEN.sum(), INFLIGHT.sum(), SKIPPED.sum(), truncated);
             SEGMENTS.clear(); return;
         }
         Pattern stock = Pattern.compile("[-._a-z0-9]+");
@@ -80,8 +82,8 @@ public final class StrictPathSegmentBudget {
             else for (String s : workload) sink = StrictPathSegmentValidator.guarded(stock, s);
             elapsed[block] = cpu.getCurrentThreadCpuTime() - start;
         }
-        logger.info("BOOTOPTIM_STRICT_SEGMENT status=complete rows={} calls={} characters={} rejected={} equivalent={} inflight={} skipped={} truncated={} c1_cpu_ns={} b1_cpu_ns={} b2_cpu_ns={} c2_cpu_ns={}",
-                rows.size(), count, chars, rejected, equivalent, INFLIGHT.sum(), SKIPPED.sum(), truncated,
+        logger.info("BOOTOPTIM_STRICT_SEGMENT status=complete rows={} calls={} rewritten={} characters={} rejected={} equivalent={} inflight={} skipped={} truncated={} c1_cpu_ns={} b1_cpu_ns={} b2_cpu_ns={} c2_cpu_ns={}",
+                rows.size(), count, REWRITTEN.sum(), chars, rejected, equivalent, INFLIGHT.sum(), SKIPPED.sum(), truncated,
                 elapsed[0], elapsed[1], elapsed[2], elapsed[3]);
         SEGMENTS.clear();
     }

@@ -1,6 +1,7 @@
 {
   "required": false,
   "minVersion": "0.8",
+  "plugin": "dev.wachipayox.bootoptim.mixin.StrictPathMixinPlugin",
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [

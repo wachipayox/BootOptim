@@ -25,4 +25,5 @@ public final class StrictPathSegmentValidator {
     public static boolean guarded(Pattern pattern, String segment) {
         return segment != null && compatible(pattern) ? matches(segment) : pattern.matcher(segment).matches();
     }
+
 }

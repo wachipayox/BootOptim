@@ -241,3 +241,22 @@ idea {
         downloadJavadoc = true
     }
 }
+
+
+// Execute the actual instruction-site transform against mod-like callbacks and fail-open shapes.
+var strictPathContractClasses = layout.buildDirectory.dir('classes/strictPathTransformContract')
+var compileStrictPathTransformContract = tasks.register('compileStrictPathTransformContract', JavaCompile) {
+    dependsOn tasks.named('classes')
+    source = files('tools/research/StrictPathSegmentTransformContract.java')
+    classpath = sourceSets.main.runtimeClasspath
+    destinationDirectory = strictPathContractClasses
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+var strictPathTransformContract = tasks.register('strictPathTransformContract', JavaExec) {
+    dependsOn compileStrictPathTransformContract
+    classpath = files(strictPathContractClasses) + sourceSets.main.runtimeClasspath
+    mainClass = 'StrictPathSegmentTransformContract'
+    jvmArgs '-Dboot_optim.strictPathSegmentScan=true'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check') { dependsOn strictPathTransformContract }
