@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "client.FilePackOrderedPrefixIndexMixin",
+    "client.FileUtilStrictPathSegmentMixin",
     "client.ModelManagerDecocraftArchiveBatchMixin",
     "client.PathPackResourcesRootAccessor",
     "client.SodiumQuadFlagClassifierMixin",
