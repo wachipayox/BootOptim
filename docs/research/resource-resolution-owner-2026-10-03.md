@@ -93,3 +93,38 @@ not a captured full ordered query workload. No candidate or physical run yet.
 Raw first artifact: C:/BootOptimBench/analysis-reload-20261003/resource-resolution-37128621786.
 The later build must populate detail rows with matching global/family accounting
 before selecting an actual optimization mechanism.
+
+## Detail gate and sampling repair
+
+Detail37130137711@379a0fd9 PASS accounting (global/family/probes/CPU partition),
+49366roots11218unique38148repeats; selectedpacks/atlas/Mixin health unchanged.
+Models family15840calls15824repeats15840hits617760probes: just16distinct keys,
+39providers perlookup. minecraft root family7922calls/7896repeats/2hits and
+textures8187calls/8041repeats/265hits also dominate repeated probing. Topkeys
+include16armor item JSONs (netherite1152each, others936each) and missing
+r_layer_1.png/d_layer_1.png/helmet.png and similar locations. This resembles
+CIT paths but count alone is NOT caller attribution or permission to revive
+#257's rejected lifecycle caching. Existing base-model bridge deliberately
+calls manager.getResource BEFORE its parse/open cache; public query observations
+must still be preserved until a safe source alternative is established.
+
+Hard sampling caveat: old ordinal&15 selected all288helmet.png queries but
+zero of several equally repeated keys. Counts are valid, family/CPU totals are
+raw actual observed scopes, but representativeness is disproven. Do NOT use
+480.708ms sampledCPU or family rankings as projected total/optimization budget.
+Repair selection using a SplitMix64-whitened sequence before the CPU endpoint;
+expected1/16root timing, independent of the observed16-call cycle. Add optional
+profileResourceResolutionCallers: expected1/256root StackWalker traces outside
+CPU endpoints, bounded200distinct traces/top40output, to attribute actual
+callers instead of assuming all armor/lookups belong to CIT. No extra resource
+operation, callback skipping, caching, scheduling or game behavior change.
+No hardware comparison is requested until repaired detail/caller gate passes.
+
+Source anti-trap: SecureJarHandler3.0.8 already overrides the JDK provider exists
+method to call UnionFileSystem.exists directly. A proposed bypass of checkAccess
+exception creation is already present and is NOT a new optimization. UnionFS
+still applies its filter to candidate paths, even on misses, and may obtain
+attributes before that callback. A manager-generation negative-result cache
+would suppress those observations and can hide directory content changes.
+FileUtil.decomposePath returns a mutable ArrayList for multi-segment paths;
+sharing its DataResult/list globally would also change consumer semantics.

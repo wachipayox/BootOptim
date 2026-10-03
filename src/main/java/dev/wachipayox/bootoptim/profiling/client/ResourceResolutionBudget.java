@@ -16,6 +16,9 @@ public final class ResourceResolutionBudget {
     private static final ThreadLocal<Scope> ACTIVE = new ThreadLocal<>();
     private static final ConcurrentHashMap<Key, Query> QUERIES = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Query> FAMILIES = new ConcurrentHashMap<>();
+    private static final boolean TRACE_CALLERS = Boolean.getBoolean("boot_optim.profileResourceResolutionCallers");
+    private static final ConcurrentHashMap<String, LongAdder> CALLERS = new ConcurrentHashMap<>();
+    private static final StackWalker WALKER = StackWalker.getInstance();
     private static final ConcurrentHashMap<String, Provider> PROVIDERS = new ConcurrentHashMap<>();
     private static final AtomicLong ORDINAL = new AtomicLong();
     private static final AtomicLong INFLIGHT = new AtomicLong();
@@ -87,11 +90,29 @@ public final class ResourceResolutionBudget {
             family.count.incrementAndGet();
             if (repeated) family.repeats.increment();
         } else truncated = true;
-        // Systematic sample of ROOT requests only. Never extrapolate it as exact total CPU.
-        boolean sampled = parent == null && (ORDINAL.getAndIncrement() & 15) == 0;
+        // Whiten the sequence to avoid locking onto periodic resource-query loops.
+        // Expected 1/16 ROOT requests; NEVER extrapolate as exact total CPU.
+        long roll = mix(ORDINAL.getAndIncrement());
+        boolean sampled = parent == null && (roll & 15) == 0;
+        if (TRACE_CALLERS && parent == null && (roll & 255) == 0) {
+            String trace = familyKey + "|" + WALKER.walk(frames -> frames
+                    .filter(frame -> !frame.getClassName().equals(ResourceResolutionBudget.class.getName()))
+                    .limit(16).map(frame -> frame.getClassName() + "#" + frame.getMethodName())
+                    .collect(java.util.stream.Collectors.joining(">")));
+            LongAdder visits = CALLERS.get(trace);
+            if (visits == null && CALLERS.size() < 200) visits = CALLERS.computeIfAbsent(trace, ignored -> new LongAdder());
+            if (visits != null) visits.increment(); else truncated = true;
+        }
         Scope scope = new Scope(parent, sampled, query, family, repeated);
         ACTIVE.set(scope);
         return scope;
+    }
+
+    private static long mix(long value) {
+        value += 0x9e3779b97f4a7c15L;
+        value = (value ^ (value >>> 30)) * 0xbf58476d1ce4e5b9L;
+        value = (value ^ (value >>> 27)) * 0x94d049bb133111ebL;
+        return value ^ (value >>> 31);
     }
 
     public static void finish(Scope scope, boolean success, int outputs) {
@@ -187,7 +208,9 @@ public final class ResourceResolutionBudget {
                     Integer.toHexString(System.identityHashCode(k.manager)), k.location, k.mode, q.count.get(), q.hits.sum(),
                     q.probes.sum(), q.samples.sum(), q.cpuSamples.sum(), q.cpu.sum());
         });
+        CALLERS.entrySet().stream().sorted((a, b) -> Long.compare(b.getValue().sum(), a.getValue().sum())).limit(40).forEach(entry ->
+                logger.info("BOOTOPTIM_RESOLUTION_CALLER trace={} samples={}", entry.getKey(), entry.getValue().sum()));
         // Counts retain manager identities only until this diagnostic snapshot.
-        if (INFLIGHT.get() == 0) { QUERIES.clear(); PROVIDERS.clear(); FAMILIES.clear(); }
+        if (INFLIGHT.get() == 0) { QUERIES.clear(); PROVIDERS.clear(); FAMILIES.clear(); CALLERS.clear(); }
     }
 }
