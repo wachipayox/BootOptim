@@ -28,6 +28,7 @@ public final class ClientStartupHooks {
         }
 
         if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
+            ModelAncestryProfiler.report();
             Minecraft.getInstance().stop();
         }
     }

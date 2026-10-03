@@ -102,3 +102,5 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 
 - [Strict path-segment scan and physical decision](strict-path-segment-scan-2026-10-03.md): retained guarded pure-operation CPU removal, clean promotion pending gates.
 - [Point-resource resolution and mutable CIT owner](resource-resolution-owner-2026-10-03.md): completed #332, no result/model cache promoted.
+
+- [Current model ancestry/material ownership](model-ancestry-owner-2026-10-03.md): distinct sampled owner/operation census after historical structural-plan no-go; no model cache or scheduler.

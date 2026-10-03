@@ -27,6 +27,9 @@ jobs:
           javac -d /tmp/bootoptim-strict-segment src/main/java/dev/wachipayox/bootoptim/optimization/StrictPathSegmentValidator.java tools/research/StrictPathSegmentContract.java
           java -cp /tmp/bootoptim-strict-segment StrictPathSegmentContract
 
+      - name: Validate ancestry accounting
+        run: python3 -m unittest discover -s scripts/exact-pack -p 'test_model_ancestry_profile.py' -v
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
