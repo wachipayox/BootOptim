@@ -21,7 +21,7 @@ public final class ModelAncestryProfiler {
     private static final class Row {
         final AtomicLong serial = new AtomicLong();
         final LongAdder calls=new LongAdder(), nested=new LongAdder(), samples=new LongAdder(), validCpu=new LongAdder(), validAlloc=new LongAdder(), failures=new LongAdder();
-        final LongAdder cpu=new LongAdder(), wall=new LongAdder(), alloc=new LongAdder(), mapProbes=new LongAdder(), mapHits=new LongAdder(), aliasChecks=new LongAdder(), direct=new LongAdder(), aliased=new LongAdder(), linked=new LongAdder();
+        final LongAdder cpu=new LongAdder(), wall=new LongAdder(), alloc=new LongAdder(), mapProbes=new LongAdder(), mapHits=new LongAdder(), aliasChecks=new LongAdder(), direct=new LongAdder(), aliased=new LongAdder(), linked=new LongAdder(), cycleSets=new LongAdder(), chainLists=new LongAdder();
     }
     private static final class State {
         int depth, bakeDepth;
@@ -45,8 +45,9 @@ public final class ModelAncestryProfiler {
         s.sampled[slot]=outer && sample(r.serial.incrementAndGet());
         INFLIGHT.increment();
         if(s.sampled[slot]) {
-            s.cpu[slot]=CPU.isCurrentThreadCpuTimeSupported() && CPU.isThreadCpuTimeEnabled()?CPU.getCurrentThreadCpuTime():-1;
+            // Keep native allocation-counter queries OUTSIDE the sampled CPU interval.
             s.alloc[slot]=ALLOC!=null && ALLOC.isThreadAllocatedMemorySupported() && ALLOC.isThreadAllocatedMemoryEnabled()?ALLOC.getThreadAllocatedBytes(Thread.currentThread().threadId()):-1;
+            s.cpu[slot]=CPU.isCurrentThreadCpuTimeSupported() && CPU.isThreadCpuTimeEnabled()?CPU.getCurrentThreadCpuTime():-1;
             s.wall[slot]=System.nanoTime();
         }
         return slot;
@@ -76,6 +77,15 @@ public final class ModelAncestryProfiler {
         State s=LOCAL.get();
         for(int i=s.depth-1;i>=0;i--) if(s.row[i]%K==Kind.MATERIAL.ordinal()) {s.aliases[i]++; ROWS[s.row[i]].aliasChecks.increment();break;}
     }
+    public static void collectionFactory(Kind kind) {
+        if(!ENABLED || CLOSED.get())return;
+        State s=LOCAL.get();
+        for(int i=s.depth-1;i>=0;i--) if(s.row[i]%K==kind.ordinal()) {
+            Row r=ROWS[s.row[i]];
+            if(kind==Kind.PARENTS)r.cycleSets.increment();else if(kind==Kind.MATERIAL)r.chainLists.increment();
+            break;
+        }
+    }
     public static void enterBake() {if(ENABLED) LOCAL.get().bakeDepth++;}
     public static void exitBake() {if(ENABLED) LOCAL.get().bakeDepth--;}
     public static void report() {
@@ -83,8 +93,8 @@ public final class ModelAncestryProfiler {
         var log=LogUtils.getLogger();
         for(int i=0;i<ROWS.length;i++) {
             Row r=ROWS[i];
-            log.info("BOOTOPTIM_MODEL_ANCESTRY phase={} kind={} calls={} nested={} samples={} cpu_valid={} alloc_valid={} cpu_ns={} wall_ns={} allocated_bytes={} failures={} map_probes={} map_hits={} alias_checks={} direct={} aliased={} already_linked={}",
-                i<K?"outside_bake":"bake",Kind.values()[i%K],r.calls.sum(),r.nested.sum(),r.samples.sum(),r.validCpu.sum(),r.validAlloc.sum(),r.cpu.sum(),r.wall.sum(),r.alloc.sum(),r.failures.sum(),r.mapProbes.sum(),r.mapHits.sum(),r.aliasChecks.sum(),r.direct.sum(),r.aliased.sum(),r.linked.sum());
+            log.info("BOOTOPTIM_MODEL_ANCESTRY phase={} kind={} calls={} nested={} samples={} cpu_valid={} alloc_valid={} cpu_ns={} wall_ns={} allocated_bytes={} failures={} map_probes={} map_hits={} alias_checks={} direct={} aliased={} already_linked={} cycle_sets={} chain_lists={}",
+                i<K?"outside_bake":"bake",Kind.values()[i%K],r.calls.sum(),r.nested.sum(),r.samples.sum(),r.validCpu.sum(),r.validAlloc.sum(),r.cpu.sum(),r.wall.sum(),r.alloc.sum(),r.failures.sum(),r.mapProbes.sum(),r.mapHits.sum(),r.aliasChecks.sum(),r.direct.sum(),r.aliased.sum(),r.linked.sum(),r.cycleSets.sum(),r.chainLists.sum());
         }
         log.info("BOOTOPTIM_MODEL_ANCESTRY_SUMMARY inflight={} overflow={} scope=sampled_original_inclusive_no_extrapolated_savings",INFLIGHT.sum(),overflow);
     }

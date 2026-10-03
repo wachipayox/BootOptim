@@ -85,4 +85,15 @@ abstract class BlockModelAncestryProfileMixin {
     private boolean bootoptim$alias(List<?> list,Object key,Operation<Boolean> original) {
         ModelAncestryProfiler.aliasCheck();return original.call(list,key);
     }
+
+    @WrapOperation(method="resolveParents",at=@At(value="INVOKE",target="Lcom/google/common/collect/Sets;newLinkedHashSet()Ljava/util/LinkedHashSet;"))
+    private java.util.LinkedHashSet<UnbakedModel> bootoptim$cycleSet(Operation<java.util.LinkedHashSet<UnbakedModel>> original) {
+        java.util.LinkedHashSet<UnbakedModel> result=original.call();
+        ModelAncestryProfiler.collectionFactory(Kind.PARENTS); return result;
+    }
+    @WrapOperation(method="getMaterial",at=@At(value="INVOKE",target="Lcom/google/common/collect/Lists;newArrayList()Ljava/util/ArrayList;"))
+    private java.util.ArrayList<String> bootoptim$chainList(Operation<java.util.ArrayList<String>> original) {
+        java.util.ArrayList<String> result=original.call();
+        ModelAncestryProfiler.collectionFactory(Kind.MATERIAL); return result;
+    }
 }

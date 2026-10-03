@@ -114,3 +114,46 @@ throwingcleanup contract; sixparser tests PASS(inactiveprobe, missingrow, unavai
 allocation, unfinishedclosure, malformedmaterial accounting). Existing strict-path
 production ASMcontract alsoPASS. Packaged bootstrap remains distributable target.
 Next hosted gate must validate actual method/operation hooks, not build alone.
+
+## Late measurement cautions and recovered #177 gate
+Historical #177 summary34160538431 shows three control/candidate medians
+88556/86932ms menu(-1624),41238/39012ms reload-to-FancyMenu(-2226).
+No netownerCPU/stable same-JVM2C2B gate, so unresolved evidence, not promotion.
+Raw C:/BootOptimBench/analysis-reload-20261003/material-list-pool-34160538431.
+HotSpot escape analysis/inlining may eliminate source-written temporary objects;
+profiler wrappers can affect it. Sampled thread-allocation includes descendants
+and instrumentation; source newArrayList counts are NOT actualobject/GC savings.
+Require matched actual operation replay before any candidate.
+
+## First actual hosted result and instrumentation repair
+
+Exact37148156904@6bd135f47f3e6d6372e40bc75cb79b36338eea2b (full SHA recorded in Git;
+abbreviated6bd135f4 is authoritative here) reached main menu,14orderedpacks,
+oneinitialreload,8192x8192x2atlas,Mixin0. Menu88057ms is diagnostic health ONLY.
+Raw C:/BootOptimBench/analysis-reload-20261003/model-ancestry-37148156904;
+ancestry-summary.json retains the original-schema validation.
+
+outside_bake PARENTS3292876calls,3250040already_linked,9781nested;
+DEPENDENCIES56098calls. bake MATERIAL1396811calls,1333196direct,
+63615aliased,64094aliaschecks. bake TEXTURE_ENTRY1460905calls,
+1856263mapprobes,1410792hits. All14rows complete, failures0,inflight0,
+overflowfalse and CPU/allocation samples available. Linked98.70% and direct95.45%
+are operation distributions, NOT savings or permission to skip callbacks.
+Sampled allocation1107264B for parent /490672B for bake material includes
+instrumentation/descendants and escape-analysis perturbation, NOT a GC budget.
+
+Detected measurement-boundary flaw: first CPU interval included the initial native
+thread-allocation-counter query; tiny method CPU exceeded wall substantially.
+Counts/semantics/health are usable; raw CPU is not an owner cost estimate.
+Repair moves allocation-start query before CPU-start, preserving final ordering;
+native allocation queries now lie outside CPU interval. CPU-clock/scope/descendant
+instrumentation overhead remains, so matched operation replay is still mandatory.
+
+Add original-only factory hooks for Sets.newLinkedHashSet and Lists.newArrayList.
+New fields cycle_sets/chain_lists must equal PARENTS/MATERIAL call counts respectively;
+missing actual hooks invalidate parser. Calls to factory are not proof of escaped
+heap objects. Actual helper tests recursive factory attribution and cleanup.
+Seven parser tests PASS; gradlew build PASS in13s including actual helper and
+existing production strict-path ASM contracts. Next hosted run validates repaired
+timer and real factory hooks, on SAME diagnostic PR336, no new profiler/candidate.
+

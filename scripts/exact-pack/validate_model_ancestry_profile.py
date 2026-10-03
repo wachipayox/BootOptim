@@ -6,7 +6,7 @@ def validate(log):
     lines=re.findall(r"BOOTOPTIM_MODEL_ANCESTRY (.*)",log)
     if len(lines)!=14:raise ValueError("exactly14 phase/kind rows required")
     rows={}
-    numeric="calls nested samples cpu_valid alloc_valid cpu_ns wall_ns allocated_bytes failures map_probes map_hits alias_checks direct aliased already_linked".split()
+    numeric="calls nested samples cpu_valid alloc_valid cpu_ns wall_ns allocated_bytes failures map_probes map_hits alias_checks direct aliased already_linked cycle_sets chain_lists".split()
     for line in lines:
         fields=dict(re.findall(r"(\w+)=(\S+)",line));key=(fields['phase'],fields['kind'])
         if key in rows or key[0] not in {"outside_bake","bake"} or key[1] not in KINDS:raise ValueError("invalid/duplicate scope")
@@ -16,6 +16,8 @@ def validate(log):
         if r['cpu_valid']!=r['samples'] or r['alloc_valid']!=r['samples']:raise ValueError("unsupported CPU/allocation")
         if r['map_hits']>r['map_probes'] or r['already_linked']>r['calls']:raise ValueError("invalid probe counts")
         if key[1]=='MATERIAL' and r['direct']+r['aliased']!=r['calls']:raise ValueError("material census incomplete")
+        if key[1]=='PARENTS' and r['cycle_sets']!=r['calls']:raise ValueError('parent set factory hook inactive')
+        if key[1]=='MATERIAL' and r['chain_lists']!=r['calls']:raise ValueError('material list factory hook inactive')
         if r['failures']:raise ValueError("original operation threw")
         rows[key]=r
     sums=re.findall(r"BOOTOPTIM_MODEL_ANCESTRY_SUMMARY (.*)",log)

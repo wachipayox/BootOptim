@@ -13,9 +13,11 @@ public class ModelAncestryProfilerContract {
     public static void main(String[]args)throws Exception{
         for(int i=0;i<10000;i++){
             int p=ModelAncestryProfiler.begin(Kind.PARENTS,true);
-            int n=ModelAncestryProfiler.begin(Kind.PARENTS,false);ModelAncestryProfiler.end(n,false);ModelAncestryProfiler.end(p,false);
+            ModelAncestryProfiler.collectionFactory(Kind.PARENTS);
+            int n=ModelAncestryProfiler.begin(Kind.PARENTS,false);ModelAncestryProfiler.collectionFactory(Kind.PARENTS);ModelAncestryProfiler.end(n,false);ModelAncestryProfiler.end(p,false);
             ModelAncestryProfiler.enterBake();
             int m=ModelAncestryProfiler.begin(Kind.MATERIAL,false);
+            ModelAncestryProfiler.collectionFactory(Kind.MATERIAL);
             int t=ModelAncestryProfiler.begin(Kind.TEXTURE_ENTRY,false);
             ModelAncestryProfiler.textureProbe(false);ModelAncestryProfiler.textureProbe(true);ModelAncestryProfiler.end(t,false);
             if(i%2==0)ModelAncestryProfiler.aliasCheck();
@@ -23,6 +25,7 @@ public class ModelAncestryProfilerContract {
         }
         Object parents=row(Kind.PARENTS,false),material=row(Kind.MATERIAL,true),entry=row(Kind.TEXTURE_ENTRY,true);
         require(count(parents,"calls")==20000 && count(parents,"nested")==10000 && count(parents,"linked")==10000);
+        require(count(parents,"cycleSets")==20000 && count(material,"chainLists")==10000);
         require(count(parents,"samples")>0 && count(parents,"samples")<10000);
         require(count(material,"calls")==10000 && count(material,"direct")==5000 && count(material,"aliased")==5000);
         require(count(entry,"mapProbes")==20000 && count(entry,"mapHits")==10000);
