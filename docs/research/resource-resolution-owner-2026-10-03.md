@@ -128,3 +128,47 @@ attributes before that callback. A manager-generation negative-result cache
 would suppress those observations and can hide directory content changes.
 FileUtil.decomposePath returns a mutable ArrayList for multi-segment paths;
 sharing its DataResult/list globally would also change consumer semantics.
+
+
+## Repaired caller result and uncached mutable-parse premise
+
+Run37130898429@2c67e0f5 passes all hosted gates and accounting. Snapshot49366
+roots/11218unique/38148repeats, failures0/inflight0/truncatedfalse. All3087
+samples haveCPU. Models1015samples, root521,textures460: no former periodic
+all-or-zero key alias (netherite individual63-80 of1152, otherarmor52-82 of936).
+Observed sampledCPU models216.460ms/root106.134ms/textures104.372ms; these are
+actual subsets with diagnostic contamination, NOT exact totals or savings.
+Provider Path984244calls/805hits/257.846ms observed sampled originalCPU.
+Caller stacks attribute models to TypeItem.getModelForFirstItemType (22samples)
+and getModelFromOverrideModel (18); root/textures to CITType.resolveAsset from
+TypeItem.load, with additional TypeArmor traces. Not inferred from filenames.
+Raw: C:/BootOptimBench/analysis-reload-20261003/resource-resolution-callers-37130898429.
+
+Exact local packed CIT SHA must match historical fixture315b46f2a78d5298426fb594558873ac19abbc499f77578f6cd4f98e6809e6a9.
+Bytecode in the two attributed methods performs current manager lookup, Resource.open,
+IOUtils.toString UTF8, BlockModel.fromString, then mutates model.name and synthetic
+identifier state. The first method also mutates spawn-egg texture maps. Existing
+#151 only covers read-only override inspection in loadUnbakedAssets; its marker
+still3960/3944/16. This is NOT inactive #151 or namespace drift (#223), and NOT
+permission for persistent lifecycle/model caches rejected #257. #267 still blocks
+direct source/JAR replacement provenance; this branch distributes no CIT code.
+Sharing the returned mutable BlockModel is unsafe. Skipping provider callbacks,
+read freshness or synthetic identifier order is also outside the proposed premise.
+
+Extend SAME #332 with default-off profileCitMutableParses. Wrap only those two
+exact methods and their current IOUtils.toString/BlockModel.fromString operations.
+All originals run once unchanged, exceptions/nulls preserved. Whitened expected
+1/16root sample with read/parse subscopes; count full JSON string equality (bounded
+256values/4MiB UTF16) outside child CPU endpoint. Parent duration includes census
+and clock contamination; root minus children is NOT a tiny exclusive budget.
+Original Resource.open is outside read scope (read scope is IOUtils only).
+Nested root timings suppressed. Main-menu snapshot declares failures/nulls/sample
+coverage/inflight/truncation. Content memory cleared on quiescent report.
+
+Next hosted smoke disables broader resource-query/caller profiling to avoid its
+probe clocks contaminating these root methods. Validate all four stages, actual
+CPU coverage and read/parse/content count parity, selection/atlas/Mixin/menu health.
+No cache/optimization or performance A/B implemented yet. If cost merits work,
+consider only a fresh-content-keyed immutable parse representation yielding a
+new independently mutable model each time; its extension/callback/deep-copy
+semantics require proof BEFORE implementation. No laptop requested.

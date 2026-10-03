@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "client.FallbackResourceResolutionBudgetMixin",
+    "client.CitResewnMutableParseBudgetMixin",
     "client.FilePackOrderedPrefixIndexMixin",
     "client.ModelManagerDecocraftArchiveBatchMixin",
     "client.PathPackResourcesRootAccessor",
