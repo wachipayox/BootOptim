@@ -7,7 +7,6 @@
     "client.FilePackOrderedPrefixIndexMixin",
     "client.ModelManagerDecocraftArchiveBatchMixin",
     "client.PathPackResourcesRootAccessor",
-    "client.PathPackResourcesLexicalPrefixMixin",
     "client.SodiumQuadFlagClassifierMixin",
     "client.SodiumQuadCoordinateBridgeMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",

@@ -95,3 +95,5 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 - [Exact ZIP query owner budget](resource-query-budget-2026-10-02.md): diagnostic closes missing exact-repetition and callback-excluded CPU evidence from #182; no resource cache.
 
 - [ZIP prefix final decision and clean promotion](zip-prefix-final-decision-2026-10-03.md): physical and hosted owner CPU evidence, mixed global/GC effects, strict lifetime guards.
+
+- [Lexical PathPackResources prefix final decision](path-prefix-reuse-candidate-2026-10-03.md): retired after hosted and physical gates; small replay ceiling does not measure candidate net CPU; no forgotten runtime flag.

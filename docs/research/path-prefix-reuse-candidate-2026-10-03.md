@@ -1,6 +1,6 @@
 # PathPackResources lexical prefix reuse candidate — 2026-10-03
 
-Status: **opt-in candidate; physical owner replay collected, real-candidate laptop gate active**.
+Status: **REJECTED / RETIRED; runtime code removed after the physical gate**.
 
 ## Evidence and premise
 
@@ -109,3 +109,39 @@ It contains zero valid measurements and is not candidate evidence. Retry
 `path-prefix-reuse-20261003-r2` uses the identical frozen JAR; only controller
 atomic state writes add bounded retries for native sharing/lock errors 32/33.
 All other errors still propagate and no non-atomic overwrite is introduced.
+
+## Final physical runtime result and disposition
+
+Campaign path-prefix-reuse-20261003-r2 completed C/B/B/C, all four valid,
+matching frozen JAR, Oracle 21.0.9, actual arguments verified, startup origin
+JVM uptime and one main_menu endpoint. Times were 381.666/372.311/353.903/
+369.369 seconds. Candidate-minus-paired-control was -9.355/-15.466 seconds,
+NOT attributable to a lexical operation budgeted at under half a second.
+Entrypoint was 132.781/124.537/129.506/121.473 seconds; subsequent elapsed
+was 248.885/247.774/224.397/247.896 seconds. GC pause sums were
+24.713/12.499/13.799/13.262 seconds. They are secondary observations, not
+source-specific proof or time that can be subtracted from overlapping phases.
+
+All runs preserved the same selected packs and before-options SHA256
+C4BA61169E3125403753609A367CF9641F171F0AD9B61915F291F37F79F94E09,
+created the expected 8192x8192x2 block atlas and recorded no new Mixin/reload
+failures. Transactions restored every time; original CFG and bootstrap hashes
+were independently checked after collection. No Java or Prism remained.
+Raw health-phase-summary.json and transactions are retained under
+C:/BootOptimBench/artifacts/path-prefix-reuse-physical-20261003-r2/results.
+
+Decision: RETIRE THIS CANDIDATE. The source-operation replay establishes a
+small possible budget on the laptop, not an actual net CPU saving of the
+implemented guards/volatile cache. The real candidate campaign passed health
+but does not fill that missing segment-level evidence. A cache hit also skips
+the original invocation chain, so unknown future wrappers would need renewed
+compatibility proof. That maintenance surface is not justified by this limited
+ceiling. This is not a claim that lexical reuse has zero effect, and noisy total
+startup results are not the reason for rejection. No default-off option remains.
+
+Reopen only with a materially larger owner budget or a callback-preserving
+implementation whose actual full guard/hit/miss cost is shown to improve under
+identical 2C/2B segment measurements. Do not repeat ideal-path replay or noisy
+TTMM campaigns as if they supplied that proof. Broader point-resource resolution
+(provider search, filters, decomposition and existence) remains a DIFFERENT
+front; its CPU distribution has not been measured by this experiment.
