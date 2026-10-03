@@ -62,3 +62,34 @@ resolution plan. A hit/miss plan must preserve current filters/provider effects;
 no optimization is currently implemented. Material provider cost can justify a
 narrow deeper owner diagnostic; small hosted data cannot close the physical
 CPU/HDD-sensitive front alone. No laptop or manual instance run launched here.
+## First hosted result and bounded detail follow-up
+
+Run37128621786@458c963e passes: selected14packs in order, blockatlas8192x8192x2,
+Mixin0, menu88137ms (diagnostic health only). Snapshot49367rootqueries,
+11218uniquekeys,38149repeats,29363hits,failures0,inflight0,truncatedfalse.
+All3086sampledroots haveCPU coverage. Actual sampled root CPU500.558225ms,
+providerCPU351.679026ms, not extrapolated to exact total or savings.
+Direct provider calls1445071 (~29.27 per root request):
+
+| Provider | Calls | Hits | Sampled original CPU ms |
+|---|---:|---:|---:|
+| PathPackResources | 984244 | 805 | 253.978788 |
+| FilePackResources | 378245 | 12055 | 44.479642 |
+| CompositePackResources | 47520 | 485 | 7.509775 |
+| VanillaPackResources | 35048 | 16049 | 45.637533 |
+| LDLib CustomResourcePack | 14 | 0 | 0.073288 |
+
+Path provider misses dominate the call distribution, but these observations do
+NOT authorize skipping providers/callbacks or storing negative results. The
+exact keys, point/stack mode, query families and repeated-vs-first ownership
+were missing, so extend THIS diagnostic with family count/hit/probe/sample rows
+and top40 frequent key rows. Retain current instrumentation/return contracts;
+per-key count is atomic to identify repeat starts under concurrency. Family
+keys are namespace/firstpathcomponent/mode, bounded2000; all detail counters
+run outside sampled CPU endpoints where possible. Remaining root instrumentation
+contamination still applies. Top keys keep manager identities distinct and are
+not a captured full ordered query workload. No candidate or physical run yet.
+
+Raw first artifact: C:/BootOptimBench/analysis-reload-20261003/resource-resolution-37128621786.
+The later build must populate detail rows with matching global/family accounting
+before selecting an actual optimization mechanism.
