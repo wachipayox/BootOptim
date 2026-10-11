@@ -102,3 +102,5 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 
 - [Strict path-segment scan and physical decision](strict-path-segment-scan-2026-10-03.md): retained guarded pure-operation CPU removal, clean promotion pending gates.
 - [Point-resource resolution and mutable CIT owner](resource-resolution-owner-2026-10-03.md): completed #332, no result/model cache promoted.
+
+- [Lazy parent-cycle local](parent-cycle-lazy-2026-10-11.md): guarded first-use collection allocation; actual parent traversal CPU/allocation A/B, no callback skip or graph cache.

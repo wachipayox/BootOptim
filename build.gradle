@@ -258,3 +258,19 @@ var strictPathTransformContract = tasks.register('strictPathTransformContract', 
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
 }
 tasks.named('check') { dependsOn strictPathTransformContract }
+
+var parentCycleClasses = layout.buildDirectory.dir('classes/parentCycleContract')
+var compileParentCycleContract = tasks.register('compileParentCycleContract', JavaCompile) {
+    dependsOn tasks.named('classes')
+    source = files('tools/research/ParentCycleSetContract.java')
+    classpath = sourceSets.main.runtimeClasspath
+    destinationDirectory = parentCycleClasses
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+var parentCycleContract = tasks.register('parentCycleContract', JavaExec) {
+    dependsOn compileParentCycleContract
+    classpath = files(parentCycleClasses) + sourceSets.main.runtimeClasspath
+    mainClass = 'ParentCycleSetContract'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check') { dependsOn parentCycleContract }

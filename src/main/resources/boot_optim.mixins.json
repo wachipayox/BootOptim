@@ -5,6 +5,8 @@
   "package": "dev.wachipayox.bootoptim.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "client.BlockModelCycleSetAnchorMixin",
+    "client.ModelBakeryParentCycleStageMixin",
     "client.FilePackOrderedPrefixIndexMixin",
     "client.FileUtilStrictPathSegmentMixin",
     "client.ModelManagerDecocraftArchiveBatchMixin",

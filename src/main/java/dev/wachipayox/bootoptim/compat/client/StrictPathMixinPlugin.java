@@ -24,7 +24,10 @@ public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
             extensions.add(new FinalOperationExtension());
     }
     @Override public String getRefMapperConfig() { return null; }
-    @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) { return true; }
+    @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        if (mixinClassName.endsWith("ModelBakeryParentCycleStageMixin")) return Boolean.getBoolean("boot_optim.profileParentCycleStage");
+        return !mixinClassName.endsWith("BlockModelCycleSetAnchorMixin") || Boolean.getBoolean("boot_optim.lazyParentCycleSet");
+    }
     @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {}
     @Override public List<String> getMixins() { return null; }
     @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
@@ -33,13 +36,20 @@ public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
     private static final class FinalOperationExtension implements IExtension {
         @Override public boolean checkActive(MixinEnvironment environment) {
             return environment.getSide() == MixinEnvironment.Side.CLIENT
-                    && Boolean.parseBoolean(System.getProperty("boot_optim.strictPathSegmentScan", "true"));
+                    && (Boolean.parseBoolean(System.getProperty("boot_optim.strictPathSegmentScan", "true"))
+                    || Boolean.getBoolean("boot_optim.lazyParentCycleSet"));
         }
         @Override public void preApply(ITargetClassContext context) {}
         @Override public void postApply(ITargetClassContext context) {
-            if (context.getClassNode().name.equals("net/minecraft/FileUtil")) {
+            if (context.getClassNode().name.equals("net/minecraft/FileUtil")
+                    && Boolean.parseBoolean(System.getProperty("boot_optim.strictPathSegmentScan", "true"))) {
                 boolean changed = StrictPathSegmentTransform.rewrite(context.getClassNode());
                 LoggerFactory.getLogger("BootOptim/StrictPath").info("BOOTOPTIM_STRICT_SEGMENT_SCAN status={}", changed ? "active" : "fallback");
+            }
+            if (Boolean.getBoolean("boot_optim.lazyParentCycleSet")
+                    && context.getClassNode().name.equals(ParentCycleSetTransform.OWNER)) {
+                boolean changed = ParentCycleSetTransform.rewrite(context.getClassNode());
+                LoggerFactory.getLogger("BootOptim/ParentCycleSet").info("BOOTOPTIM_LAZY_PARENT_CYCLE_SET status={}", changed ? "active" : "fallback");
             }
         }
         @Override public void export(MixinEnvironment environment, String name, boolean force, ClassNode classNode) {}
