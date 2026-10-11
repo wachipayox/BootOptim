@@ -51,6 +51,8 @@ public final class StartupProfiler {
         if (PROFILING_ENABLED) {
             logPhase("main_menu");
         }
+        // Diagnostic snapshot after the actual main-menu marker, never included in TTMM.
+        dev.wachipayox.bootoptim.profiling.client.PathPackEnumerationProbe.report();
         return true;
     }
 
