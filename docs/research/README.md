@@ -108,3 +108,5 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 - [Lazy parent-cycle local: retired](parent-cycle-lazy-2026-10-11.md): actual 2C/2B traversal allocation -93.09%, CPU showed no net win; no runtime code retained.
 
 - [CITResewn fresh-model syntax reuse — rejected](citresewn-fresh-model-syntax-reuse-2026-10-11.md): preimplementation callback/budget rejection; no new performance candidate or runtime switch.
+
+- [Decocraft pure preparation and ordered commit — rejected](modelmanager-pure-prepare-ordered-commit-2026-10-11.md): current consumer seam cannot remove duplicate work while preserving stock behavior; no new runtime candidate.
