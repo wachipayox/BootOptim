@@ -1,6 +1,6 @@
 # BootOptim research ledger
 
-- [Pure preparation / ordered commit: Decocraft consumer-seam NO-GO — 2026-10-11](modelmanager-pure-prepare-ordered-commit-2026-10-11.md): current-integration synthesis of #250 eligibility, #253 source seam, #254 direct-source limit and #265 zero-safe-closure census; no runtime candidate or 2C/2B claimed.
+- [Agent 216 point-resource resolution plan NO-GO — 2026-10-11](resource-resolution-plan-no-go-2026-10-11.md): rejects repeated-lookup caches and speculative provider plans before runtime; source/callback gates unmet, no invented 2C/2B or menu improvement.
 
 - [External report audit and clean JSON promotion — 2026-10-02](web-report-disposition-2026-10-02.md): distinguish new premises from #142/#182/#248 history; no generic cache without a current budget.
 
@@ -104,3 +104,7 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 
 - [Strict path-segment scan and physical decision](strict-path-segment-scan-2026-10-03.md): retained guarded pure-operation CPU removal, clean promotion pending gates.
 - [Point-resource resolution and mutable CIT owner](resource-resolution-owner-2026-10-03.md): completed #332, no result/model cache promoted.
+
+- [Lazy parent-cycle local: retired](parent-cycle-lazy-2026-10-11.md): actual 2C/2B traversal allocation -93.09%, CPU showed no net win; no runtime code retained.
+
+- [Decocraft pure preparation and ordered commit — rejected](modelmanager-pure-prepare-ordered-commit-2026-10-11.md): current consumer seam cannot remove duplicate work while preserving stock behavior; no new runtime candidate.
