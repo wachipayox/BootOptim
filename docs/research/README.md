@@ -1,5 +1,7 @@
 # BootOptim research ledger
 
+- [Pure preparation / ordered commit: Decocraft consumer-seam NO-GO — 2026-10-11](modelmanager-pure-prepare-ordered-commit-2026-10-11.md): current-integration synthesis of #250 eligibility, #253 source seam, #254 direct-source limit and #265 zero-safe-closure census; no runtime candidate or 2C/2B claimed.
+
 - [External report audit and clean JSON promotion — 2026-10-02](web-report-disposition-2026-10-02.md): distinguish new premises from #142/#182/#248 history; no generic cache without a current budget.
 
 Final Ferrite late-presize decision: [retired after physical gate — 2026-10-01](ferrite-presize-final-decision-2026-10-01.md). This supersedes the earlier hosted segment-retain/pending-promotion status; no active Ferrite candidate remains.
