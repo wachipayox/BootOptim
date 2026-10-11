@@ -1,5 +1,7 @@
 # BootOptim research ledger
 
+- [Agent 216 point-resource resolution plan NO-GO — 2026-10-11](resource-resolution-plan-no-go-2026-10-11.md): rejects repeated-lookup caches and speculative provider plans before runtime; source/callback gates unmet, no invented 2C/2B or menu improvement.
+
 - [External report audit and clean JSON promotion — 2026-10-02](web-report-disposition-2026-10-02.md): distinguish new premises from #142/#182/#248 history; no generic cache without a current budget.
 
 Final Ferrite late-presize decision: [retired after physical gate — 2026-10-01](ferrite-presize-final-decision-2026-10-01.md). This supersedes the earlier hosted segment-retain/pending-promotion status; no active Ferrite candidate remains.
@@ -103,4 +105,6 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 - [Strict path-segment scan and physical decision](strict-path-segment-scan-2026-10-03.md): retained guarded pure-operation CPU removal, clean promotion pending gates.
 - [Point-resource resolution and mutable CIT owner](resource-resolution-owner-2026-10-03.md): completed #332, no result/model cache promoted.
 
-- [CITResewn fresh-model syntax-reuse feasibility — 2026-10-11](citresewn-fresh-model-syntax-reuse-2026-10-11.md): **REJECT / no runtime candidate**; #332 proves repeated strings but not exclusive recoverable JSON grammar CPU, and mutable NeoForge geometry/customData callbacks prevent shared models or naive shared Gson trees. #151 remains retained; no 2C/2B claims or dormant switch.
+- [Lazy parent-cycle local: retired](parent-cycle-lazy-2026-10-11.md): actual 2C/2B traversal allocation -93.09%, CPU showed no net win; no runtime code retained.
+
+- [CITResewn fresh-model syntax reuse — rejected](citresewn-fresh-model-syntax-reuse-2026-10-11.md): preimplementation callback/budget rejection; no new performance candidate or runtime switch.
