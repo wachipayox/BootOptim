@@ -102,3 +102,5 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 
 - [Strict path-segment scan and physical decision](strict-path-segment-scan-2026-10-03.md): retained guarded pure-operation CPU removal, clean promotion pending gates.
 - [Point-resource resolution and mutable CIT owner](resource-resolution-owner-2026-10-03.md): completed #332, no result/model cache promoted.
+
+- [CITResewn fresh-model syntax-reuse feasibility — 2026-10-11](citresewn-fresh-model-syntax-reuse-2026-10-11.md): **REJECT / no runtime candidate**; #332 proves repeated strings but not exclusive recoverable JSON grammar CPU, and mutable NeoForge geometry/customData callbacks prevent shared models or naive shared Gson trees. #151 remains retained; no 2C/2B claims or dormant switch.
