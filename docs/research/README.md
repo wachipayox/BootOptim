@@ -106,3 +106,5 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 - [Point-resource resolution and mutable CIT owner](resource-resolution-owner-2026-10-03.md): completed #332, no result/model cache promoted.
 
 - [Lazy parent-cycle local: retired](parent-cycle-lazy-2026-10-11.md): actual 2C/2B traversal allocation -93.09%, CPU showed no net win; no runtime code retained.
+
+- [CITResewn fresh-model syntax reuse — rejected](citresewn-fresh-model-syntax-reuse-2026-10-11.md): preimplementation callback/budget rejection; no new performance candidate or runtime switch.
