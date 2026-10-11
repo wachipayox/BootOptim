@@ -1,5 +1,7 @@
 # BootOptim research ledger
 
+- [Agent 216 point-resource resolution plan NO-GO — 2026-10-11](resource-resolution-plan-no-go-2026-10-11.md): rejects repeated-lookup caches and speculative provider plans before runtime; source/callback gates unmet, no invented 2C/2B or menu improvement.
+
 - [External report audit and clean JSON promotion — 2026-10-02](web-report-disposition-2026-10-02.md): distinguish new premises from #142/#182/#248 history; no generic cache without a current budget.
 
 Final Ferrite late-presize decision: [retired after physical gate — 2026-10-01](ferrite-presize-final-decision-2026-10-01.md). This supersedes the earlier hosted segment-retain/pending-promotion status; no active Ferrite candidate remains.
@@ -20,6 +22,8 @@ markers, post-menu presentation and inclusive listener/task-sum timings remain
 separate buckets; overlapping values are never summed. On the Prism laptop,
 stop Prism before editing `instance.cfg` and confirm the effective JVM command
 line afterwards, because Prism may rewrite stale in-memory arguments on exit.
+
+- [Temporary material-resolution chain list, relay 214 final rejection — 2026-10-11](material-chain-list-lazy-2026-10-11.md): valid 2C/2B on the actual patched method shows mixed-sign net whole-bake CPU despite lower allocation; retired with no production change.
 
 ## Status vocabulary
 
@@ -42,8 +46,6 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 8. Links to the relevant profiling/experiment PRs.
 
 ## Research index
-
-- [Non-ZIP PathPackResources enumeration catalogue — 2026-10-11](non-zip-pathpack-enumeration-2026-10-11.md): **REJECTED #340**; 17,581 hosted list calls and 1,092.269220 ms callback-excluded *diagnostic* CPU do not establish net savings or immutable provider identity. No catalog/cache/profiler retained; physical and 2C/2B candidate evidence not available.
 
 - [Game-side lexical prefix IO audit — 2026-10-01](path-prefix-io-audit-2026-10-01.md) — actual directory/ZIP/filter/priority/dynamic-file/closed-pack contracts pass offline; no runtime or performance claim.
 
@@ -104,3 +106,11 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 
 - [Strict path-segment scan and physical decision](strict-path-segment-scan-2026-10-03.md): retained guarded pure-operation CPU removal, clean promotion pending gates.
 - [Point-resource resolution and mutable CIT owner](resource-resolution-owner-2026-10-03.md): completed #332, no result/model cache promoted.
+
+- [Lazy parent-cycle local: retired](parent-cycle-lazy-2026-10-11.md): actual 2C/2B traversal allocation -93.09%, CPU showed no net win; no runtime code retained.
+
+- [CITResewn fresh-model syntax reuse — rejected](citresewn-fresh-model-syntax-reuse-2026-10-11.md): preimplementation callback/budget rejection; no new performance candidate or runtime switch.
+
+- [Decocraft pure preparation and ordered commit — rejected](modelmanager-pure-prepare-ordered-commit-2026-10-11.md): current consumer seam cannot remove duplicate work while preserving stock behavior; no new runtime candidate.
+
+- [Non-ZIP PathPackResources catalogue — rejected](non-zip-pathpack-enumeration-2026-10-11.md): new diagnostic census; class/root identity cannot prove immutable contents or filters, no runtime catalogue retained.
