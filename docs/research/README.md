@@ -23,6 +23,8 @@ separate buckets; overlapping values are never summed. On the Prism laptop,
 stop Prism before editing `instance.cfg` and confirm the effective JVM command
 line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
+- [Temporary material-resolution chain list, relay 214 final rejection — 2026-10-11](material-chain-list-lazy-2026-10-11.md): valid 2C/2B on the actual patched method shows mixed-sign net whole-bake CPU despite lower allocation; retired with no production change.
+
 ## Status vocabulary
 
 - **PROFILED** — diagnostic evidence only; no optimization conclusion yet.
