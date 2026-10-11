@@ -9,7 +9,6 @@
     "client.FileUtilStrictPathSegmentMixin",
     "client.ModelManagerDecocraftArchiveBatchMixin",
     "client.PathPackResourcesRootAccessor",
-    "client.PathPackEnumerationProbeMixin",
     "client.SodiumQuadFlagClassifierMixin",
     "client.SodiumQuadCoordinateBridgeMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",

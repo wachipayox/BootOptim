@@ -43,6 +43,8 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 ## Research index
 
+- [Non-ZIP PathPackResources enumeration catalogue — 2026-10-11](non-zip-pathpack-enumeration-2026-10-11.md): **REJECTED #340**; 17,581 hosted list calls and 1,092.269220 ms callback-excluded *diagnostic* CPU do not establish net savings or immutable provider identity. No catalog/cache/profiler retained; physical and 2C/2B candidate evidence not available.
+
 - [Game-side lexical prefix IO audit — 2026-10-01](path-prefix-io-audit-2026-10-01.md) — actual directory/ZIP/filter/priority/dynamic-file/closed-pack contracts pass offline; no runtime or performance claim.
 
 - [Generated-item pixel-query reuse rejection — 2026-09-30, closed 2026-10-01](generated-item-pixel-query-followup-2026-09-30.md) — retired: identical topology is insufficient when alpha callbacks change from 12 to 4 and change order; no runtime candidate retained. Reopen only with a changed, proven purity premise.
