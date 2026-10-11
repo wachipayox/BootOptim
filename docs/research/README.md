@@ -112,3 +112,5 @@ A large count reduction is not sufficient evidence of startup improvement. BootO
 - [CITResewn fresh-model syntax reuse — rejected](citresewn-fresh-model-syntax-reuse-2026-10-11.md): preimplementation callback/budget rejection; no new performance candidate or runtime switch.
 
 - [Decocraft pure preparation and ordered commit — rejected](modelmanager-pure-prepare-ordered-commit-2026-10-11.md): current consumer seam cannot remove duplicate work while preserving stock behavior; no new runtime candidate.
+
+- [Non-ZIP PathPackResources catalogue — rejected](non-zip-pathpack-enumeration-2026-10-11.md): new diagnostic census; class/root identity cannot prove immutable contents or filters, no runtime catalogue retained.
