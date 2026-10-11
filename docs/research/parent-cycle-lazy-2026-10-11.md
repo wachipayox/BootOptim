@@ -38,4 +38,3 @@ No laptop, fast-PC visual/gameplay or GC-specific experiment was performed. Do n
 ## Reopening criteria
 
 A materially different implementation must demonstrate lower net traversal CPU including added branches and JIT effects, or a deliberately chosen and measured memory/GC benefit worth its cost. Inline control flow/JIT behavior is a possible investigation, **not a demonstrated fix**. Do not repeat this exact helper merely because millions of factory calls disappeared. Any reopened candidate needs current-graph callback/cycle/error invariants, actual activation, comparable owner metrics first and physical evidence when necessary. No forgotten disabled production option is retained.
-
