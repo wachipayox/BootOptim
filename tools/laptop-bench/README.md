@@ -81,20 +81,10 @@ the loop running (2026-10-14: an orphaned loop started a Prism run on top of a P
 - The account is logged in by the user; agents never type or copy credentials.
 - Screen capture for diagnosis: an Interactive scheduled task running a `System.Drawing` `CopyFromScreen`
   script, then copy the PNG back.
-- Old scheduled tasks from finished campaigns were removed; remove yours at the end of a campaign.
-
-## Incident log 2026-10-14 (why the rules above exist)
-
-1. Prism pre-launch took >10 min on the HDD + 2.4 GHz Wi-Fi (metadata/account refresh, Java check, asset
-   downloads) and exceeded the launch grace twice; SSH dropped while the link was saturated.
-2. Stopping a background Git Bash campaign stopped only the parent shell; the loop kept going and started a
-   Prism run on top of a launcher run. Kill drivers by command line (or PID file), then `Recover` the
-   transactions in reverse order.
-3. The launcher rebrand moved the data directory from `%APPDATA%\PandoraLauncher` to
-   `%APPDATA%\WachilandLauncher` without migration: the instance, account, `libraries`, `assets`,
-   `logconfigs` and `metadata` had to be re-created/copied. The copied instance kept the old
-   `preferred_account`, so the launcher opened a browser login and never started Java.
-4. Task Scheduler refused tasks registered without battery settings (`0x800710E0`).
+- Old scheduled tasks from finished campaigns were removed; remove yours at the end of a campaign. Register
+  tasks with explicit battery settings or Task Scheduler refuses them (`0x800710E0`).
+- Prism pre-launch (metadata/account refresh, Java check, asset downloads) can exceed the launch grace on
+  this machine; that is why the launcher runner is the default.
 
 ## Known machine issues
 
@@ -120,8 +110,6 @@ enables OpenAL Soft logging. For isolation, move mod JARs out of `mods` (and edi
 `try/finally` that always restores them. WER local dumps for `javaw.exe` are enabled (minidumps to
 `C:\BootOptimBench\controller\worldentry\dumps`).
 
-Findings 2026-10-14 (reported to WachilandEliteCompanion through wbombo `decisions.md`): the client renders one
-world frame and dies ~30–70 s after `joined the game` with `abort()` (`0xc0000409`, fast-fail 7) inside LWJGL
-`OpenAL.dll` 1.23.1 at offset `0xa2b05`, as in September. It still reproduces without MCEF+WebDisplays and
-without AnalogAudio. OpenAL Soft logs a healthy context (stereo float32 48 kHz) and no error before the abort.
-The master-volume-0 isolation was invalidated by the disk storm; it is the next step once the disk is replaced.
+The world-entry native crash (OpenAL `abort()`) found with this script is a pack bug, tracked in
+WachilandEliteCompanion issue #1 (private); September analysis in
+`docs/research/p2-webdisplay-openal-native-crash-2026-09-06.md`.
