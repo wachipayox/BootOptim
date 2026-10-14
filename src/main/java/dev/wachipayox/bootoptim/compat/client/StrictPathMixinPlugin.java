@@ -24,8 +24,10 @@ public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
         Object transformer = MixinEnvironment.getCurrentEnvironment().getActiveTransformer();
         if (transformer instanceof IMixinTransformer mixinTransformer
                 && mixinTransformer.getExtensions() instanceof Extensions extensions
-                && extensions.getExtensions().stream().noneMatch(e -> e instanceof FinalOperationExtension))
+                && extensions.getExtensions().stream().noneMatch(e -> e instanceof FinalOperationExtension)) {
             extensions.add(new FinalOperationExtension());
+            extensions.add(new CompatCheckExtension());
+        }
     }
     @Override public String getRefMapperConfig() { return null; }
     @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) { return true; }
@@ -34,6 +36,18 @@ public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
     @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
     @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
         CompatInjectionCheck.afterApply(targetClassName, targetClass, mixinClassName, mixinInfo);
+    }
+
+    /** Runs after all mixins (registered after MixinExtras' own extension) to verify injections. */
+    private static final class CompatCheckExtension implements IExtension {
+        @Override public boolean checkActive(MixinEnvironment environment) {
+            return environment.getSide() == MixinEnvironment.Side.CLIENT;
+        }
+        @Override public void preApply(ITargetClassContext context) {}
+        @Override public void postApply(ITargetClassContext context) {
+            CompatInjectionCheck.verifyFinal(context.getClassNode());
+        }
+        @Override public void export(MixinEnvironment environment, String name, boolean force, ClassNode classNode) {}
     }
 
     private static final class FinalOperationExtension implements IExtension {

@@ -31,6 +31,10 @@ public final class CompatInjectionCheck {
             "schm.shsupercm.citresewn.", "citresewn");
     private static final Set<String> DECLARED_TARGETS = ConcurrentHashMap.newKeySet();
     private static final Set<String> APPLIED_TARGETS = ConcurrentHashMap.newKeySet();
+    /** Internal target name -> injectors to verify once the class is fully transformed. */
+    private static final Map<String, List<Pending>> PENDING = new ConcurrentHashMap<>();
+
+    private record Pending(String mixin, String targetClassName, List<String> handlers) {}
 
     private CompatInjectionCheck() {}
 
@@ -38,22 +42,49 @@ public final class CompatInjectionCheck {
         DECLARED_TARGETS.addAll(targets);
     }
 
+    /**
+     * Mixin config plugin postApply: only records the injectors. MixinExtras injectors such as
+     * {@code @WrapOperation} are applied later, so verification waits for {@link #verifyFinal}.
+     */
     static void afterApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
         APPLIED_TARGETS.add(targetClassName);
         try {
-            ClassNode mixin = mixinInfo.getClassNode(0);
-            List<String> missing = new ArrayList<>();
-            for (MethodNode method : mixin.methods) {
-                if (isInjector(method) && !isReferenced(targetClass, method.name)) {
-                    missing.add(method.name);
+            List<String> handlers = new ArrayList<>();
+            for (MethodNode method : mixinInfo.getClassNode(0).methods) {
+                if (isInjector(method)) {
+                    handlers.add(method.name);
                 }
             }
-            if (!missing.isEmpty()) {
-                CompatLog.fallback(simpleName(mixinClassName), modFor(targetClassName),
-                        "injection_target_not_found target=" + targetClassName + " handlers=" + missing);
+            if (!handlers.isEmpty()) {
+                PENDING.computeIfAbsent(targetClass.name, key -> new ArrayList<>())
+                        .add(new Pending(simpleName(mixinClassName), targetClassName, handlers));
             }
         } catch (RuntimeException failure) {
             // The check is diagnostic only; never let it affect class transformation.
+        }
+    }
+
+    /** Mixin extension postApply: the class now carries every mixin and MixinExtras injection. */
+    static void verifyFinal(ClassNode targetClass) {
+        List<Pending> pending = PENDING.remove(targetClass.name);
+        if (pending == null) {
+            return;
+        }
+        try {
+            for (Pending entry : pending) {
+                List<String> missing = new ArrayList<>();
+                for (String handler : entry.handlers()) {
+                    if (!isReferenced(targetClass, handler)) {
+                        missing.add(handler);
+                    }
+                }
+                if (!missing.isEmpty()) {
+                    CompatLog.fallback(entry.mixin(), modFor(entry.targetClassName()),
+                            "injection_target_not_found target=" + entry.targetClassName() + " handlers=" + missing);
+                }
+            }
+        } catch (RuntimeException failure) {
+            // Diagnostic only.
         }
     }
 
