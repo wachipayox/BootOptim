@@ -1,5 +1,7 @@
 # BootOptim research ledger
 
+- [JIT compiler pressure — 2026-10-14](jit-compiler-pressure-2026-10-14.md): JVM flags only. `CICompilerCount=2` wins 3/3 same-VM hosted pairs (−3.9 to −4.7 s to `main_menu`), physical gate + profile delivery pending; C1-only ceiling rejected; delayed C2 retired. Startup report now records JVM CPU/JIT/GC counters.
+
 - [Agent 216 point-resource resolution plan NO-GO — 2026-10-11](resource-resolution-plan-no-go-2026-10-11.md): rejects repeated-lookup caches and speculative provider plans before runtime; source/callback gates unmet, no invented 2C/2B or menu improvement.
 
 - [External report audit and clean JSON promotion — 2026-10-02](web-report-disposition-2026-10-02.md): distinguish new premises from #142/#182/#248 history; no generic cache without a current budget.
