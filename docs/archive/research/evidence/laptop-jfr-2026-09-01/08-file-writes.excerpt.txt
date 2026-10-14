@@ -1,0 +1,15 @@
+Source: JMC text export `08-file-writes.txt` supplied 2026-09-01.
+Preservation: complete visible leading rows used by BootOptim research; not the complete raw file.
+
+Path                                                       Writes Total Written
+N/A                                                        72     12,2 kB
+logs\debug.log                                             31      9,7 kB
+...\config\fancymenu\ui_themes\spooky_season.json       1      8,0 kB
+...\config\fancymenu\ui_themes\dark_high_contrast.json  1      8,0 kB
+logs\debug-1.log.gz                                         1      8,0 kB
+...\Temp\imageio....tmp                                    1      2,3 kB
+logs\latest.log                                             4      1,3 kB
+...\jna....dll                                              1      1,0 kB
+...\config\moreculling.toml                                1    512 bytes
+...\logs\bootoptim-startup.log                             2    317 bytes
+...\data\fabricDefaultResourcePacks.dat                    2     80 bytes

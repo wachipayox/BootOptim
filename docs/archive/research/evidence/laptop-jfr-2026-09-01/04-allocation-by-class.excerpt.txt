@@ -1,0 +1,21 @@
+Source: JMC text export `04-allocation-by-class.txt` supplied 2026-09-01.
+Preservation: top rows used by BootOptim research; not the complete raw file.
+
+Object Type                                                     Allocation Pressure
+byte[]                                                          21,00%
+long[]                                                          10,79%
+java.lang.reflect.Field                                          9,99%
+net.minecraft.world.phys.shapes.BitSetDiscreteVoxelShape$$Lambda... 7,21%
+int[]                                                            6,29%
+char[]                                                           5,20%
+boolean[]                                                        3,54%
+java.lang.Object[]                                               3,13%
+java.lang.String                                                 2,43%
+java.lang.ref.WeakReference                                      2,13%
+org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable 1,46%
+org.joml.Matrix4f                                                1,10%
+java.lang.String[]                                               1,00%
+java.util.stream.ReferencePipeline$Head                          0,96%
+double[]                                                         0,92%
+java.util.HashMap$Node                                           0,92%
+java.util.HashMap$Node[]                                         0,78%

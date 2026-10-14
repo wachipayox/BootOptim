@@ -1,0 +1,19 @@
+Source: JMC text export `12-gc.txt` supplied 2026-09-01.
+Preservation: representative young-GC rows used by BootOptim research; not the complete raw file.
+Note: the original raw TXT is not available byte-for-byte in this chat. Durations below preserve the values supplied in the research handoff; `~` marks values reported there as approximate.
+
+GC ID  Pause
+101    ~154 ms
+102    ~161 ms
+103    ~242 ms
+104    ~277 ms
+113    ~223 ms
+114    ~214 ms
+120    ~243 ms
+121    ~433 ms
+122    ~211 ms
+123    ~226 ms
+124    ~244 ms
+125    ~234 ms
+
+Interpretation: these are individual collection pauses, not additive proof of a single serial startup tail. Use the JMC pause summary for aggregate pause time.
