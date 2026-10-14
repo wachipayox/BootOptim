@@ -25,8 +25,9 @@ Internet function are unchanged. It logs
 
 ## Safety
 
-- Applies only when the loaded `xaeroworldmap` version is exactly `1.41.0`;
-  any other or unknown version, or a failed version probe, runs the stock call.
+- Not pinned to a Xaero version (policy 2026-10-14). If `loadLater()` no longer
+  calls `checkModVersion()`, the injection finds no target, stock behaviour
+  remains and the post-apply check logs `[WBOMBO-COMPAT] FALLBACK`.
 - Absent Xaero: the pseudo-mixin does not apply (fail open, no hard dependency).
 - Kill switch: `-Dboot_optim.xaeroSkipStartupUpdateCheck=false`.
 - Observable trade-off: no automatic Xaero World Map update notification for
@@ -41,6 +42,6 @@ menu; **no time-to-main-menu improvement is claimed**.
 
 ## Reopen / revisit
 
-When Xaero World Map changes version (the guard turns the patch off), on any
+On a `[WBOMBO-COMPAT] FALLBACK` for this mechanism, on any
 unexpected map behaviour, or if physical evidence shows the stall no longer
 occurs.

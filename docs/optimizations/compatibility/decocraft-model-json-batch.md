@@ -1,5 +1,8 @@
 # Exact Decocraft model JSON batching
 
+> **Version policy (2026-10-14):** no longer pinned to a mod version or JAR hash. See "Mod compatibility policy" in `docs/agent-guide.md`; fallbacks log `[WBOMBO-COMPAT] FALLBACK`.
+> Gate now: any installed Decocraft JAR is snapshotted with a stable-file check and caps (50,000 entries, 32 MiB, 64 KiB per entry; larger entries stay on the stock path). The exact size/digest below describe the validated corpus, not a runtime requirement.
+
 Status: production promotion #325; integrated when that PR is merged.
 Default enabled on the guarded path; kill switch
 `-Dboot_optim.decocraftModelArchiveBatch=false`. Minecraft1.21.1 exact

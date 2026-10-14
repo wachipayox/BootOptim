@@ -24,7 +24,7 @@ public final class McefFirstConsumerDefer {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String MCEF_CLASS = "com.cinemamod.mcef.MCEF";
     private static final String FANCY_MCEF_UTIL_CLASS = "de.keksuccino.fancymenu.util.mcef.MCEFUtil";
-    private static final String EXPECTED_VERSION = "2.1.6-1.21.1";
+    private static final String MECHANISM = "mcef-first-consumer-defer";
     private static final boolean ENABLED = Boolean.parseBoolean(System.getProperty(PROPERTY, "true"));
     private static final ThreadLocal<Boolean> FORCE_INITIALIZE = ThreadLocal.withInitial(() -> false);
     private static final AtomicReference<State> STATE = new AtomicReference<>(State.ARMED);
@@ -92,9 +92,9 @@ public final class McefFirstConsumerDefer {
 
         if (STATE.compareAndSet(State.ARMED, State.DEFERRED)) {
             LOGGER.info(
-                    "BOOTOPTIM_MCEF_FIRST_CONSUMER status=deferred mcef_version={} kill_switch=-D{}=false",
-                    EXPECTED_VERSION,
+                    "BOOTOPTIM_MCEF_FIRST_CONSUMER status=deferred kill_switch=-D{}=false",
                     PROPERTY);
+            CompatLog.active(MECHANISM, "mcef");
         }
         suppressedCalls++;
         return true;
@@ -245,6 +245,10 @@ public final class McefFirstConsumerDefer {
         return result;
     }
 
+    /**
+     * Not pinned to an MCEF version: deferral needs only MCEF's public lifecycle methods
+     * ({@code initialize}, {@code isInitialized}). If they changed, fall back to stock and warn.
+     */
     private static boolean isCompatible() {
         if (compatibilityChecked) {
             return compatible;
@@ -253,31 +257,29 @@ public final class McefFirstConsumerDefer {
             if (compatibilityChecked) {
                 return compatible;
             }
-
-            String version = null;
+            String reason = null;
             try {
-                version = ModList.get()
-                        .getModContainerById("mcef")
-                        .map(container -> container.getModInfo().getVersion().toString())
-                        .orElse(null);
-                compatible = EXPECTED_VERSION.equals(version);
-            } catch (RuntimeException exception) {
-                compatible = false;
-                if (!compatibilityReported) {
-                    compatibilityReported = true;
-                    LOGGER.warn(
-                            "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=version_probe_failed",
-                            exception);
+                if (!ModList.get().isLoaded("mcef")) {
+                    reason = "mcef_absent";
+                } else {
+                    Class<?> mcef = Class.forName(MCEF_CLASS, false, McefFirstConsumerDefer.class.getClassLoader());
+                    if (mcef.getMethod("initialize").getReturnType() != boolean.class
+                            || mcef.getMethod("isInitialized").getReturnType() != boolean.class) {
+                        reason = "mcef_lifecycle_signature_changed";
+                    }
                 }
+            } catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
+                reason = "mcef_lifecycle_methods_missing " + exception.getClass().getSimpleName();
             }
+            compatible = reason == null;
             compatibilityChecked = true;
-
             if (!compatible && !compatibilityReported) {
                 compatibilityReported = true;
-                LOGGER.info(
-                        "BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=mcef_version expected={} actual={}",
-                        EXPECTED_VERSION,
-                        version == null ? "absent" : version);
+                if ("mcef_absent".equals(reason)) {
+                    LOGGER.info("BOOTOPTIM_MCEF_FIRST_CONSUMER status=disabled reason=mcef_absent");
+                } else {
+                    CompatLog.fallback(MECHANISM, "mcef", reason);
+                }
             }
             return compatible;
         }
