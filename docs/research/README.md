@@ -27,6 +27,19 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 Branch-only evidence from unmerged experiment/diagnostic branches (229 files, harvested 2026-10-14 before branch/PR cleanup) is preserved verbatim in [`docs/archive/`](../archive/README.md). It is historical and not mandatory reading; this ledger stays authoritative.
 
+## Pre-entrypoint phase (JVM → FML → ModLauncher → mod entrypoint): archived summary
+
+Context: this phase is ~31 s on hosted exact-pack but ~124–180 s on the physical laptop. It was mined heavily in September 2026; every document below lives in [`docs/archive/research/`](../archive/research/) and **none left a runtime candidate**. Read a file only if you reopen its exact premise.
+
+- **Discovery / JarJar / scan:** generic dependency/JarJar result cache rejected (#134: locators depend on runtime state); copy+SHA JiJ sidecar rejected for FML 4.0.43; background scan is already a prepare/barrier design; root-wrapper discovery replay NO-GO; ModFile metadata re-read proven duplicate but hosted ceiling too small (reopen only with physical HDD evidence). Files: `discovery-artifact-critical-path`, `fml-dependency-discovery-cache-boundary`, `fml-4.0.43-jij-*`, `fml-background-scan-barrier`, `root-wrapper-discovery-replay`, `fml-modfile-metadata-reread`.
+- **Construction / registration:** construction scheduler rejected; mod-container registry attribution closed; AT collection loop tiny — the only credible route is an upstream AccessTransformers-engine change (test contract exists, no BootOptim cache). Files: `fml-construction-*`, `fml-registry-attribution-pr99-final`, `fml-registration-publication`, `access-transformer*`, `create-registrate-callback-frontier`, `registry-block-cpu-attribution`.
+- **Mixin / ModLauncher:** per-config prepare NO-GO; opcode-name lookup micro-candidate NO-GO; Bootstrap "double transform" explained (not two definitions); pre-bootstrap redundancy NO-GO without an upstream contract; post-accept ModLauncher fork NO-GO as optimization. Files: `mixin-*`, `modlauncher-*`, `post-discovery-pre-transformers-residual`, `pre-minecraft-bootstrap-transition`, `minecraft-bootstrap-causal-trace`.
+- **Connector:** warm transform cache already hits 3/3; split-package residual NO-GO. Files: `connector-*`.
+- **Class-data sharing:** AppCDS retired (+3.8 s physical median, #290); pre-generated distributable archive NO-GO; JDK 25 AOT cache NO-GO (#293). Files: `appcds-*`, `pandora-appcds-net-benefit`, `jdk25-aot-cache-laptop`.
+- **Physical scaling / I/O:** `early-fml-physical-variance-boundary` leaves one unmeasured BootOptim-owned frontier (wrapper lookup fallback in `DiscoveryStartLocator`); `decocraft-jar-readahead-ceiling` was left as ACTIVE DIAGNOSTIC without a decision (**pending closure**, tracked in wbombo). Other scaling/trace files (`early-modloading-scaling`, `laptop-startup-scaling`, `bootstrap-variance-boundary`, `fml-*-causal-trace`, `fml-lifecycle-*`) are observability only.
+
+Reopen rule: a new premise must name which bucket above it differs from and why the old evidence does not apply.
+
 ## PRs closed in the 2026-10-14 cleanup
 
 These PRs were open with decisions already reached or superseded. Their documents are preserved in [`docs/archive/`](../archive/README.md); the PR stays the place for code and discussion.

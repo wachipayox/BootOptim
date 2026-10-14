@@ -1,12 +1,14 @@
 package dev.wachipayox.bootoptim.optimization.client;
 
 import com.mojang.logging.LogUtils;
+import dev.wachipayox.bootoptim.compat.client.CompatLog;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -37,6 +39,8 @@ public final class CitResewnGlowingTrimLegacyWarningSuppression {
     private static final String MESSAGE_PREFIX = "[citresewn] Using legacy nbt.display.Name @L";
     private static final String PATH_MARKER = " in minecraft:optifine/cit/";
     private static final String PACK_SUFFIX = " from file/Glowing Trim Armors v5.0.zip";
+    private static final String COMPAT_MECHANISM = "citresewn-glowing-trim-warning-suppression";
+    private static final String COMPAT_MOD = "citresewn";
     private static final long EXPECTED_EXACT_PACK_COUNT = 7_920L;
     private static final boolean ENABLED = Boolean.parseBoolean(System.getProperty(PROPERTY, "true"));
     private static final AtomicLong SUPPRESSED = new AtomicLong();
@@ -68,12 +72,14 @@ public final class CitResewnGlowingTrimLegacyWarningSuppression {
         try {
             if (!matcherContractHolds()) {
                 LOGGER.warn("BOOTOPTIM_CIT_LEGACY_WARNING_SUPPRESSION status=unavailable reason=matcher_contract");
+                compatFallback("matcher_contract");
                 return;
             }
             if (!(LogManager.getFactory() instanceof Log4jContextFactory factory)) {
                 LOGGER.warn(
                         "BOOTOPTIM_CIT_LEGACY_WARNING_SUPPRESSION status=unavailable reason=non_core_factory factory={}",
                         LogManager.getFactory().getClass().getName());
+                compatFallback("non_core_log4j_factory");
                 return;
             }
 
@@ -87,6 +93,7 @@ public final class CitResewnGlowingTrimLegacyWarningSuppression {
                 LOGGER.warn(
                         "BOOTOPTIM_CIT_LEGACY_WARNING_SUPPRESSION status=unavailable reason=logger_context_match_count matches={} contexts={}",
                         matches.size(), factory.getSelector().getLoggerContexts().size());
+                compatFallback("citresewn_logger_matches_" + matches.size());
                 return;
             }
 
@@ -139,11 +146,23 @@ public final class CitResewnGlowingTrimLegacyWarningSuppression {
             target.addFilter(selectedFilter);
             filter = selectedFilter;
             armed = true;
+            CompatLog.active(COMPAT_MECHANISM, COMPAT_MOD);
             LOGGER.info(
                     "BOOTOPTIM_CIT_LEGACY_WARNING_SUPPRESSION status=armed logger={} context={} matcher=exact_glowing_trim_pack expected_exact_pack={} contract=passed",
                     target.getName(), target.getContext().getName(), EXPECTED_EXACT_PACK_COUNT);
         } catch (RuntimeException ex) {
             LOGGER.warn("BOOTOPTIM_CIT_LEGACY_WARNING_SUPPRESSION status=unavailable reason=install_failure", ex);
+            compatFallback("install_failure");
+        }
+    }
+
+    private static void compatFallback(String reason) {
+        try {
+            if (ModList.get() != null && ModList.get().isLoaded(COMPAT_MOD)) {
+                CompatLog.fallback(COMPAT_MECHANISM, COMPAT_MOD, reason);
+            }
+        } catch (RuntimeException ignored) {
+            // Compatibility reporting must never break startup.
         }
     }
 

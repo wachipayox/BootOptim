@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.optimization.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import dev.wachipayox.bootoptim.compat.client.CompatLog;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -20,6 +21,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.extensions.IBakedModelExtension;
 import net.neoforged.neoforge.client.model.BakedModelWrapper;
 import net.neoforged.neoforge.client.model.IQuadTransformer;
@@ -43,6 +45,7 @@ public final class DecocraftRotatedQuadReuse {
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/DecocraftBakeReuse");
     private static final String GEOMETRY_CLASS = "com.razz.decocraft.models.bbmodel.BBModelGeometryLoader$BBGeometry";
     private static final String BAKED_MODEL_CLASS = "com.razz.decocraft.models.bbmodel.BlockbenchModel";
+    private static final String COMPAT_MECHANISM = "decocraft-quarter-turn-reuse";
     private static final float EPSILON = 1.0e-4F;
     private static final boolean ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.decocraftQuarterTurnReuse", "true"));
@@ -154,6 +157,7 @@ public final class DecocraftRotatedQuadReuse {
 
     public static synchronized void finishModelBake() {
         try {
+            reportCompatibility();
             if (decocraftCalls != 0) {
                 LOGGER.info(
                         "BOOTOPTIM_DECOCRAFT_QUAD_REUSE status={} calls={} base_bakes={} derived_bakes={} exact_reuses={} fallbacks={} rejected_models={} derived_quads={} derived_ms={} fallback_ms={} rotation_90={} rotation_180={} rotation_270={}",
@@ -174,6 +178,28 @@ public final class DecocraftRotatedQuadReuse {
         } finally {
             BASES.clear();
             DERIVED_BY_ROTATION.clear();
+        }
+    }
+
+    /** Code-shape drift check: Decocraft present but its geometry class or model shape changed. */
+    private static void reportCompatibility() {
+        if (!ENABLED || !decocraftLoaded()) {
+            return;
+        }
+        if (decocraftCalls == 0) {
+            CompatLog.fallback(COMPAT_MECHANISM, "decocraft", "geometry_class_not_seen:" + GEOMETRY_CLASS);
+        } else if (derivedBakes == 0 && exactReuses == 0 && rejectedModels == baseBakes) {
+            CompatLog.fallback(COMPAT_MECHANISM, "decocraft", "all_models_rejected_by_shape_guards");
+        } else {
+            CompatLog.active(COMPAT_MECHANISM, "decocraft");
+        }
+    }
+
+    private static boolean decocraftLoaded() {
+        try {
+            return ModList.get() != null && ModList.get().isLoaded("decocraft");
+        } catch (RuntimeException failure) {
+            return false;
         }
     }
 
