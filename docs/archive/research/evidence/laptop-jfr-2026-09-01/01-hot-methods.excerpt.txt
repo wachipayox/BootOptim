@@ -1,0 +1,24 @@
+Source: JMC text export `01-hot-methods.txt` supplied 2026-09-01.
+Preservation: top rows used by BootOptim research; not the complete raw file.
+
+Method                                                                 Samples Percent
+net.minecraft.world.phys.shapes.BitSetDiscreteVoxelShape.lambda$join$0(...) 750 4,88%
+de.keksuccino.fancymenu.util.resource.Resource.waitForLoadingCompletedOrFailed(long) 629 4,10%
+net.caffeinemc.mods.lithium.common.shapes.pairs.LithiumDoublePairList.forMergedIndexes(...) 391 2,55%
+jdk.internal.util.ArraysSupport.unsignedHashCode(int, byte[], int, int) 316 2,06%
+com.google.common.collect.RegularImmutableMap.get(...) 296 1,93%
+java.lang.Class.copyFields(Field[]) 295 1,92%
+net.minecraft.world.phys.shapes.BitSetDiscreteVoxelShape.lambda$join$1(...) 278 1,81%
+java.util.HashMap.getNode(Object) 276 1,80%
+it.unimi.dsi.fastutil.longs.LongOpenHashSet.add(long) 267 1,74%
+com.razz.decocraft.models.bbmodel.BlockbenchBakery.applyElementRotation(...) 224 1,46%
+org.objectweb.asm.ClassReader.readCode(...) 175 1,14%
+net.minecraft.world.level.block.state.StateHolder.getValue(Property) 157 1,02%
+net.minecraft.world.phys.shapes.BitSetDiscreteVoxelShape.<init>(int, int, int) 147 0,96%
+net.minecraft.client.Minecraft...moreculling...onBlockRenderManagerInitialized... 141 0,92%
+net.caffeinemc.mods.sodium.client.util.color.ColorSRGB.linearToSrgb(float) 122 0,79%
+ca.fxco.moreculling.utils.SpriteUtils.doesHaveTranslucency(...) 121 0,79%
+java.util.ArrayList.grow(int) 111 0,72%
+java.lang.StringBuilder.append(String) 109 0,71%
+java.util.concurrent.ConcurrentHashMap.get(Object) 104 0,68%
+org.apache.logging.log4j.core.async.AsyncLogger.log(...) 94 0,61%

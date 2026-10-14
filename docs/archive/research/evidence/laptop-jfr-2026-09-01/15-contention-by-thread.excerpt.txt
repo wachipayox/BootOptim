@@ -1,0 +1,15 @@
+Source: JMC text export `15-contention-by-thread.txt` supplied 2026-09-01.
+Preservation: representative contention-by-thread rows used by BootOptim research; not the complete raw file.
+Note: JMC can emit multiple grouped rows for a thread/family; do not add them as if they were disjoint wall time.
+
+Thread / group                    Events  Average   Maximum
+AsyncLogger                         3      205 ms    573 ms
+Worker-ResourceReload-1           778     13.0 ms   366 ms
+Render thread                      19     24.9 ms   249 ms
+Worker-ResourceReload-2           744     15.9 ms   186 ms
+modloading worker groups            —       —       up to 181 ms / 151 ms
+Worker-ResourceReload-0           483     12.4 ms   126 ms
+ForkJoinPool common workers      ~212-224 ~9.6-9.9 ms  ~39-46 ms
+main                               34      9.16 ms   33.8 ms
+
+Interpretation: the three resource-reload workers and modloading workers already contend materially on the four-processor laptop. This is evidence against unbounded extra startup parallelism; prefer removing work or carefully bounded overlap.

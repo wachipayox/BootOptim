@@ -1,0 +1,24 @@
+Source: JMC text export `03-allocation-by-site.txt` supplied 2026-09-01.
+Preservation: top rows used by BootOptim research; not the complete raw file.
+
+Method                                                        Allocation Pressure
+it.unimi.dsi.fastutil.longs.LongOpenHashSet.<init>(int, float) 10,46%
+java.lang.reflect.Field.copy()                                  9,99%
+java.io.InputStream.readNBytes(int)                             8,29%
+java.lang.invoke.DirectMethodHandle.allocateInstance(Object)    8,19%
+com.google.gson.stream.JsonReader.<init>(Reader)                3,75%
+net.minecraft.world.phys.shapes.BitSetDiscreteVoxelShape.lambda$join$1(...) 2,92%
+java.util.Arrays.copyOfRange(byte[], int, int)                  2,85%
+java.lang.reflect.AccessibleObject.slowVerifyAccess(...)        2,13%
+java.io.BufferedReader.<init>(Reader, int)                      1,97%
+java.util.Arrays.copyOf(byte[], int)                            1,89%
+jdk.internal.classfile.impl.EntryMap.<init>(int, float)         1,80%
+jdk.internal.misc.Unsafe.allocateUninitializedArray(...)        1,44%
+java.util.ArrayList.grow(int)                                   1,23%
+java.nio.HeapByteBuffer.<init>(...)                             1,20%
+net.caffeinemc.mods.lithium.common.shapes.pairs.LithiumDoublePairList.<init>(...) 1,12%
+dev.wachipayox.bootoptim.optimization.client.DecocraftRotatedQuadReuse.rotateQuads(...) 1,10%
+net.minecraft.resources.ResourceLocation.validPathChar(char)    1,07%
+java.util.stream.StreamSupport.stream(...)                      0,96%
+java.util.HashMap.newNode(...)                                  0,92%
+java.util.zip.InflaterInputStream.<init>(...)                   0,84%

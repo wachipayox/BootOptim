@@ -1,0 +1,17 @@
+Source: JMC text export `14-contention-by-site.txt` supplied 2026-09-01.
+Preservation: representative contention-site rows used by BootOptim research; not the complete raw file.
+Note: grouped rows for the same method must not be blindly summed.
+
+Site / family                                      Events  Average   Maximum
+java.io.PrintStream.write(...)                         1      —       573 ms
+sun.nio.ch.FileChannelImpl.implRead(...)              825    12.0 ms   366 ms
+Ixeris tryCreateMinecraft(...)                         1      —       249 ms
+sun.nio.ch.FileChannelImpl.implRead(...)                4    56.2 ms   186 ms
+Mixin launch plugin handlesClass(...) groups            —      —       up to 181 ms
+Mixin launch plugin processClass(...) groups            —      —       up to 153 ms
+Palladium Deduplicator                                  —      —       up to 149 ms
+sun.nio.ch.FileChannelImpl.implRead(...)               544    11.5 ms   126 ms
+sun.nio.ch.FileChannelImpl.implRead(...)               227    23.3 ms   125 ms
+sun.nio.ch.FileChannelImpl.implRead(...)               145    12.6 ms   110 ms
+
+Interpretation: contention is distributed across I/O and transformation work. The repeated FileChannel groups reinforce the resource/I/O scaling evidence but are not independent serial durations.
