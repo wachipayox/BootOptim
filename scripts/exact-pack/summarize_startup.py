@@ -46,6 +46,23 @@ def find_first_time(lines, needles):
     return None
 
 
+JVM_KEYS = ("process_cpu_ms", "jit_ms", "gc_count", "gc_ms", "code_cache_used_kb", "heap_used_mb", "classes_loaded")
+
+
+def parse_jvm_snapshots(path: Path):
+    """`JVM phase=<p> key=value ...` lines -> {"jvm_<p>_<key>": int}."""
+    values = {}
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = re.match(r"JVM phase=(\S+)(.*)", line)
+        if not match:
+            continue
+        for key in JVM_KEYS:
+            value = find_int(match.group(2).strip(), key)
+            if value is not None:
+                values[f"jvm_{match.group(1)}_{key}"] = value
+    return values
+
+
 def parse_startup_report(path: Path):
     phases = {}
     total = None
@@ -162,6 +179,11 @@ def parse_single(args):
         "blocks_atlas_height": atlas_height,
         "blocks_atlas_levels": atlas_levels,
     }
+    result.update(parse_jvm_snapshots(startup_path))
+    for key in ("process_cpu_ms", "jit_ms", "gc_ms"):
+        start = result.get(f"jvm_mod_entrypoint_{key}")
+        end = result.get(f"jvm_main_menu_{key}")
+        result[f"jvm_post_mod_entrypoint_{key}"] = (end - start) if start is not None and end is not None else None
     Path(args.output).write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
 
@@ -213,6 +235,22 @@ def parse_aggregate(args):
         "reload_to_fancymenu_finish_ms",
         "fancymenu_panorama_ms",
     ]
+    jvm_metrics = [
+        "jvm_mod_entrypoint_process_cpu_ms",
+        "jvm_mod_entrypoint_jit_ms",
+        "jvm_main_menu_process_cpu_ms",
+        "jvm_main_menu_jit_ms",
+        "jvm_main_menu_gc_count",
+        "jvm_main_menu_gc_ms",
+        "jvm_main_menu_code_cache_used_kb",
+        "jvm_main_menu_heap_used_mb",
+        "jvm_main_menu_classes_loaded",
+        "jvm_post_mod_entrypoint_process_cpu_ms",
+        "jvm_post_mod_entrypoint_jit_ms",
+        "jvm_post_mod_entrypoint_gc_ms",
+    ]
+    if any(row.get(metric) is not None for row in rows for metric in jvm_metrics):
+        metrics = metrics + jvm_metrics
     summary = {}
     for variant in variants:
         subset = [row for row in rows if row["variant"] == variant]
@@ -297,7 +335,7 @@ def parse_aggregate(args):
                 delta = candidate - control
                 pct = (delta / control * 100.0) if control else None
                 pct_text = f" ({pct:+.2f}%)" if pct is not None else ""
-                markdown.append(f"- `{metric}`: {delta:+,.1f} ms{pct_text}")
+                markdown.append(f"- `{metric}`: {delta:+,.1f}{' ms' if metric.endswith('_ms') else ''}{pct_text}")
 
     if paired_pairs:
         markdown.extend(
@@ -324,7 +362,7 @@ def parse_aggregate(args):
         for metric in metrics:
             delta = median_deltas.get(metric)
             if delta is not None:
-                markdown.append(f"- `{metric}`: {delta:+,.1f} ms")
+                markdown.append(f"- `{metric}`: {delta:+,.1f}{' ms' if metric.endswith('_ms') else ''}")
 
     markdown_text = "\n".join(markdown) + "\n"
     Path(args.output).write_text(markdown_text, encoding="utf-8")

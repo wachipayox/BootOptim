@@ -1,5 +1,7 @@
 # Remote laptop benchmark operation audit — 2026-09-07
 
+> **Current runbook:** [`tools/laptop-bench/README.md`](../../tools/laptop-bench/README.md). Since 2026-10-14 measurements use the launcher runner `remote_laptop_pandora_run.ps1`; the Prism transaction described here is legacy.
+
 Base authority: `agent/integration-current` at `2bccf5f4fa221c78e286d052beb78636fa4c317b`.
 
 Status: tooling/documentation only. No Minecraft/NeoForge runtime, production optimization, Windows setting, Java installation, driver, power-plan, gameplay behavior, profiler, or resource selection is changed by this branch.
