@@ -38,3 +38,6 @@ run/
 **/src/generated/**/.cache/
 repo/
 !**/src/**/repo/
+
+### Local AI coordination (never publish relay prompts or answers) ###
+.agent-coordination/

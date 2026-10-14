@@ -110,4 +110,12 @@ Optional targets use `@Pseudo` / `require=0`; version mismatch, absent MCEF, sig
 
 Hosted validation and the physical laptop confirmation prove startup/title behavior and a real FancyMenu MCEF-video first consumer. An in-world WebDisplays browser remains a separate semantic check; repetitive laptop A/B is not required to establish the mechanism, and the physical pair above should not be reused as a precise effect-size estimate.
 
+### Good-PC WebDisplays semantic check — 2026-09-06
+
+The exact beta pack on the good PC reached an existing world with the production BootOptim JAR and successfully opened a WebDisplays browser. YouTube loaded, video played and audio was audible. There was no Java crash report and no local `javaw.exe`/`OpenAL.dll` application crash during this run.
+
+The log records one fail-open race in the current first-consumer guard: `getClient` began the real initializer, a concurrent `getApp` consumer could not join the in-flight wait and disabled the guard, and the real CEF initialization completed about 30.616 s later. WebDisplays then completed its normal setup. This proves compatibility/functionality on the good PC, but it also identifies a separate concurrency-hardening opportunity; it is not evidence that the native laptop `OpenAL.dll` crash is caused by BootOptim.
+
+This test used the beta's intermediate FancyMenu build (active-layout filter present, latest parallel-prelaunch classes absent), so it is not the final FancyMenu fork A/B.
+
 Relevant PRs: #78 rejected overlap experiment, #88 first-consumer experiment, #89 FancyMenu/static/dynamic compatibility audit, #90 production promotion and repeated current-head confirmation.

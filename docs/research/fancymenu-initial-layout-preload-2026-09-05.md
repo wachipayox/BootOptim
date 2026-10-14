@@ -130,8 +130,8 @@ candidate/control launch.
 The user accepted this optimization for the controlled `FancyMenu` fork after
 the clean physical control-002/candidate-006 pair. Keep commits
 `0bb403aff` (implementation) and `c3f79f7e4` (fork documentation) on branch
-`codex/active-layout-preload`. The candidate remains opt-in by default and
-must be carried as the matching `FancyMenu 3.9.0-wedit` build; BootOptim should
-not duplicate the implementation with a mixin. The laptop is restored to the
-original JAR and the option is disabled, while the fork branch is ready for
-the next packaging/release decision.
+`codex/active-layout-preload`. The fork now enables the option by default in
+commit `67c9088cf`; `false` remains the explicit kill switch. It must be
+carried as the matching `FancyMenu 3.9.0-wedit` build; BootOptim should not
+duplicate the implementation with a mixin. The laptop is restored to the
+original JAR and the option is disabled in its preserved baseline.
