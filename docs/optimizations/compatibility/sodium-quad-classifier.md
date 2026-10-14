@@ -3,7 +3,7 @@
 > **Version policy (2026-10-14):** no longer pinned to a mod version or JAR hash. See "Mod compatibility policy" in `docs/agent-guide.md`; fallbacks log `[WBOMBO-COMPAT] FALLBACK`.
 > Gate now: any Sodium version, with a differential guard: the first 4,096 eligible calls and then one in 1,024 keep Sodium's own result and compare it with BootOptim's; any mismatch returns to stock permanently and warns.
 
-Status: **PRODUCTION — ENABLED on the exact supported version/class**.
+Status: **PRODUCTION — ENABLED on any Sodium version, guarded by the runtime differential check**.
 This replaces #299/#300's indefinite default-off position
 under policy #307; #309's capture/replay/trial logic is not part of production.
 
@@ -14,7 +14,7 @@ the same partial/parallel/aligned flags. Twelve virtual coordinate reads remain
 in original vertex/X/Y/Z order, including their exception behavior. NaN and
 out-of-range planes preserve stock comparisons; no negated NaN predicate.
 
-Scope: exact `BakedQuad` class and Sodium version `0.8.12-beta.1+mc1.21.1`.
+Scope: exact `BakedQuad` class; validated on Sodium `0.8.12-beta.1+mc1.21.1` (not version-pinned).
 Unknown versions/classes, absent bridge, null face/quad or disabled property
 delegate to the original method. The optional interface bridge declares only
 the existing float getX/getY/getZ descriptors, with no Sodium hard dependency.

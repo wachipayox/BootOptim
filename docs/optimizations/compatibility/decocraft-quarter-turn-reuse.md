@@ -1,5 +1,7 @@
 # Decocraft quarter-turn geometry reuse
 
+> **Version policy (2026-10-14):** validated on Decocraft 3.0.11 but not pinned to it. The gate is the exact runtime class names plus model-shape invariants below; drift fails open with `[WBOMBO-COMPAT] FALLBACK`.
+
 ## Current project decision
 
 **RETAIN / PROMOTE THE HARDENED VERSION.**

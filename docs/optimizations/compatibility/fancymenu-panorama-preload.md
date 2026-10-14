@@ -2,7 +2,7 @@
 
 ## Scope
 
-Optional startup optimization for FancyMenu's cubic panorama resource preloader. Validated against FancyMenu 3.9.0 in the reference pack.
+Optional startup optimization for FancyMenu's cubic panorama resource preloader. Validated against FancyMenu 3.9.0 in the reference pack; not version-pinned (gated on the target method being present, fails open with `[WBOMBO-COMPAT] FALLBACK`).
 
 Kill switch: `-Dboot_optim.fancymenuParallelPanoramaPreload=false`
 
