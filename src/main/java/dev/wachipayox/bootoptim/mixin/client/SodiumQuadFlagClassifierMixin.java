@@ -23,11 +23,24 @@ public abstract class SodiumQuadFlagClassifierMixin {
     @Inject(method = "getQuadFlags", at = @At("HEAD"), cancellable = true, require = 0)
     private static void bootoptim$classify(@Coerce Object quad, Direction face,
                                            CallbackInfoReturnable<Integer> result) {
-        if (!BOOTOPTIM_AXIS_FLAGS_REQUESTED || face == null || quad == null || quad.getClass() != BakedQuad.class
-                || !(quad instanceof QuadCoordinateView view) || !SodiumQuadFlagSupport.supported()) {
+        if (!bootoptim$eligible(quad, face) || !SodiumQuadFlagSupport.replaceThisCall()) {
             return;
         }
-        result.setReturnValue(SodiumQuadFlagClassifier.classify(view, face.ordinal()));
+        result.setReturnValue(SodiumQuadFlagClassifier.classify((QuadCoordinateView) quad, face.ordinal()));
     }
 
+    @Inject(method = "getQuadFlags", at = @At("RETURN"), require = 0)
+    private static void bootoptim$verify(@Coerce Object quad, Direction face,
+                                         CallbackInfoReturnable<Integer> result) {
+        if (SodiumQuadFlagSupport.verifying() && bootoptim$eligible(quad, face)) {
+            SodiumQuadFlagSupport.verify(result.getReturnValueI(),
+                    SodiumQuadFlagClassifier.classify((QuadCoordinateView) quad, face.ordinal()), face.ordinal());
+        }
+    }
+
+    @Unique
+    private static boolean bootoptim$eligible(Object quad, Direction face) {
+        return BOOTOPTIM_AXIS_FLAGS_REQUESTED && face != null && quad != null && quad.getClass() == BakedQuad.class
+                && quad instanceof QuadCoordinateView;
+    }
 }

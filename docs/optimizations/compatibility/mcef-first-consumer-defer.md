@@ -1,5 +1,8 @@
 # MCEF first-consumer defer
 
+> **Version policy (2026-10-14):** no longer pinned to a mod version or JAR hash. See "Mod compatibility policy" in `docs/agent-guide.md`; fallbacks log `[WBOMBO-COMPAT] FALLBACK`.
+> Gate now: MCEF loaded and its `initialize()`/`isInitialized()` lifecycle methods present; otherwise stock + warning. Historical text below mentions the old exact-version gate.
+
 ## Status
 
 Production candidate. Enabled by default only for exact MCEF `2.1.6-1.21.1`.

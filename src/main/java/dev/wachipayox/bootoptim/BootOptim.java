@@ -1,11 +1,13 @@
 package dev.wachipayox.bootoptim;
 
+import dev.wachipayox.bootoptim.compat.client.CompatInjectionCheck;
 import dev.wachipayox.bootoptim.optimization.client.CitResewnGlowingTrimLegacyWarningSuppression;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 
 /**
@@ -23,6 +25,7 @@ public final class BootOptim {
         StartupProfiler.markModEntrypoint();
         if (FMLEnvironment.dist == Dist.CLIENT) {
             CitResewnGlowingTrimLegacyWarningSuppression.install(modEventBus);
+            modEventBus.addListener(FMLClientSetupEvent.class, event -> CompatInjectionCheck.reportMissingPseudoTargets());
             if (StartupProfiler.isEnabled()) {
                 ClientStartupHooks.install();
             }

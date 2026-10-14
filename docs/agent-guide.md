@@ -147,6 +147,25 @@ These are reminders, not a substitute for reading the ledger:
 - Decocraft quarter-turn BBModel reuse removed about 2.7 s of repeated geometry CPU in its original experiment. Although the original PR #37 was initially rejected under the then-current significance threshold because only ~1 s reached critical path, the project later explicitly decided to retain the **hardened** production version with strict fail-open guards. Do not treat the old #37 rejection as the current product decision.
 - Resource-reload listener durations from `ProfiledReloadInstance` are inclusive/overlapping. Do not sum them. PR #47 introduced barrier/turn critical-path profiling because ModelManager needed to be proven as the actual preparation gate.
 
+## Mod compatibility policy (user decision, 2026-10-14)
+
+- Never gate a third-party mod optimization on an exact mod version, JAR size
+  or JAR hash. It must keep working on other versions of that mod.
+- Fall back to stock only when the touched code actually changed, and always
+  say so with `CompatLog.fallback(...)`, which logs at WARN:
+  `[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=<id> mod=<modid>@<version> reason=<why> -> stock behaviour`.
+  Report activation once with `CompatLog.active(...)` (`[WBOMBO-COMPAT] ACTIVE`).
+- Every mixin is checked automatically after application
+  (`CompatInjectionCheck`, from the mixin config plugin): an injector that no
+  longer reaches its target, or a `@Pseudo` target class missing from a loaded
+  mod, produces a FALLBACK warning. Keep `require = 0` on third-party targets.
+  New third-party packages must be added to its package -> mod id map.
+- If the patch replaces an algorithm (not just a call or a value), add a
+  runtime differential guard against the original result, as the Sodium
+  classifier does (`SodiumQuadFlagSupport`).
+- Exact-pack CI lists the lines in `wbombo_compat_fallbacks` /
+  `wbombo_compat_active` of its result JSON. A new FALLBACK is a finding.
+
 ## Safety / compatibility invariants
 
 - Preserve stock observable behavior unless the optimization has an explicitly validated equivalence argument.

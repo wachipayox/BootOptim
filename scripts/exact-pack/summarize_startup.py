@@ -137,6 +137,9 @@ def parse_single(args):
         "Mixin prepare for mod boot_optim failed",
     ]
     bootoptim_mixin_errors = sum(1 for line in lines if any(pattern in line for pattern in error_patterns))
+    compat_lines = [line.strip() for line in lines if "[WBOMBO-COMPAT]" in line]
+    compat_fallbacks = [line[line.index("[WBOMBO-COMPAT]"):] for line in compat_lines if "FALLBACK" in line]
+    compat_active = [line[line.index("[WBOMBO-COMPAT]"):] for line in compat_lines if "ACTIVE" in line]
 
     result = {
         "variant": args.variant,
@@ -149,6 +152,8 @@ def parse_single(args):
         "reload_to_fancymenu_finish_ms": delta_ms(reload_start, fancy_reload_end),
         "fancymenu_panorama_ms": panorama_ms,
         "bootoptim_mixin_errors": bootoptim_mixin_errors,
+        "wbombo_compat_fallbacks": compat_fallbacks[:20],
+        "wbombo_compat_active": compat_active[:20],
         "decocraft_status": decocraft_status,
         "decocraft_models_remapped": decocraft_remapped,
         "decocraft_atlas_removed": decocraft_removed,

@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.optimization.client;
 
 import com.mojang.logging.LogUtils;
+import dev.wachipayox.bootoptim.compat.client.CompatLog;
 import dev.wachipayox.bootoptim.mixin.client.PathPackResourcesRootAccessor;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -15,7 +16,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
-import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import net.minecraft.resources.ResourceLocation;
@@ -26,8 +26,10 @@ import net.neoforged.neoforgespi.language.IModFileInfo;
 import org.slf4j.Logger;
 
 /**
- * Guarded exact-corpus optimization: materialize Decocraft's tiny model JSON
- * corpus in archive order once, then let stock ModelManager parse fresh readers.
+ * Materialize Decocraft's tiny model/blockstate JSON corpus in archive order once, then let stock
+ * ModelManager parse fresh readers over the same bytes. Not pinned to a Decocraft version or JAR
+ * hash: any installed JAR is snapshotted with a stable-file check and safety caps; oversized
+ * entries are left to the stock path. Failure falls back to stock with {@code [WBOMBO-COMPAT]}.
  */
 public final class DecocraftModelArchiveBatch {
     @FunctionalInterface
@@ -41,11 +43,11 @@ public final class DecocraftModelArchiveBatch {
 
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final boolean ENABLED = Boolean.parseBoolean(System.getProperty("boot_optim.decocraftModelArchiveBatch", "true"));
-    private static final long EXPECTED_ARCHIVE_BYTES = 93_170_262L;
-    private static final int EXPECTED_ENTRIES = 10_809;
-    private static final int EXPECTED_JSON_BYTES = 3_129_313;
-    private static final int MAX_ENTRY_BYTES = 4_096;
-    private static final String EXPECTED_DIGEST = "7e1ceb06798205056f50669b4c5edde3c95b35eabd7ca5a78416b884754e68d7";
+    private static final String MECHANISM = "decocraft-model-json-batch";
+    /** Safety caps (validated corpus: 10,809 entries, 3,129,313 bytes, all entries <= 4 KiB). */
+    private static final int MAX_ENTRIES = 50_000;
+    private static final int MAX_JSON_BYTES = 32 * 1024 * 1024;
+    private static final int MAX_ENTRY_BYTES = 64 * 1024;
     private static final Object LOCK = new Object();
     private static volatile Snapshot snapshot;
     private static volatile Target target;
@@ -92,11 +94,10 @@ public final class DecocraftModelArchiveBatch {
                     try {
                         current = load(currentTarget.physicalPath());
                         snapshot = current;
-                        LOGGER.info("BOOTOPTIM_DECOCRAFT_MODEL_BATCH status=ready entries={} bytes={} digest={}",
-                                EXPECTED_ENTRIES, EXPECTED_JSON_BYTES, EXPECTED_DIGEST);
+                        CompatLog.active(MECHANISM, "decocraft");
                     } catch (IOException | RuntimeException exception) {
                         failed = true;
-                        LOGGER.warn("BOOTOPTIM_DECOCRAFT_MODEL_BATCH status=disabled reason=archive_validation_failed", exception);
+                        CompatLog.fallback(MECHANISM, "decocraft", "archive_validation_failed " + exception.getMessage());
                     }
                 }
             }
@@ -144,8 +145,7 @@ public final class DecocraftModelArchiveBatch {
 
     private static Snapshot load(Path path) throws IOException {
         Fingerprint before = fingerprint(path);
-        if (before.size() != EXPECTED_ARCHIVE_BYTES) throw new IOException("unexpected archive size");
-        Map<String, byte[]> entries = new HashMap<>(EXPECTED_ENTRIES * 2);
+        Map<String, byte[]> entries = new HashMap<>();
         MessageDigest digest;
         try {
             digest = MessageDigest.getInstance("SHA-256");
@@ -153,14 +153,18 @@ public final class DecocraftModelArchiveBatch {
             throw new IllegalStateException(exception);
         }
         int total = 0;
+        int skipped = 0;
         byte[] number = new byte[4];
         try (ZipFile zip = new ZipFile(path.toFile())) {
             for (ZipEntry entry : zip.stream().toList()) {
                 String name = entry.getName();
                 if (!name.startsWith("assets/decocraft/") || !name.endsWith(".json")
                         || !(name.contains("/models/") || name.contains("/blockstates/"))) continue;
-                if (entry.isDirectory() || entry.getSize() < 0 || entry.getSize() > MAX_ENTRY_BYTES
-                        || entries.size() >= EXPECTED_ENTRIES) throw new IOException("entry bound exceeded");
+                if (entry.isDirectory() || entry.getSize() < 0 || entry.getSize() > MAX_ENTRY_BYTES) {
+                    skipped++; // left to the stock path
+                    continue;
+                }
+                if (entries.size() >= MAX_ENTRIES) throw new IOException("entry count cap exceeded");
                 byte[] value;
                 try (var input = zip.getInputStream(entry)) {
                     value = input.readNBytes(MAX_ENTRY_BYTES + 1);
@@ -168,7 +172,7 @@ public final class DecocraftModelArchiveBatch {
                 if (value.length != entry.getSize()) throw new IOException("entry length mismatch");
                 if (entries.putIfAbsent(name, value) != null) throw new IOException("duplicate entry");
                 total += value.length;
-                if (total > EXPECTED_JSON_BYTES) throw new IOException("archive byte bound exceeded");
+                if (total > MAX_JSON_BYTES) throw new IOException("byte cap exceeded");
                 byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);
                 updateInt(digest, number, nameBytes.length);
                 digest.update(nameBytes);
@@ -176,11 +180,11 @@ public final class DecocraftModelArchiveBatch {
                 digest.update(value);
             }
         }
-        if (entries.size() != EXPECTED_ENTRIES || total != EXPECTED_JSON_BYTES
-                || !Objects.equals(HexFormat.of().formatHex(digest.digest()), EXPECTED_DIGEST)
-                || !before.equals(fingerprint(path))) {
-            throw new IOException("archive corpus fingerprint mismatch");
+        if (!before.equals(fingerprint(path))) {
+            throw new IOException("archive changed while reading");
         }
+        LOGGER.info("BOOTOPTIM_DECOCRAFT_MODEL_BATCH status=ready entries={} bytes={} skipped_large={} digest={}",
+                entries.size(), total, skipped, HexFormat.of().formatHex(digest.digest()));
         return new Snapshot(before, Map.copyOf(entries));
     }
 

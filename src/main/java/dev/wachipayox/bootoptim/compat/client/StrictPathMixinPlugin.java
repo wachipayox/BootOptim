@@ -12,7 +12,11 @@ import org.spongepowered.asm.mixin.transformer.ext.Extensions;
 import org.spongepowered.asm.mixin.transformer.ext.IExtension;
 import org.spongepowered.asm.mixin.transformer.ext.ITargetClassContext;
 
-/** Changes no other target; unknown bytecode remains stock. */
+/**
+ * BootOptim mixin config plugin: strict-path final-operation extension (changes no other target;
+ * unknown bytecode remains stock) and the post-apply injection check that reports any injector
+ * which no longer reaches its target as {@code [WBOMBO-COMPAT] FALLBACK}.
+ */
 public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
     @Override public void onLoad(String mixinPackage) {
         // Register during config selection, before Extensions.select. Do not rewrite in the
@@ -20,15 +24,31 @@ public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
         Object transformer = MixinEnvironment.getCurrentEnvironment().getActiveTransformer();
         if (transformer instanceof IMixinTransformer mixinTransformer
                 && mixinTransformer.getExtensions() instanceof Extensions extensions
-                && extensions.getExtensions().stream().noneMatch(e -> e instanceof FinalOperationExtension))
+                && extensions.getExtensions().stream().noneMatch(e -> e instanceof FinalOperationExtension)) {
             extensions.add(new FinalOperationExtension());
+            extensions.add(new CompatCheckExtension());
+        }
     }
     @Override public String getRefMapperConfig() { return null; }
     @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) { return true; }
-    @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {}
+    @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) { CompatInjectionCheck.declareTargets(myTargets); }
     @Override public List<String> getMixins() { return null; }
     @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
-    @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
+    @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        CompatInjectionCheck.afterApply(targetClassName, targetClass, mixinClassName, mixinInfo);
+    }
+
+    /** Runs after all mixins (registered after MixinExtras' own extension) to verify injections. */
+    private static final class CompatCheckExtension implements IExtension {
+        @Override public boolean checkActive(MixinEnvironment environment) {
+            return environment.getSide() == MixinEnvironment.Side.CLIENT;
+        }
+        @Override public void preApply(ITargetClassContext context) {}
+        @Override public void postApply(ITargetClassContext context) {
+            CompatInjectionCheck.verifyFinal(context.getClassNode());
+        }
+        @Override public void export(MixinEnvironment environment, String name, boolean force, ClassNode classNode) {}
+    }
 
     private static final class FinalOperationExtension implements IExtension {
         @Override public boolean checkActive(MixinEnvironment environment) {
