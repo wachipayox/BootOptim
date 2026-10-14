@@ -2,6 +2,8 @@
 
 - [JIT compiler pressure — 2026-10-14](jit-compiler-pressure-2026-10-14.md): JVM flags only. `CICompilerCount=2` won 3/3 hosted pairs (−3.9 to −4.7 s) but **failed the physical laptop ABBA** (+17.7 s to `main_menu`, +40 s before the entrypoint): rejected. C1-only ceiling rejected; delayed C2 retired. Startup report now records JVM CPU/JIT/GC counters.
 
+- [ModelBakery construction allocation attribution — 2026-10-14](modelbakery-allocation-attribution-2026-10-14.md): JFR by stack; constructor is 13.7 % of startup allocation, top site is the already-retired multipart union; GC ceiling ~0.6 s hosted. NO-GO. Exact-pack CI now uploads `*.jfr`.
+
 - [Agent 216 point-resource resolution plan NO-GO — 2026-10-11](resource-resolution-plan-no-go-2026-10-11.md): rejects repeated-lookup caches and speculative provider plans before runtime; source/callback gates unmet, no invented 2C/2B or menu improvement.
 
 - [External report audit and clean JSON promotion — 2026-10-02](web-report-disposition-2026-10-02.md): distinguish new premises from #142/#182/#248 history; no generic cache without a current budget.
