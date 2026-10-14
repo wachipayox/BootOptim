@@ -41,10 +41,17 @@ function Sha([string]$p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
 function Save($st, [string]$f) { $t = "$f.tmp"; [IO.File]::WriteAllText($t, ($st | ConvertTo-Json -Depth 10), $Utf8); Move-Item -LiteralPath $t -Destination $f -Force }
 function Load([string]$f) { Get-Content -LiteralPath $f -Raw | ConvertFrom-Json }
 function Pandora-Procs { @(Get-CimInstance Win32_Process -Filter "Name like 'BootOptimPandora%' or Name='pandora_launcher.exe' or Name='WachilandLauncher.exe'") }
-function Target-Java([string]$gameRoot) {
-    $needle = $gameRoot.TrimEnd('\').ToLowerInvariant()
+function Target-Java([string]$gameRoot, [string]$marker) {
+    # The launcher starts Java with the game directory as working directory and does not always pass it on the
+    # command line, so a per-run marker property is the reliable identity; without a marker, match any Java that
+    # references the game directory or the launcher data directory (natives/libraries).
+    $launcherData = (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $gameRoot))).ToLowerInvariant()
+    $game = $gameRoot.TrimEnd('').ToLowerInvariant()
     @(Get-CimInstance Win32_Process -Filter "Name='java.exe' or Name='javaw.exe'" | Where-Object {
-        $_.CommandLine -and ($_.CommandLine.ToLowerInvariant().Replace('/', '\').Contains($needle))
+        if (-not $_.CommandLine) { return $false }
+        if ($marker) { return ([Bench.Argv]::Split($_.CommandLine) -ccontains $marker) }
+        $c = $_.CommandLine.ToLowerInvariant().Replace('/', '')
+        $c.Contains($game) -or $c.Contains($launcherData)
     })
 }
 function Wrappers([string]$mods) {
@@ -90,7 +97,7 @@ switch ($Action) {
         gameRoot = $game; modsDir = $mods; info = $info; infoBackup = $infoBak; originalInfoSha256 = (Sha $info)
         originalJarPath = $live[0].FullName; jarBackup = $jarBak; originalJarSha256 = (Sha $jarBak)
         stagedJar = (Join-Path $mods ('bootoptim-bench-' + $RunId + '.jar')); candidateSha256 = $ExpectedJarSha256.ToUpperInvariant()
-        pandoraExe = $PandoraExe; javaPath = $JavaPath; jvmFlags = $JvmFlags; required = @($RequiredJvmArg); forbidden = @($ForbiddenJvmArg)
+        pandoraExe = $PandoraExe; javaPath = $JavaPath; jvmFlags = $JvmFlags; runMarker = "-Dboot_optim.benchRunId=$RunId"; required = @($RequiredJvmArg); forbidden = @($ForbiddenJvmArg)
         interactiveUser = $InteractiveUser; timeoutSeconds = $TimeoutSeconds; launchGraceSeconds = $LaunchGraceSeconds
         taskName = ('BootOptimPandoraBench-' + $RunId); javaPid = 0; javaCreationDate = $null; pandoraPid = 0; javaExitCode = $null
         commandLineSha256 = $null; launchedUtc = $null; javaSeenUtc = $null; javaExitUtc = $null
@@ -100,7 +107,8 @@ switch ($Action) {
     Copy-Item -LiteralPath $ArtifactJar -Destination $st.stagedJar
     if ((Sha $st.stagedJar) -ne $st.candidateSha256) { Fail 'staged copy hash mismatch' }
     $j = Get-Content -LiteralPath $info -Raw | ConvertFrom-Json
-    $flags = [pscustomobject]@{ enabled = $true; flags = $JvmFlags }
+    $runMarker = "-Dboot_optim.benchRunId=$RunId"
+    $flags = [pscustomobject]@{ enabled = $true; flags = ($JvmFlags + ' ' + $runMarker) }
     $bin = [pscustomobject]@{ enabled = $true; path = $JavaPath }
     if ($j.PSObject.Properties['jvm_flags']) { $j.jvm_flags = $flags } else { $j | Add-Member jvm_flags $flags }
     if ($JavaPath) { if ($j.PSObject.Properties['jvm_binary']) { $j.jvm_binary = $bin } else { $j | Add-Member jvm_binary $bin } }
@@ -132,7 +140,7 @@ switch ($Action) {
         $launcherLog = Join-Path (Split-Path -Parent (Split-Path -Parent $st.instanceDir)) 'launcher.log'
         $deadline = (Get-Date).AddSeconds($st.launchGraceSeconds); $java = $null; $launchError = $null; $i = 0
         while (-not $java -and -not $launchError -and (Get-Date) -lt $deadline) {
-            Start-Sleep -Seconds 2; $java = Target-Java $st.gameRoot | Select-Object -First 1
+            Start-Sleep -Seconds 2; $java = Target-Java $st.gameRoot $st.runMarker | Select-Object -First 1
             if (-not $java -and (++$i % 5) -eq 0 -and (Test-Path -LiteralPath $launcherLog)) {
                 $launchError = Get-Content -LiteralPath $launcherLog -Tail 200 | Where-Object { $_ -match 'Failed to launch|Auth Flow: Initial' } | Select-Object -Last 1
             }
@@ -144,7 +152,7 @@ switch ($Action) {
         $argv = [Bench.Argv]::Split($java.CommandLine)
         $st.commandLineSha256 = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($Utf8.GetBytes($java.CommandLine))).Replace('-', '')
         $st.javaExe = $java.ExecutablePath
-        $missing = @(); foreach ($r in $st.required) { if (@($argv | Where-Object { $_ -ceq $r }).Count -ne 1) { $missing += $r } }
+        $missing = @(); foreach ($r in @($st.required) + @($st.runMarker)) { if (@($argv | Where-Object { $_ -ceq $r }).Count -ne 1) { $missing += $r } }
         $present = @(); foreach ($f in $st.forbidden) { if ($argv -ccontains $f) { $present += $f } }
         $st.bootOptimKeys = @($argv | Where-Object { $_ -like '-Dboot_optim.*' } | ForEach-Object { ($_ -split '=')[0] } | Sort-Object -Unique)
         if ($st.javaPath -and -not $java.ExecutablePath.Equals(($st.javaPath -replace '/', '\'), [StringComparison]::OrdinalIgnoreCase)) { $missing += "java=$($st.javaPath)" }

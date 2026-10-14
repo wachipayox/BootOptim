@@ -25,6 +25,10 @@ measured configuration.
 - **Before a campaign, run one primer** and confirm it reaches `finished` before trusting the driver loop.
 - **If a run is invalid, stop and read the launcher log** (`%APPDATA%\WachilandLauncher\launcher.log`,
   rotated to `.old` on each start) and take a screenshot; do not loop.
+- **Create measurement instances from the launcher UI** (it installs the loader and generates the patched
+  NeoForge libraries), then point their `.minecraft` where needed. Copying only `info_v1.json` from another
+  launcher's data directory skips the loader install; on 2026-10-14 that made the first launch fail with
+  `Failed to launch ... IoError NotFound` until `libraries`/`assets`/`logconfigs` were copied over.
 - **After updating the launcher exe**, check that its data directory did not change and that the instance,
   `libraries`, `assets`, `logconfigs`, `metadata` and the logged-in account are still there.
 
