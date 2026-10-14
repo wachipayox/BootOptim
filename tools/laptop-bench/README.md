@@ -98,6 +98,30 @@ the loop running (2026-10-14: an orphaned loop started a Prism run on top of a P
 
 ## Known machine issues
 
-- 7.9 GB physical RAM with `-Xmx6G`: little headroom for native memory (CEF, OpenAL, chunk meshes).
-- World entry crashes natively (see `docs/research/p2-webdisplay-openal-native-crash-2026-09-06.md`); menu-only
-  benchmarks are unaffected.
+- **The HDD is failing (2026-10-14).** 162 uncorrected read errors (`Get-StorageReliabilityCounter`), System
+  events `disk` 7 (bad block) and `storahci` 129 (controller reset) in bursts, and on 2026-10-14 a continuous
+  storm (one bad block and one reset per minute for 20+ minutes) that froze a game during resource loading and
+  dropped SSH. **The laptop is not valid for startup timing until the disk is replaced**: a single read on a bad
+  sector stalls the whole disk for tens of seconds, which alone explains "random" run-to-run variance. Before
+  any campaign, check the last hour of `disk`/`storahci` events; any hit invalidates the run.
+- After the disk is replaced, control the remaining variance sources before measuring: Defender exclusions for
+  the launcher data dir and JDKs (the old `PandoraLauncher` dir was excluded, the new `WachilandLauncher` dir was
+  not), `WSearch`/`SysMain` stopped during campaigns, a purged standby list before each run (all runs equally
+  cold), and low-rate system counters (CPU, disk, paging, `% Processor Performance`) recorded per run.
+- 7.9 GB physical RAM with `-Xmx6G`; no low-virtual-memory events were recorded during the world-entry crashes.
+
+## World-entry reproduction (`world_entry_repro.ps1`)
+
+The launcher has no CLI quick-play: it starts `com.moulberry.pandora.LaunchWrapper` and sends the game
+arguments through stdin. `world_entry_repro.ps1 -Action Capture` records the launcher's JVM argv once;
+`-Action Run -World <name>` starts Java directly with those args and feeds the stdin protocol with
+`--quickPlaySingleplayer`, so a world entry needs nobody at the laptop. `-Env 'ALSOFT_LOGLEVEL=3','ALSOFT_LOGFILE={run}\alsoft.log'`
+enables OpenAL Soft logging. For isolation, move mod JARs out of `mods` (and edit `options.txt`) inside a
+`try/finally` that always restores them. WER local dumps for `javaw.exe` are enabled (minidumps to
+`C:\BootOptimBench\controller\worldentry\dumps`).
+
+Findings 2026-10-14 (reported to WachilandEliteCompanion through wbombo `decisions.md`): the client renders one
+world frame and dies ~30–70 s after `joined the game` with `abort()` (`0xc0000409`, fast-fail 7) inside LWJGL
+`OpenAL.dll` 1.23.1 at offset `0xa2b05`, as in September. It still reproduces without MCEF+WebDisplays and
+without AnalogAudio. OpenAL Soft logs a healthy context (stereo float32 48 kHz) and no error before the abort.
+The master-volume-0 isolation was invalidated by the disk storm; it is the next step once the disk is replaced.
