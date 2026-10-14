@@ -28,6 +28,7 @@ public final class StartupProfiler {
     public static void markModEntrypoint() {
         if (REPORT_ENABLED) {
             StartupReport.phase("mod_entrypoint", uptimeMs());
+            StartupReport.jvm("mod_entrypoint");
         }
         if (PROFILING_ENABLED) {
             logPhase("mod_entrypoint");
@@ -46,6 +47,7 @@ public final class StartupProfiler {
         // Finish the on-disk report before emitting the console marker used by CI to terminate the client.
         if (REPORT_ENABLED) {
             StartupReport.phase("main_menu", uptimeMs);
+            StartupReport.jvm("main_menu");
             StartupReport.complete(uptimeMs);
         }
         if (PROFILING_ENABLED) {
