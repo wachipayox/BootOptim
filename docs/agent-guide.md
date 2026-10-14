@@ -71,6 +71,10 @@ never add overlapping listener durations or compare a stale-JVM run with a
 fresh process. A result with missing/duplicated markers, a stale Prism
 `instance.cfg`, or a surviving previous Java process is invalid/inconclusive.
 
+**Physical laptop operation (since 2026-10-14): follow [`tools/laptop-bench/README.md`](../tools/laptop-bench/README.md).**
+Measurements go through the Wachiland/Pandora launcher runner (`remote_laptop_pandora_run.ps1`), not Prism.
+The Prism notes below remain only for reading older evidence.
+
 When editing the laptop Prism instance, stop Prism before changing
 `instance.cfg`, then verify the effective Java command line on the next run.
 Prism can rewrite its in-memory `JvmArgs` on exit and silently restore an old
