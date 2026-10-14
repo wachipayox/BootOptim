@@ -27,6 +27,34 @@ line afterwards, because Prism may rewrite stale in-memory arguments on exit.
 
 Branch-only evidence from unmerged experiment/diagnostic branches (229 files, harvested 2026-10-14 before branch/PR cleanup) is preserved verbatim in [`docs/archive/`](../archive/README.md). It is historical and not mandatory reading; this ledger stays authoritative.
 
+## PRs closed in the 2026-10-14 cleanup
+
+These PRs were open with decisions already reached or superseded. Their documents are preserved in [`docs/archive/`](../archive/README.md); the PR stays the place for code and discussion.
+
+- [#336](https://github.com/wachipayox/BootOptim/pull/336) — [model-ancestry-owner-2026-10-03](../archive/research/model-ancestry-owner-2026-10-03.md): Model ancestry/texture-resolution owner diagnostic. Counts usable, exclusive CPU tiny; not a budget. Follow-ups (relays 214–218, #337) closed without a runtime candidate.
+- [#324](https://github.com/wachipayox/BootOptim/pull/324) — [palladium-constructor-shortcuts-2026-10-02](../archive/research/palladium-constructor-shortcuts-2026-10-02.md): **NO-GO** for a BootOptim runtime patch: Palladium constructor shortcuts rejected by binary semantic audit.
+- [#323](https://github.com/wachipayox/BootOptim/pull/323) — [shader-input-reuse-audit-2026-10-02](../archive/research/shader-input-reuse-audit-2026-10-02.md): **REJECTED**: generic cross-program shader include-text caching (provider semantics).
+- [#322](https://github.com/wachipayox/BootOptim/pull/322) — [ferrite-quad-hash-arithmetic-2026-10-02](../archive/research/ferrite-quad-hash-arithmetic-2026-10-02.md): **RETIRED**: Ferrite hash arithmetic, no demonstrated game saving after valid actual-method replay.
+- [#321](https://github.com/wachipayox/BootOptim/pull/321) — [jei-index-edge-promotion-audit-2026-10-02](../archive/research/jei-index-edge-promotion-audit-2026-10-02.md): **REJECTED**: JEI edge clone skipping (exact-binary callback-order counterexample).
+- [#320](https://github.com/wachipayox/BootOptim/pull/320) — [decocraft-json-owner-decision-2026-10-01](../archive/research/decocraft-json-owner-decision-2026-10-01.md): Decocraft JSON owner diagnostic; superseded by the clean production promotion #325.
+- [#306](https://github.com/wachipayox/BootOptim/pull/306) — [runner-variance-calibrated-trials-2026-10-01](../archive/research/runner-variance-calibrated-trials-2026-10-01.md): Tooling proposal for a calibrated within-JVM evidence gate (A/A noise). Not adopted as a required gate.
+- [#304](https://github.com/wachipayox/BootOptim/pull/304) — [inprocess-candidate-decision-2026-09-30](../archive/research/inprocess-candidate-decision-2026-09-30.md): Counterbalanced within-JVM decision diagnostic for the 2026-09-30 express candidates; decisions superseded by owner-candidate-final-decisions-2026-10-01.
+- [#303](https://github.com/wachipayox/BootOptim/pull/303) — [model-grouping-attribution-2026-09-30](../archive/research/model-grouping-attribution-2026-09-30.md): Multipart/blockstate attribution diagnostic; dependency owner already profiled, loops/unions retired (#295/#305/#313).
+- [#302](https://github.com/wachipayox/BootOptim/pull/302) — [laptop-express-sweep-2026-09-30](../archive/research/laptop-express-sweep-2026-09-30.md): Unattended laptop express sweep; combined ABBA order confound recorded; superseded by owner-candidate final decisions.
+- [#297](https://github.com/wachipayox/BootOptim/pull/297) — [hosted-repeat-reload-2026-09-30](../archive/research/hosted-repeat-reload-2026-09-30.md): Same-JVM hosted repeat-reload harness smoke; diagnostic only.
+- [#293](https://github.com/wachipayox/BootOptim/pull/293) — [jdk25-aot-cache-laptop-2026-09-25](../archive/research/jdk25-aot-cache-laptop-2026-09-25.md): **NO-GO**: JDK 25 AOT cache for the current private launcher profile.
+- [#291](https://github.com/wachipayox/BootOptim/pull/291) — [pandora-prelaunch-attribution-followup-2026-09-25](../archive/research/pandora-prelaunch-attribution-followup-2026-09-25.md): Pandora prelaunch attribution; superseded by Pandora PR #66 (persistent per-instance `.minecraft`, no per-launch mods rebuild).
+- [#290](https://github.com/wachipayox/BootOptim/pull/290) — [pandora-appcds-net-benefit-2026-09-25](../archive/research/pandora-appcds-net-benefit-2026-09-25.md): **RETIRED**: full-archive AppCDS (four physical pairs, +3.8 s median regression).
+- [#289](https://github.com/wachipayox/BootOptim/pull/289) — [rrls-fancymenu-early-menu-2026-09-24](../archive/research/rrls-fancymenu-early-menu-2026-09-24.md): Do not ship upstream RRLS early-menu with this pack; work continues in the private RRLS/FancyMenu forks.
+- [#288](https://github.com/wachipayox/BootOptim/pull/288) — [decocraft-sprite-archive-batch-2026-09-23](../archive/research/decocraft-sprite-archive-batch-2026-09-23.md): **NO-GO** for promotion: Decocraft encoded sprite PNG batch.
+- [#287](https://github.com/wachipayox/BootOptim/pull/287) — [decocraft-sprite-archive-batch-2026-09-23](../archive/research/decocraft-sprite-archive-batch-2026-09-23.md): Default-off sprite batch experiment; closed by #288.
+- [#286](https://github.com/wachipayox/BootOptim/pull/286) — [decocraft-model-archive-batch-2026-09-23](../archive/research/decocraft-model-archive-batch-2026-09-23.md): Physical reload harness for the Decocraft model JSON batch; superseded by production #325.
+- [#285](https://github.com/wachipayox/BootOptim/pull/285) — [decocraft-model-archive-batch-2026-09-23](../archive/research/decocraft-model-archive-batch-2026-09-23.md): Default-off Decocraft model JSON batch experiment; superseded by production #325.
+- [#284](https://github.com/wachipayox/BootOptim/pull/284) — [model-input-io-lane-2026-09-23](../archive/research/model-input-io-lane-2026-09-23.md): Resource-reload I/O/GC physical evidence; two-permit model input lane **REJECTED** before A/B; input-cache design remains a hypothesis.
+- [#282](https://github.com/wachipayox/BootOptim/pull/282) — [resource-loading-coverage-audit-2026-09-22](../archive/research/resource-loading-coverage-audit-2026-09-22.md): Manual resource-pack reload I/O/GC attribution diagnostic; no runtime change.
+
+Still open for a decision: [#292](https://github.com/wachipayox/BootOptim/pull/292) Xaero World Map 1.41.0 startup version-check skip (hosted smoke passed, runtime validation pending).
+
 ## Status vocabulary
 
 - **PROFILED** — diagnostic evidence only; no optimization conclusion yet.
