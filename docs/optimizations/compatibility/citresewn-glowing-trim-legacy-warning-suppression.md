@@ -8,7 +8,7 @@ The user explicitly authorized BootOptim to suppress only the repeated CITResewn
 
 Historical PR #97 proved that a direct filter on the concrete `CITResewn` Log4j logger can remove these emitted lines without changing CIT parsing or model behavior. PR #258 later classified all 7,920 records as real logger emissions and rejected suppression only because the then-current contract forbade hiding any warning. The 2026-09-11 user authorization intentionally overrides that narrow product-policy rejection for this one warning family; it does not change any broader logging policy.
 
-> **Version policy (2026-10-14):** not pinned to a CITResewn version. If CITResewn is loaded but its logger/matcher contract no longer holds, the filter is not installed and `[WBOMBO-COMPAT] FALLBACK mechanism=citresewn_glowing_trim_warning_suppression` is logged; `ACTIVE` is logged when armed.
+> **Version policy (2026-10-14):** not pinned to a CITResewn version. If CITResewn is loaded but its logger/matcher contract no longer holds, the filter is not installed and `[WBOMBO-COMPAT] FALLBACK mechanism=citresewn-glowing-trim-warning-suppression` is logged; `ACTIVE` is logged when armed.
 
 ## Exact matcher
 

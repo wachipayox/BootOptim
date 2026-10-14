@@ -45,7 +45,7 @@ public final class DecocraftRotatedQuadReuse {
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/DecocraftBakeReuse");
     private static final String GEOMETRY_CLASS = "com.razz.decocraft.models.bbmodel.BBModelGeometryLoader$BBGeometry";
     private static final String BAKED_MODEL_CLASS = "com.razz.decocraft.models.bbmodel.BlockbenchModel";
-    private static final String COMPAT_MECHANISM = "decocraft_quarter_turn_reuse";
+    private static final String COMPAT_MECHANISM = "decocraft-quarter-turn-reuse";
     private static final float EPSILON = 1.0e-4F;
     private static final boolean ENABLED = Boolean.parseBoolean(
             System.getProperty("boot_optim.decocraftQuarterTurnReuse", "true"));

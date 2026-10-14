@@ -39,7 +39,7 @@ public final class CitResewnGlowingTrimLegacyWarningSuppression {
     private static final String MESSAGE_PREFIX = "[citresewn] Using legacy nbt.display.Name @L";
     private static final String PATH_MARKER = " in minecraft:optifine/cit/";
     private static final String PACK_SUFFIX = " from file/Glowing Trim Armors v5.0.zip";
-    private static final String COMPAT_MECHANISM = "citresewn_glowing_trim_warning_suppression";
+    private static final String COMPAT_MECHANISM = "citresewn-glowing-trim-warning-suppression";
     private static final String COMPAT_MOD = "citresewn";
     private static final long EXPECTED_EXACT_PACK_COUNT = 7_920L;
     private static final boolean ENABLED = Boolean.parseBoolean(System.getProperty(PROPERTY, "true"));
