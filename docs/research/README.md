@@ -53,7 +53,7 @@ These PRs were open with decisions already reached or superseded. Their document
 - [#284](https://github.com/wachipayox/BootOptim/pull/284) — [model-input-io-lane-2026-09-23](../archive/research/model-input-io-lane-2026-09-23.md): Resource-reload I/O/GC physical evidence; two-permit model input lane **REJECTED** before A/B; input-cache design remains a hypothesis.
 - [#282](https://github.com/wachipayox/BootOptim/pull/282) — [resource-loading-coverage-audit-2026-09-22](../archive/research/resource-loading-coverage-audit-2026-09-22.md): Manual resource-pack reload I/O/GC attribution diagnostic; no runtime change.
 
-Still open for a decision: [#292](https://github.com/wachipayox/BootOptim/pull/292) Xaero World Map 1.41.0 startup version-check skip (hosted smoke passed, runtime validation pending).
+[#292](https://github.com/wachipayox/BootOptim/pull/292) Xaero World Map 1.41.0 startup version-check skip: **promoted to production** on 2026-10-14 by user decision; see [`optimizations/compatibility/xaero-startup-update-check.md`](../optimizations/compatibility/xaero-startup-update-check.md).
 
 ## Status vocabulary
 
