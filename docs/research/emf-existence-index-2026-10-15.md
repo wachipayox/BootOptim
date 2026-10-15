@@ -1,6 +1,6 @@
 # EMF absent-resource probes answered from EMF's own listing — 2026-10-15
 
-Status: **ACTIVE** — hosted A/B pending. Candidate in this PR; decision (integrate or reject) follows the segment-first policy.
+Status: **ACTIVE** — hosted A/B done (mechanism proven, effect below hosted resolution); physical-laptop gate or an explicit user decision pending.
 
 Origin of the idea: the private RRLS fork's reload experiments (September 2026, archived in [`rrls-fancymenu-early-menu-2026-09-24.md`](../archive/research/rrls-fancymenu-early-menu-2026-09-24.md), sections 2026-09-27 "complete existence index" and "guarded complete-index physical activation"). That work was measured on the fast PC inside RRLS's post-menu reload and manual F3+T reloads, not on `main_menu`. This entry re-asks the question for BootOptim's endpoint.
 
@@ -41,6 +41,17 @@ Not carried over: any claim about `main_menu`. The RRLS runs are not paired A/B,
 2. Hosted exact-pack smoke, `exact-pack-fixture: latest`: expect `[WBOMBO-COMPAT] ACTIVE ... mechanism=emf-existence-index`, the `BootOptim EMF existence index` line with its counters, and 0 new FALLBACK. If the current Beta pack no longer carries EMF, or a pack provider is unsupported, the run says so and the premise is closed as not applicable.
 3. Hosted A/B, 3 repetitions, same fixture revision for control and candidate; the revision and `manifest_sha256` are quoted from the job summary. Judge the `EntityRenderDispatcher` slot first, then `main_menu`.
 4. A saving of ~0.15–0.2 s is below hosted run-to-run noise (runner spread 35 % in [beta-rev3-baseline](beta-rev3-baseline-2026-10-15.md)). A coherent segment effect with ACTIVE and no FALLBACK is enough to continue to the physical laptop; hosted `main_menu` alone cannot accept or reject it.
+
+## Hosted result (PR #363, run 38800697103, 3 candidate + 3 control, fixture `latest`)
+
+Origin: hosted exact-pack surrogate, fresh VM per run, endpoint `main_menu`. Fixture revision and `manifest_sha256`: see the job summary of that run.
+
+- Mechanism: `[WBOMBO-COMPAT] ACTIVE mechanism=emf-existence-index mod=entity_model_features@3.2.4` in 3/3 candidates; `wbombo_compat_fallbacks` empty in 6/6; 0 mixin errors; the pack's provider inventory was accepted (no unsupported-pack FALLBACK). Differential guard: 109 stock re-checks in each run, 0 disagreements.
+- Probes answered: 3000+ per run (2891 served + 109 verified at the 3000 mark).
+- Segment estimate from the guard's own timing (stock absent probe 23–67 µs, cold-biased): **110–195 ms** of stock wall avoided per run. This is an estimate of the removed lookups, not a measured slot delta; the hosted CI does not report the `EntityRenderDispatcher` slot.
+- `main_menu` medians: candidate 64,239 ms vs control 82,936 ms (−22.5 %). **Not attributable**: `mod_entrypoint` (before this mechanism runs) is also −21 % (24.8 s vs 31.5 s), and runs split into two clusters (~64 s: candidate 1, 3 and control 3 at 68 s; ~83 s: candidate 2, control 1, 2). Runner variance, as already recorded in [beta-rev3-baseline](beta-rev3-baseline-2026-10-15.md). A ~0.15 s effect cannot be seen at this spread.
+
+Disposition: the premise holds (EMF 3.2.4 present, ~3000 redundant probes, no semantic disagreement) but the saving is ~0.1–0.2 s, below what hosted A/B can resolve. Decide by the segment-first policy: keep if the user accepts a verified, guarded, low-risk CPU saving in its segment; otherwise run the laptop gate (HDD cost of absent probes may be larger) before integration. Not rejected.
 
 ## Residual risks
 
