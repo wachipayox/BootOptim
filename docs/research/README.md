@@ -1,6 +1,6 @@
 # BootOptim research ledger
 
-- [Mod-loading subphases: fast PC vs hosted CI — 2026-10-15](modloading-subphases-pc-vs-ci-2026-10-15.md): PHASE markers added (PR #365); the PC split is not measured yet. Front F1 (wrapper-lookup fallback in discovery) is the one open question; no optimization proposed.
+- [Mod-loading subphases: fast PC vs hosted CI — 2026-10-15](modloading-subphases-pc-vs-ci-2026-10-15.md): PC split measured (2026-10-16): block registration is 8.8 s and CPU-bound in voxel-shape joins (frontier 2 of #360, F2); discovery I/O is small. CI column pending. No optimization proposed.
 
 - [Beta rev 3 hosted baseline — 2026-10-15](beta-rev3-baseline-2026-10-15.md): rev 3 (Companion 1.0.5a7) smoke + JFR on the hosted surrogate; 0 FALLBACK, 6 ACTIVE; segments not attributable to pack vs runner without a same-runner control; three frontiers listed, none opened.
 
