@@ -1,6 +1,6 @@
 # Beta rev 3 hosted baseline — 2026-10-15
 
-Status: **PROFILED** — baseline only. No optimization is implemented, promoted or rejected here. Two new frontiers are listed for a bounded decision; one hot spot repeats a closed decision and is not reopened.
+Status: **PROFILED** — baseline only. No optimization is implemented, promoted or rejected here. Three frontiers are listed for a bounded decision; one hot spot repeats a closed decision and is not reopened.
 
 PR: [#360](https://github.com/wachipayox/BootOptim/pull/360) (draft, research only, no runtime change).
 
