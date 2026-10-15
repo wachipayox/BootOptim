@@ -8,16 +8,24 @@ It is a **software-pack surrogate**, not an emulation of the Intel i3-2350M lapt
 
 ## Fixture pin
 
-Authoritative public Release asset:
+Since 2026-10-15 the default fixture is built from Distribution (user decision: Actions may read the Distribution client API). Selection, by PR-body directive `exact-pack-fixture:` or the `fixture` dispatch input:
+
+- `latest` (default): latest revision of the Beta profile (`vars.EXACT_PACK_PROFILE`);
+- `rev_<id>`: a pinned revision of that profile, for reproducible comparisons;
+- `legacy`: the hand-built September release below.
+
+The fixture job resolves the pin (`--resolve-only`), restores `.exact-pack-cache` by `exact-pack-dist-<manifest_sha256>-<builder version>-linux`, and otherwise builds it with `tools/exact-pack/build_fixture_from_profile.py` (see its README: signature/pin/object verification, launcher first-install semantics, deterministic ZIP, sidecar). The ZIP SHA-256 is checked against the sidecar and passed to the benchmark jobs; profile, revision and digests go to the job summary. `DISTRIBUTION_URL` (secret, masked), optional `DISTRIBUTION_KEY` header (secret) and optional `DISTRIBUTION_TRUSTED_KEYS` (variable) configure access. Missing secret or profile variable falls back to `legacy` with a warning. Hosted absolute times from different fixtures are not comparable.
+
+Legacy public Release asset (pinned option and fallback):
 
 - tag: `exact-pack-2026-09-02-v1`
 - asset: `bootoptim-exact-pack.zip`
 - size: `1,202,581,263` bytes
 - SHA-256: `7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639`
 
-The workflow verifies SHA-256 before extraction and caches the ZIP by the pinned digest. Never silently replace the asset behind this fixture; a changed pack needs a new release/tag and documented hash.
+Never silently replace the asset behind this fixture.
 
-The ZIP was assembled on the user's PC, not the laptop. Its purpose is to pin **software state**. `options.txt` is copied so the resource packs the user normally enables participate in hosted resource resolution too.
+The legacy ZIP was assembled on the user's PC, not the laptop. Its purpose is to pin **software state**. `options.txt` is copied so the resource packs the user normally enables participate in hosted resource resolution too.
 
 The fixture deliberately contains `mods/mcef-libraries/`, deliberately excludes mutable `mods/mcef-cache/`, and must not contain a BootOptim JAR. The branch/PR build is injected by ModDevGradle.
 
