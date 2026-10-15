@@ -18,10 +18,13 @@ def selection(path):
     return packs
 
 
-def check(reference, actual, log=None):
+def check(reference, actual, log=None, allow_no_external=False):
     expected = selection(reference)
     observed = selection(actual)
-    if not any(p.startswith('file/') for p in expected):
+    # The hand-built laptop/legacy fixtures always select external packs, so an
+    # empty selection there means a broken workload. A Distribution profile
+    # revision is the pack itself and may legitimately select none.
+    if not allow_no_external and not any(p.startswith('file/') for p in expected):
         raise ValueError('Reference has no external resource packs; cannot validate exact-pack')
     issues = []
     if observed != expected:
@@ -54,9 +57,11 @@ def main():
     parser.add_argument('--reference', required=True, type=Path)
     parser.add_argument('--options', required=True, type=Path)
     parser.add_argument('--log', type=Path, help='Read only after the measured Java process exits')
+    parser.add_argument('--allow-no-external', action='store_true',
+                        help='Accept a reference without file/ packs (Distribution profile fixtures)')
     args = parser.parse_args()
     try:
-        result = check(args.reference, args.options, args.log)
+        result = check(args.reference, args.options, args.log, args.allow_no_external)
     except (OSError, ValueError) as error:
         result = dict(valid=False, issues=[str(error)])
     print(json.dumps(result, ensure_ascii=False, indent=2))

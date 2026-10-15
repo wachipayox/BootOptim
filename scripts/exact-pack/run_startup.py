@@ -229,7 +229,9 @@ def main() -> None:
                 [sys.executable, "tools/laptop-bench/check_resource_selection.py",
                  "--reference", str(selection_reference),
                  "--options", str(root / "run-pack-benchmark" / "options.txt"),
-                 "--log", str(latest_log)],
+                 "--log", str(latest_log)]
+                + (["--allow-no-external"]
+                   if os.environ.get("BOOTOPTIM_EXACT_PACK_SOURCE") == "distribution" else []),
                 cwd=root, stdout=report, check=False,
             )
         if resource_check.returncode != 0:

@@ -161,6 +161,7 @@ jobs:
     outputs:
       cache_key: ${{ steps.resolve.outputs.cache_key }}
       sha256: ${{ steps.verify.outputs.sha256 }}
+      source: ${{ steps.resolve.outputs.source }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -333,6 +334,7 @@ jobs:
       MESA_GL_VERSION_OVERRIDE: '4.6'
       MESA_GLSL_VERSION_OVERRIDE: '460'
       BOOTOPTIM_MCEF_MIRROR_PORT: '18765'
+      BOOTOPTIM_EXACT_PACK_SOURCE: ${{ needs.fixture.outputs.source }}
       BOOTOPTIM_PACK_JAVA_VERSION: '25'
       BOOTOPTIM_PACK_BASE_JVM_ARGS: |-
         -Xmx6G

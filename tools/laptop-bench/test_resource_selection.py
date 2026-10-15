@@ -49,6 +49,18 @@ class ResourceContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             check(self.reference, self.actual)
 
+    def test_profile_fixture_may_select_no_external_packs(self):
+        self.write_options(self.reference, ['vanilla', 'mod_resources'])
+        self.write_options(self.actual, ['vanilla', 'mod_resources'])
+        self.log.write_text('Reloading ResourceManager: vanilla, mod_resources', encoding='utf-8')
+        self.assertTrue(check(self.reference, self.actual, self.log, allow_no_external=True)['valid'])
+
+    def test_profile_fixture_still_rejects_added_external_pack(self):
+        self.write_options(self.reference, ['vanilla'])
+        self.write_options(self.actual, ['vanilla', 'file/Stray.zip'])
+        self.log.write_text('Reloading ResourceManager: vanilla, file/Stray.zip', encoding='utf-8')
+        self.assertFalse(check(self.reference, self.actual, self.log, allow_no_external=True)['valid'])
+
     def test_no_reload_is_not_success(self):
         self.log.write_text('SUMMARY status=main_menu_reached', encoding='utf-8')
         self.assertFalse(check(self.reference, self.actual, self.log)['valid'])
