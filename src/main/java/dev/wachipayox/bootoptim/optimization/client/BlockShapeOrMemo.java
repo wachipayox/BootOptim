@@ -215,7 +215,7 @@ public final class BlockShapeOrMemo {
 
     // ---- exact structural comparison (class, grids, boxes), never a hash ----
 
-    static boolean sameShape(VoxelShape x, VoxelShape y) {
+    public static boolean sameShape(VoxelShape x, VoxelShape y) {
         if (x == y) {
             return true;
         }

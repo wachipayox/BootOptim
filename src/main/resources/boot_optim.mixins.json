@@ -26,7 +26,9 @@
     "client.XaeroWorldMapUpdateCheckMixin",
     "client.WallBlockShapeOrMemoMixin",
     "client.CrossCollisionBlockShapeOrMemoMixin",
-    "client.PipeBlockShapeOrMemoMixin"
+    "client.PipeBlockShapeOrMemoMixin",
+    "client.VoxelShaperPrefixDiagnosticMixin",
+    "client.ShapesOrPrefixDiagnosticMixin"
   ],
   "injectors": {
     "defaultRequire": 0
