@@ -233,6 +233,7 @@ def main() -> None:
                 cwd=root, stdout=report, check=False,
             )
         if resource_check.returncode != 0:
+            print(selection_report.read_text(encoding="utf-8", errors="replace"), file=sys.stderr)
             raise SystemExit("Exact-pack resource contract failed; see resource-selection-check.json.")
 
         summary = subprocess.run(
