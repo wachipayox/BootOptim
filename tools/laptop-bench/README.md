@@ -5,6 +5,9 @@ failure classes these scripts prevent are in
 [`docs/research/remote-laptop-operation-audit-2026-09-07.md`](../../docs/research/remote-laptop-operation-audit-2026-09-07.md).
 Private connection details (LAN address, account) live only in the private wbombo workspace, never here.
 
+For JVM-level A/B on a fast physical PC (flags, JDK version, simulated core counts) see
+[`../fast-pc-bench/`](../fast-pc-bench/README.md).
+
 ## Which runner
 
 | Runner | Launcher | Use |

@@ -1,6 +1,6 @@
 # JIT compiler pressure on a four-processor JVM — 2026-10-14
 
-Status: **`CICompilerCount=2` REJECTED for the product after the physical laptop gate** (hosted win does not transfer: +17.7 s to `main_menu` on the 2C/4T laptop, driven by +40 s before the mod entrypoint). C1-only ceiling REJECTED; delayed C2 RETIRED. The `JVM` startup-report counters are retained as tooling.
+Status: **`CICompilerCount` tuning REJECTED for the product, including as a hardware-conditional default** (closed 2026-10-15 after the fast-PC sweep below; the owner also removes it as a launcher option). The laptop gate lost +17.7 s; on the fast PC the gain is at most −2.3 s with JDK 25 and only on four fast threads, neutral or negative elsewhere. C1-only ceiling REJECTED; delayed C2 RETIRED. The `JVM` startup-report counters are retained as tooling. **Side finding with larger leverage: JDK 25 instead of the launcher's Java 21 cuts 7–12 s to `main_menu`** (see "Fast-PC sweep").
 
 ## Premise and why it is not a repeat
 
@@ -51,12 +51,47 @@ Decision: **do not ship `CICompilerCount=2`** as a profile JVM parameter. No Boo
 
 Laptop context: these 410–506 s menus are slower than the September 2026 physical baseline (~350 s, Prism, different pack/state); compare only within this campaign.
 
+## Fast-PC sweep — 2026-10-15 (hardware condition)
+
+Question from the owner: if the flag wins on fast four-thread PCs and loses on slow ones, make it conditional on hardware (thread count / single-core score).
+
+Origin: physical PC, Intel i5-12600KF (6 P-cores with HT + 4 E-cores, 16 logical), SSD, Windows 11. Pack: Beta rev 3 (`profile_wachiland-elite-beta`), 160 mods, BootOptim integration build `6b7d84cf`. Launched through the Wachiland Launcher (`agent/integration-current` `1bf072a1`) with `--run-instance-normal --no-update`, `-Dboot_optim.benchmark.exitOnTitle=true`, launcher default heap. Start: JVM start; endpoint `main_menu`. Each arm: one discarded primer, then ABBA ×2 (or ABCCBA ×2 for three arms); medians of 4 runs. Tooling: [`tools/fast-pc-bench/`](../../tools/fast-pc-bench/README.md).
+
+Hardware classes are simulated with a CPU affinity mask on the launcher (Java inherits it) **plus `-XX:ActiveProcessorCount=N`**: on Windows HotSpot ignores the affinity mask when sizing compiler threads (`jcmd VM.flags` showed `CICompilerCount=12` under a four-CPU mask). "4 fast" = two P-cores with HT (the laptop's 2C/4T topology); "4 slow" = the four E-cores; "8" = four P-cores with HT.
+
+| Class | JVM | Default (compiler threads) | Candidate | Δ `main_menu` |
+| --- | --- | ---: | --- | ---: |
+| 4 fast | Java 21 (launcher `java-runtime-delta` 21.0.7) | 108.5 s (3) | `CICompilerCount=2` 104.8 s | **−3.6 s**, 4/4 below all controls |
+| 4 slow | Java 21 | 114.4 s (3) | `=2` 112.1 s | **−2.3 s**, 4/4 below |
+| 8 | Java 21 | 81.6 s (7) | `=4` 81.3 s · `=2` 80.9 s | tie (ranges overlap) |
+| 16 | Java 21 | 80.1 s (12) | `=4` 75.6 s · `=6` 76.3 s · `=8` 78.2 s · `=2` 79.8 s | **−4.5 s** at 4–6, tie at 2 |
+| 4 fast | Oracle JDK 25.0.1 | 101.7 s (3) | `=2` 99.4 s | −2.3 s |
+| 4 slow | Oracle JDK 25.0.1 | 104.5 s | `=2` 105.6 s | tie (noisy) |
+| 8 | Oracle JDK 25.0.1 | 73.6 s | `=2` 74.6 s | +1.0 s |
+| 16 | Oracle JDK 25.0.1 | 69.5 s | `=4` 69.3 s | tie |
+
+JDK comparison, default flags:
+
+| Class | Java 21 (launcher) | Temurin 25.0.4.1 | Δ |
+| --- | ---: | ---: | ---: |
+| 16 | 81.4 s | 69.2 s | **−12.2 s (−15 %)**, 4/4 below all controls |
+| 4 fast | 111.6 s | 104.3 s | **−7.3 s**, 4/4 below all controls |
+
+Oracle JDK 25 at 16 threads: 69.5 s vs 79.8 s for Java 21 in the same block (−10.3 s). Most of the gain is before the mod entrypoint (16 threads: 40.2 → 33.6 s). Temurin 25 also reached the menu with zero BootOptim mixin errors, all six `[WBOMBO-COMPAT] ACTIVE`, and entered a newly created world without problems.
+
+Interpretation and decision:
+
+- With the JDK players will get (25), `CICompilerCount=2` helps only four fast threads (−2.3 s, ~2 %), is neutral on four moderate cores, slightly negative at eight, and lost +17.7 s on the 2011 laptop. The sign follows per-core speed, so a condition would have to separate "fast 4-thread" from "slow 4-thread" PCs to win ~2 s, with the downside on exactly the slow PCs the pack targets. **Not worth it: no hardware-conditional default, and no launcher option.**
+- The Java 21 gain at 16 threads (`=4`, −4.5 s) disappears on JDK 25. Not shipped either: Android stays on its own Java 21 runtime and has far fewer cores.
+- The laptop's +40 s pre-entrypoint loss was measured the day its failing HDD was diagnosed (`tools/laptop-bench/README.md`, "Known machine issues"); it may be partly I/O noise, but it is not needed for the decision above.
+- **JDK 25 is the real lever** (−7 to −12 s, consistent sign). Follow-up belongs to the launcher (BootOptimPandora): default PC instances of Wachiland profiles to a redistributable JDK 25 with automatic fallback to Java 21. Not BootOptim code.
+
 ## Reopening criteria
 
 - C1-only: only for a workload without a heavy post-entrypoint model pipeline.
 - Delayed C2: only with a different threshold set *and* paired evidence on top of `CICompilerCount=2`.
-- Higher processor counts: re-measure; the default thread count and the trade-off change.
+- Higher processor counts: measured 2026-10-15 (8 and 16 threads, fast-PC sweep); reopen only if players stay on Java 21 on PCs with 12+ threads.
 - `CICompilerCount=2`: only with a mechanism that protects the pre-entrypoint serial path (for example a flag change applied after the mod entrypoint, which HotSpot does not support today) or on hardware where the physical gate passes.
 - The laptop result suggests pre-entrypoint time is sensitive to C2 throughput; a *higher* C2 count is an untested, separate premise and needs its own physical ABBA.
 
-PRs: #351 (C1 ceiling), #352 (delayed C2, rounds 1–3), #353 (two compiler threads), #354 (counters, this entry, laptop runbook).
+PRs: #351 (C1 ceiling), #352 (delayed C2, rounds 1–3), #353 (two compiler threads), #354 (counters, this entry, laptop runbook), fast-PC sweep and closure (this PR).
