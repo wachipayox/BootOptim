@@ -76,10 +76,15 @@ public final class BlockShapeOrMemo {
         }
     }
 
-    /** Start of a builder call. {@code kind} names the builder; {@code params} are its exact float bits. */
+    /**
+     * Start of a builder call. {@code kind} names the builder; {@code params} are its exact float bits.
+     * With the mechanism off the call is still timed (same counters), so a control run reports the
+     * stock builder wall time with identical instrumentation.
+     */
     public static void enter(String kind, Object owner, int... params) {
+        String counterKey = kind + "@" + owner.getClass().getName();
         if (!ENABLED || DISABLED.get()) {
-            SESSION.remove();
+            SESSION.set(new Session(kind, counterKey, Mode.OFF, null));
             return;
         }
         StringBuilder key = new StringBuilder(kind);
@@ -87,20 +92,16 @@ public final class BlockShapeOrMemo {
             key.append('|').append(p);
         }
         String k = key.toString();
-        String verifyKey = k + "@" + owner.getClass().getName();
         VoxelShape[] entry = MEMO.get(k);
         Mode mode;
         if (entry == null) {
             mode = MEMO.size() >= MAX_KEYS ? Mode.OFF : Mode.RECORD;
-        } else if (AUDIT || !VERIFIED.contains(verifyKey)) {
+        } else if (AUDIT || !VERIFIED.contains(k + "@" + owner.getClass().getName())) {
             mode = Mode.VERIFY;
         } else {
             mode = Mode.REPLAY;
         }
-        SESSION.set(mode == Mode.OFF ? null : new Session(k, kind + "@" + owner.getClass().getName(), mode, entry));
-        if (mode == Mode.OFF) {
-            counters(kind + "@" + owner.getClass().getName()).calls.increment();
-        }
+        SESSION.set(new Session(k, counterKey, mode, entry));
     }
 
     /** Wraps one {@code Shapes.or} call site inside a covered builder. */
