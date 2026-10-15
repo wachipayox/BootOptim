@@ -1,5 +1,7 @@
 # BootOptim research ledger
 
+- [Mod-loading subphases: fast PC vs hosted CI — 2026-10-15](modloading-subphases-pc-vs-ci-2026-10-15.md): PHASE markers added (PR #365); the PC split is not measured yet. Front F1 (wrapper-lookup fallback in discovery) is the one open question; no optimization proposed.
+
 - [Beta rev 3 hosted baseline — 2026-10-15](beta-rev3-baseline-2026-10-15.md): rev 3 (Companion 1.0.5a7) smoke + JFR on the hosted surrogate; 0 FALLBACK, 6 ACTIVE; segments not attributable to pack vs runner without a same-runner control; three frontiers listed, none opened.
 
 - [JIT compiler pressure — 2026-10-14](jit-compiler-pressure-2026-10-14.md): JVM flags only. `CICompilerCount=2` won 3/3 hosted pairs (−3.9 to −4.7 s) but **failed the physical laptop ABBA** (+17.7 s to `main_menu`, +40 s before the entrypoint): rejected. C1-only ceiling rejected; delayed C2 retired. Startup report now records JVM CPU/JIT/GC counters. 2026-10-15 fast-PC sweep: no hardware-conditional default either (≤ −2.3 s with JDK 25, sign follows per-core speed); side finding **JDK 25 vs launcher Java 21: −7 to −12 s** (launcher follow-up).
