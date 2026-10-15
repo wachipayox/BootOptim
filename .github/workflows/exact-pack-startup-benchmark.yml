@@ -40,6 +40,11 @@ on:
         required: false
         default: ''
         type: string
+      fixture:
+        description: "Fixture: latest (Beta profile latest revision), rev_<id> (pinned Distribution revision) or legacy (exact-pack-2026-09-02-v1)"
+        required: false
+        default: latest
+        type: string
 
 permissions:
   contents: read
@@ -49,10 +54,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  EXACT_PACK_TAG: exact-pack-2026-09-02-v1
-  EXACT_PACK_ASSET: bootoptim-exact-pack.zip
-  EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
-  EXACT_PACK_CACHE_KEY: exact-pack-2026-09-02-v1-7f586ecd90497a4d-linux
+  # Legacy hand-built September fixture (pinned option and fallback).
+  LEGACY_EXACT_PACK_TAG: exact-pack-2026-09-02-v1
+  LEGACY_EXACT_PACK_ASSET: bootoptim-exact-pack.zip
+  LEGACY_EXACT_PACK_SHA256: 7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639
+  # Bump when the builder's output format changes, to invalidate cached Distribution fixtures.
+  EXACT_PACK_BUILDER_VERSION: b1
   MCEF_JAVA_CEF_COMMIT: a78e832f9f13c2c688caea3d04d8b84fcd238d94
   MCEF_PLATFORM: linux_amd64
   MCEF_CACHE_KEY: mcef-jcef-a78e832f9f13c2c688caea3d04d8b84fcd238d94-linux-amd64-v1
@@ -64,6 +71,7 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       mode: ${{ steps.plan.outputs.mode }}
+      fixture: ${{ steps.plan.outputs.fixture }}
     env:
       PR_BODY: ${{ github.event.pull_request.body || '' }}
       DISPATCH_MODE: ${{ inputs.mode || '' }}
@@ -71,6 +79,7 @@ jobs:
       DISPATCH_SMOKE_ARGS: ${{ inputs.smoke_jvm_args || '' }}
       DISPATCH_CANDIDATE_ARGS: ${{ inputs.candidate_jvm_args || '' }}
       DISPATCH_CONTROL_ARGS: ${{ inputs.control_jvm_args || '' }}
+      DISPATCH_FIXTURE: ${{ inputs.fixture || '' }}
     steps:
       - name: Build benchmark matrix
         id: plan
@@ -93,6 +102,7 @@ jobs:
               smoke_args = os.environ.get('DISPATCH_SMOKE_ARGS', '').strip()
               candidate_args = os.environ.get('DISPATCH_CANDIDATE_ARGS', '').strip()
               control_args = os.environ.get('DISPATCH_CONTROL_ARGS', '').strip()
+              fixture = os.environ.get('DISPATCH_FIXTURE', '').strip() or 'latest'
           else:
               mode_values = directive('exact-pack-mode')
               mode = (mode_values[-1] if mode_values else 'smoke').strip().lower()
@@ -101,6 +111,13 @@ jobs:
               smoke_args = '\n'.join(directive('exact-pack-smoke-jvm-arg')).strip()
               candidate_args = '\n'.join(directive('exact-pack-candidate-jvm-arg')).strip()
               control_args = '\n'.join(directive('exact-pack-control-jvm-arg')).strip()
+              fixture_values = directive('exact-pack-fixture')
+              fixture = (fixture_values[-1] if fixture_values else 'latest').strip()
+
+          if fixture == 'exact-pack-2026-09-02-v1':
+              fixture = 'legacy'
+          if fixture not in {'latest', 'legacy'} and not re.fullmatch(r'rev_[a-z0-9_.-]{1,124}', fixture):
+              raise SystemExit(f'Unsupported exact-pack-fixture: {fixture} (latest, legacy or rev_<id>)')
 
           if mode not in {'smoke', 'ab', 'paired'}:
               raise SystemExit(f'Unsupported exact-pack mode: {mode}')
@@ -134,45 +151,137 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               output.write(f'matrix={matrix}\n')
               output.write(f'mode={mode}\n')
-          print(json.dumps({'mode': mode, 'runs': include}, indent=2))
+              output.write(f'fixture={fixture}\n')
+          print(json.dumps({'mode': mode, 'fixture': fixture, 'runs': include}, indent=2))
 
   fixture:
     needs: plan
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 60
+    outputs:
+      cache_key: ${{ steps.resolve.outputs.cache_key }}
+      sha256: ${{ steps.verify.outputs.sha256 }}
+      source: ${{ steps.resolve.outputs.source }}
     steps:
-      - name: Restore exact-pack ZIP cache
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve exact-pack fixture
+        id: resolve
+        shell: bash
+        env:
+          FIXTURE: ${{ needs.plan.outputs.fixture }}
+          DISTRIBUTION_URL: ${{ secrets.DISTRIBUTION_URL }}
+          DISTRIBUTION_KEY: ${{ secrets.DISTRIBUTION_KEY }}
+          EXACT_PACK_PROFILE: ${{ vars.EXACT_PACK_PROFILE || 'profile_wachiland-elite-beta' }}
+          BOOTOPTIM_DISTRIBUTION_TRUSTED_KEYS: ${{ vars.DISTRIBUTION_TRUSTED_KEYS }}
+        run: |
+          set -euo pipefail
+          # The server address is private: mask it (and the optional header) before any command runs.
+          if [ -n "$DISTRIBUTION_URL" ]; then echo "::add-mask::$DISTRIBUTION_URL"; fi
+          if [ -n "$DISTRIBUTION_KEY" ]; then echo "::add-mask::$DISTRIBUTION_KEY"; fi
+          legacy() {
+            echo "source=legacy" >> "$GITHUB_OUTPUT"
+            echo "cache_key=${LEGACY_EXACT_PACK_TAG}-${LEGACY_EXACT_PACK_SHA256:0:16}-linux-dir" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Exact-pack fixture"
+              echo "- source: legacy release \`$LEGACY_EXACT_PACK_TAG\` (hand-built 2026-09-02)"
+              echo "- SHA-256: \`$LEGACY_EXACT_PACK_SHA256\`"
+              if [ -n "${1:-}" ]; then echo "- **warning:** $1"; fi
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+          if [ "$FIXTURE" = legacy ]; then legacy; exit 0; fi
+          if [ -z "$DISTRIBUTION_URL" ] || [ -z "$EXACT_PACK_PROFILE" ]; then
+            msg="fixture '$FIXTURE' requested but secret DISTRIBUTION_URL is not available; using the legacy pinned fixture"
+            echo "::warning::$msg"
+            legacy "$msg"
+            exit 0
+          fi
+          python tools/exact-pack/build_fixture_from_profile.py \
+            --profile "$EXACT_PACK_PROFILE" --revision "$FIXTURE" --resolve-only > resolved.json
+          manifest=$(python -c 'import json;print(json.load(open("resolved.json"))["manifest_sha256"])')
+          revision=$(python -c 'import json;print(json.load(open("resolved.json"))["revision_id"])')
+          echo "source=distribution" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          echo "manifest_sha256=$manifest" >> "$GITHUB_OUTPUT"
+          echo "cache_key=exact-pack-dist-${manifest}-${EXACT_PACK_BUILDER_VERSION}-linux" >> "$GITHUB_OUTPUT"
+          echo "Resolved $EXACT_PACK_PROFILE $FIXTURE -> $revision manifest_sha256=$manifest"
+
+      - name: Restore exact-pack fixture cache
         id: pack-cache
         uses: actions/cache@v4
         with:
-          path: .exact-pack-cache/bootoptim-exact-pack.zip
-          key: ${{ env.EXACT_PACK_CACHE_KEY }}
+          path: .exact-pack-cache
+          key: ${{ steps.resolve.outputs.cache_key }}
 
-      - name: Download pinned exact-pack release asset
-        if: steps.pack-cache.outputs.cache-hit != 'true'
+      - name: Download legacy pinned release asset
+        if: steps.pack-cache.outputs.cache-hit != 'true' && steps.resolve.outputs.source == 'legacy'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p .exact-pack-cache
-          gh release download "$EXACT_PACK_TAG" \
+          gh release download "$LEGACY_EXACT_PACK_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "$EXACT_PACK_ASSET" \
+            --pattern "$LEGACY_EXACT_PACK_ASSET" \
             --dir .exact-pack-cache \
             --clobber
 
-      - name: Verify pinned exact-pack SHA-256
+      - name: Build fixture from the Distribution revision
+        if: steps.pack-cache.outputs.cache-hit != 'true' && steps.resolve.outputs.source == 'distribution'
         shell: bash
+        env:
+          DISTRIBUTION_URL: ${{ secrets.DISTRIBUTION_URL }}
+          DISTRIBUTION_KEY: ${{ secrets.DISTRIBUTION_KEY }}
+          EXACT_PACK_PROFILE: ${{ vars.EXACT_PACK_PROFILE || 'profile_wachiland-elite-beta' }}
+          BOOTOPTIM_DISTRIBUTION_TRUSTED_KEYS: ${{ vars.DISTRIBUTION_TRUSTED_KEYS }}
+          REVISION: ${{ steps.resolve.outputs.revision }}
+          MANIFEST_SHA256: ${{ steps.resolve.outputs.manifest_sha256 }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$DISTRIBUTION_URL"
+          mkdir -p .exact-pack-cache
+          python tools/exact-pack/build_fixture_from_profile.py \
+            --profile "$EXACT_PACK_PROFILE" --revision "$REVISION" --manifest-sha256 "$MANIFEST_SHA256" \
+            --out .exact-pack-cache/bootoptim-exact-pack.zip \
+            --sidecar .exact-pack-cache/bootoptim-exact-pack.json \
+            --cache "$RUNNER_TEMP/exact-pack-objects"
+
+      - name: Verify exact-pack fixture SHA-256
+        id: verify
+        shell: bash
+        env:
+          SOURCE: ${{ steps.resolve.outputs.source }}
+          MANIFEST_SHA256: ${{ steps.resolve.outputs.manifest_sha256 }}
         run: |
           set -euo pipefail
           path=.exact-pack-cache/bootoptim-exact-pack.zip
           test -f "$path"
           actual=$(sha256sum "$path" | awk '{print $1}')
-          test "$actual" = "$EXACT_PACK_SHA256" || {
-            echo "Exact-pack SHA mismatch. expected=$EXACT_PACK_SHA256 actual=$actual" >&2
+          if [ "$SOURCE" = legacy ]; then
+            expected=$LEGACY_EXACT_PACK_SHA256
+          else
+            sidecar=.exact-pack-cache/bootoptim-exact-pack.json
+            expected=$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["zip_sha256"])' "$sidecar")
+            python - "$sidecar" "$MANIFEST_SHA256" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys
+          s = json.load(open(sys.argv[1]))
+          assert s["manifest_sha256"] == sys.argv[2], "cached sidecar does not match the resolved manifest"
+          print("### Exact-pack fixture")
+          print(f"- source: Distribution profile `{s['profile']}` ({s.get('profile_name')})")
+          print(f"- revision: `{s['revision_id']}` (sequence {s['sequence']}, created {s.get('revision_created_at')})")
+          print(f"- manifest_sha256: `{s['manifest_sha256']}`")
+          print(f"- ancestors: {', '.join(a['revision_id'] for a in s['ancestors']) or 'none'}")
+          print(f"- files: {s['file_count']}, tree_sha256: `{s['tree_sha256']}`, zip_sha256: `{s['zip_sha256']}`")
+          print(f"- excluded by contract: {s['excluded_paths'] or 'none'}; unapplied TOML settings: {len(s['unapplied_config_settings'])}")
+          PY
+          fi
+          test "$actual" = "$expected" || {
+            echo "Exact-pack SHA mismatch. expected=$expected actual=$actual" >&2
             exit 1
           }
+          echo "sha256=$actual" >> "$GITHUB_OUTPUT"
           echo "Exact-pack fixture SHA-256 verified: $actual"
 
       - name: Restore pinned Linux JCEF cache
@@ -225,6 +334,7 @@ jobs:
       MESA_GL_VERSION_OVERRIDE: '4.6'
       MESA_GLSL_VERSION_OVERRIDE: '460'
       BOOTOPTIM_MCEF_MIRROR_PORT: '18765'
+      BOOTOPTIM_EXACT_PACK_SOURCE: ${{ needs.fixture.outputs.source }}
       BOOTOPTIM_PACK_JAVA_VERSION: '25'
       BOOTOPTIM_PACK_BASE_JVM_ARGS: |-
         -Xmx6G
@@ -321,8 +431,8 @@ jobs:
       - name: Restore exact-pack ZIP
         uses: actions/cache/restore@v4
         with:
-          path: .exact-pack-cache/bootoptim-exact-pack.zip
-          key: ${{ env.EXACT_PACK_CACHE_KEY }}
+          path: .exact-pack-cache
+          key: ${{ needs.fixture.outputs.cache_key }}
           fail-on-cache-miss: true
 
       - name: Restore pinned Linux JCEF
@@ -353,7 +463,7 @@ jobs:
         run: |
           python scripts/exact-pack/prepare_fixture.py \
             --zip .exact-pack-cache/bootoptim-exact-pack.zip \
-            --sha256 "$EXACT_PACK_SHA256" \
+            --sha256 '${{ needs.fixture.outputs.sha256 }}' \
             --extract .exact-pack-run \
             --mcef-mirror-url "http://127.0.0.1:$BOOTOPTIM_MCEF_MIRROR_PORT"
 

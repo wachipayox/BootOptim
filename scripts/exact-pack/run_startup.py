@@ -85,6 +85,36 @@ def tail(path: Path, count: int = 250) -> str:
     return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-count:])
 
 
+def print_failure_diagnostics(run_dir: Path) -> None:
+    """After the process is gone, show latest.log and crash reports in the job log."""
+    latest = run_dir / "logs" / "latest.log"
+    if latest.is_file():
+        print(f"--- tail of {latest} ---", file=sys.stderr)
+        print(tail(latest, 150), file=sys.stderr)
+    debug = run_dir / "logs" / "debug.log"
+    if debug.is_file():
+        print(f"--- tail of {debug} ---", file=sys.stderr)
+        print(tail(debug, 250), file=sys.stderr)
+    for report in sorted((run_dir / "crash-reports").glob("*.txt"))[-2:]:
+        print(f"--- {report} ---", file=sys.stderr)
+        print(tail(report, 200), file=sys.stderr)
+    pack_dir = os.environ.get("BOOTOPTIM_PACK_DIR", "").strip()
+    mods = Path(pack_dir) / "mods" if pack_dir else None
+    if mods and mods.is_dir():
+        import zipfile
+        jars = sorted(mods.glob("*.jar"))
+        print(f"--- {len(jars)} mod jars in fixture ---", file=sys.stderr)
+        for jar in jars:
+            print(jar.name, file=sys.stderr)
+        for jar in jars:
+            try:
+                with zipfile.ZipFile(jar) as archive:
+                    if any(n.endswith("adapter.init.mixins.json") for n in archive.namelist()):
+                        print(f"adapter.init.mixins.json is in: {jar.name}", file=sys.stderr)
+            except (OSError, zipfile.BadZipFile) as exc:
+                print(f"cannot read {jar.name}: {exc}", file=sys.stderr)
+
+
 def wait_for_process(process: subprocess.Popen, timeout_seconds: int) -> tuple[bool, str]:
     """Wait without touching benchmark logs while the timed process is alive.
 
@@ -171,6 +201,7 @@ def main() -> None:
         console_text = console_log.read_text(encoding="utf-8", errors="replace")
         if MARKER not in console_text:
             print(tail(console_log), file=sys.stderr)
+            print_failure_diagnostics(root / "run-pack-benchmark")
             raise SystemExit(
                 f"Exact-pack benchmark exited without the main-menu marker ({reason})."
             )
@@ -198,10 +229,13 @@ def main() -> None:
                 [sys.executable, "tools/laptop-bench/check_resource_selection.py",
                  "--reference", str(selection_reference),
                  "--options", str(root / "run-pack-benchmark" / "options.txt"),
-                 "--log", str(latest_log)],
+                 "--log", str(latest_log)]
+                + (["--allow-no-external"]
+                   if os.environ.get("BOOTOPTIM_EXACT_PACK_SOURCE") == "distribution" else []),
                 cwd=root, stdout=report, check=False,
             )
         if resource_check.returncode != 0:
+            print(selection_report.read_text(encoding="utf-8", errors="replace"), file=sys.stderr)
             raise SystemExit("Exact-pack resource contract failed; see resource-selection-check.json.")
 
         summary = subprocess.run(
