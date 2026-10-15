@@ -101,5 +101,6 @@ Not reopened: FancyMenu busy wait (hot spot 1). The 2026-09-05 rejection stands;
 
 ## Follow-ups
 
+- Frontier 2 (shape joins) was opened and integrated on 2026-10-16: [block-shape-or-memo-2026-10-16](block-shape-or-memo-2026-10-16.md). It also corrects hot spot 3: 76 % of the join samples are Ponder `VoxelShaper`, not the callers listed above.
 - The September vs rev 3 difference is not attributable without a control on the same runner. No legacy control was run: a further run on another runner would not settle the ~35 % runner-to-runner variation.
 - The two FML access-transformer errors and the `Error loading class` warnings are candidates for a Companion issue only after one is shown to affect the game. Not filed.

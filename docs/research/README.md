@@ -1,5 +1,6 @@
 # BootOptim research ledger
 
+- [Block shape builders: exact `Shapes.or` replay — 2026-10-16](block-shape-or-memo-2026-10-16.md): frontier 2 of #360 integrated. Wall/cross/pipe `makeShapes` repeat 99.8 % of their ≈ 1.1 M joins across blocks; replay cuts the builder wall ≈ 1.0 s → ≈ 0.16 s (hosted, paired), exact audit clean over 970 calls. Corrects #360: 76 % of join samples are Ponder `VoxelShaper` (join-level repeat 72 %, not opened).
 - [FML event TRACE producer filter — 2026-10-15](fml-event-trace-producer-filter-2026-10-15.md): FML formats and publishes ~458k per-event TRACE lines no appender writes; producer-side filter proven equivalent by an appender-chain probe. Fast PC A/B 2+2: post-menu reload freezes −49 %, F3+T −1.6 s, no `main_menu` claim. **Integrated.**
 
 - [Beta rev 3 hosted baseline — 2026-10-15](beta-rev3-baseline-2026-10-15.md): rev 3 (Companion 1.0.5a7) smoke + JFR on the hosted surrogate; 0 FALLBACK, 6 ACTIVE; segments not attributable to pack vs runner without a same-runner control; three frontiers listed, none opened.
