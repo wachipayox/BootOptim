@@ -17,6 +17,7 @@ public final class StartupProfiler {
             || Boolean.getBoolean(EXIT_ON_TITLE_PROPERTY);
     private static final boolean REPORT_ENABLED = StartupReport.isEnabled();
     private static final AtomicBoolean MAIN_MENU_REPORTED = new AtomicBoolean();
+    private static final AtomicBoolean FIRST_RELOAD_REPORTED = new AtomicBoolean();
 
     private StartupProfiler() {
     }
@@ -26,12 +27,27 @@ public final class StartupProfiler {
     }
 
     public static void markModEntrypoint() {
+        markPhase("mod_entrypoint");
+    }
+
+    /**
+     * Mod-loading subphase marker (see docs/research). Costs two static checks when the startup report
+     * and profiling are both off. The report gets a {@code PHASE} line plus JVM counters.
+     */
+    public static void markPhase(String phase) {
         if (REPORT_ENABLED) {
-            StartupReport.phase("mod_entrypoint", uptimeMs());
-            StartupReport.jvm("mod_entrypoint");
+            StartupReport.phase(phase, uptimeMs());
+            StartupReport.jvm(phase);
         }
         if (PROFILING_ENABLED) {
-            logPhase("mod_entrypoint");
+            logPhase(phase);
+        }
+    }
+
+    /** Only the first resource reload starts the segment; later reloads are not part of it. */
+    public static void markFirstReloadStart() {
+        if (isEnabled() && FIRST_RELOAD_REPORTED.compareAndSet(false, true)) {
+            markPhase("reload_start");
         }
     }
 

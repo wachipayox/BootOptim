@@ -14,5 +14,6 @@ public final class DiscoveryEndLocator implements IModFileCandidateLocator {
     @Override
     public void findCandidates(ILaunchContext context, IDiscoveryPipeline pipeline) {
         DiscoveryProfiler.endRoot();
+        StartupDiagnostics.phase("root_mod_discovery_end");
     }
 }

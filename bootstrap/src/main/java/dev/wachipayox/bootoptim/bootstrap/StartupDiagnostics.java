@@ -2,6 +2,9 @@ package dev.wachipayox.bootoptim.bootstrap;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.management.CompilationMXBean;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -82,6 +85,46 @@ public final class StartupDiagnostics {
 
     public static void event(String category, String message) {
         append(sanitize(category) + " " + sanitize(message));
+    }
+
+    /**
+     * Mod-loading milestone in the same {@code PHASE} format as the game-layer report, followed by a
+     * {@code JVM} counter line. A no-op unless startup logging is enabled.
+     */
+    public static void phase(String phase) {
+        if (!isEnabled()) {
+            return;
+        }
+        append("PHASE name=" + sanitize(phase) + " uptime_ms="
+                + ManagementFactory.getRuntimeMXBean().getUptime());
+        jvmCounters(phase);
+    }
+
+    private static void jvmCounters(String phase) {
+        StringBuilder line = new StringBuilder("JVM phase=").append(sanitize(phase));
+        try {
+            if (ManagementFactory.getOperatingSystemMXBean()
+                    instanceof com.sun.management.OperatingSystemMXBean os) {
+                line.append(" process_cpu_ms=").append(os.getProcessCpuTime() / 1_000_000L);
+            }
+            CompilationMXBean jit = ManagementFactory.getCompilationMXBean();
+            if (jit != null && jit.isCompilationTimeMonitoringSupported()) {
+                line.append(" jit_ms=").append(jit.getTotalCompilationTime());
+            }
+            long gcCount = 0L;
+            long gcMs = 0L;
+            for (GarbageCollectorMXBean gc : ManagementFactory.getGarbageCollectorMXBeans()) {
+                gcCount += Math.max(0L, gc.getCollectionCount());
+                gcMs += Math.max(0L, gc.getCollectionTime());
+            }
+            line.append(" gc_count=").append(gcCount).append(" gc_ms=").append(gcMs);
+            line.append(" heap_used_mb=")
+                    .append(ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed() / (1024L * 1024L));
+            line.append(" classes_loaded=").append(ManagementFactory.getClassLoadingMXBean().getTotalLoadedClassCount());
+        } catch (Throwable failure) {
+            line.append(" error=").append(sanitize(failure.getClass().getSimpleName()));
+        }
+        append(line.toString());
     }
 
     private static void append(String line) {

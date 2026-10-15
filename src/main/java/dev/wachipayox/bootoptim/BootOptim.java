@@ -8,6 +8,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 
 /**
@@ -26,6 +27,7 @@ public final class BootOptim {
         if (FMLEnvironment.dist == Dist.CLIENT) {
             CitResewnGlowingTrimLegacyWarningSuppression.install(modEventBus);
             modEventBus.addListener(FMLClientSetupEvent.class, event -> CompatInjectionCheck.reportMissingPseudoTargets());
+            modEventBus.addListener(FMLCommonSetupEvent.class, event -> StartupProfiler.markPhase("registration_end"));
             if (StartupProfiler.isEnabled()) {
                 ClientStartupHooks.install();
             }

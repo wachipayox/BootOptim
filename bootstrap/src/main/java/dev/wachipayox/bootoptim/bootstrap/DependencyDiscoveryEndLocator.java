@@ -15,5 +15,6 @@ public final class DependencyDiscoveryEndLocator implements IDependencyLocator {
     @Override
     public void scanMods(List<IModFile> loadedMods, IDiscoveryPipeline pipeline) {
         DiscoveryProfiler.endDependencies();
+        StartupDiagnostics.phase("dependency_discovery_end");
     }
 }
