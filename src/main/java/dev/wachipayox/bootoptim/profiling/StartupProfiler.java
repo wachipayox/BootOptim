@@ -1,6 +1,7 @@
 package dev.wachipayox.bootoptim.profiling;
 
 import com.mojang.logging.LogUtils;
+import dev.wachipayox.bootoptim.optimization.client.BlockShapeOrMemo;
 import java.lang.management.ManagementFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
@@ -43,6 +44,7 @@ public final class StartupProfiler {
             return false;
         }
 
+        BlockShapeOrMemo.report();
         long uptimeMs = uptimeMs();
         // Finish the on-disk report before emitting the console marker used by CI to terminate the client.
         if (REPORT_ENABLED) {

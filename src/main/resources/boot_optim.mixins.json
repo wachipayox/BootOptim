@@ -23,7 +23,10 @@
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin",
-    "client.XaeroWorldMapUpdateCheckMixin"
+    "client.XaeroWorldMapUpdateCheckMixin",
+    "client.WallBlockShapeOrMemoMixin",
+    "client.CrossCollisionBlockShapeOrMemoMixin",
+    "client.PipeBlockShapeOrMemoMixin"
   ],
   "injectors": {
     "defaultRequire": 0
