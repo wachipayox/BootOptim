@@ -120,7 +120,10 @@ def main() -> None:
     # MCEF selects natives by OS and its dev path is ../build/mcef-libraries.
     fixture_mcef_libraries = mods / "mcef-libraries"
     if not fixture_mcef_libraries.exists():
-        raise SystemExit("Exact-pack fixture is missing mods/mcef-libraries.")
+        # Distribution-built fixtures carry only what the profile ships; MCEF
+        # downloads its natives at runtime, so profiles have no mcef-libraries.
+        # The hosted run uses the staged ../build/mcef-libraries either way.
+        print("Exact-pack fixture has no mods/mcef-libraries; using the staged pinned JCEF.")
     if (mods / "mcef-cache").exists():
         raise SystemExit("Exact-pack fixture contains mods/mcef-cache; mutable browser cache must stay out of the fixture.")
 
