@@ -101,5 +101,5 @@ Not reopened: FancyMenu busy wait (hot spot 1). The 2026-09-05 rejection stands;
 
 ## Follow-ups
 
-- The September vs rev 3 difference is not attributable. A same-runner control on the legacy fixture would settle whether any segment grew. It needs one more smoke run, so it is a decision for the owner, not for this entry.
+- The September vs rev 3 difference is not attributable without a control on the same runner. No legacy control was run: a further run on another runner would not settle the ~35 % runner-to-runner variation.
 - The two FML access-transformer errors and the `Error loading class` warnings are candidates for a Companion issue only after one is shown to affect the game. Not filed.
