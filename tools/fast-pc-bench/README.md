@@ -33,3 +33,12 @@ screen and appends one line (`mod_entrypoint_ms`, `main_menu_ms`, affinity, Java
   whether all candidates fall outside the control range.
 - A launcher or game left running blocks the next run (`launcher running`); kill both before relaunching.
 - In PowerShell, names are case-insensitive: never reuse a parameter name (`$JavaPath`) for a local variable.
+
+## Class sources (AOT cache)
+
+`aot_class_sources.ps1 -ClassLoadLog <log> -Report <bootoptim-startup.log> [-TrainingLog <log>]`
+counts, up to `mod_entrypoint` and `main_menu`, where classes come from:
+`AOT/CDS` (non-JDK class served from the cache), `JDK-CDS`, `DEFINED` (custom loader, parsed),
+`MISMATCH` (loaded in training too, but bytes differ now, so the cache is rejected for it), `JAR`, `JRT`.
+The log needs `-Xlog:class+load=info:file=<path>:uptime`. See
+[`docs/research/jdk25-aot-cache-reopen-2026-10-15.md`](../../docs/research/jdk25-aot-cache-reopen-2026-10-15.md).
