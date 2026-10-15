@@ -10,7 +10,7 @@ It is a **software-pack surrogate**, not an emulation of the Intel i3-2350M lapt
 
 Since 2026-10-15 the default fixture is built from Distribution (user decision: Actions may read the Distribution client API). Selection, by PR-body directive `exact-pack-fixture:` or the `fixture` dispatch input:
 
-- `latest` (default): latest revision of the Beta profile (`vars.EXACT_PACK_PROFILE`);
+- `latest` (default): latest revision of the Beta profile (`profile_wachiland-elite-beta`, overridable with `vars.EXACT_PACK_PROFILE`);
 - `rev_<id>`: a pinned revision of that profile, for reproducible comparisons;
 - `legacy`: the hand-built September release below.
 

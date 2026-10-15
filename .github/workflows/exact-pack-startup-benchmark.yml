@@ -172,7 +172,7 @@ jobs:
           FIXTURE: ${{ needs.plan.outputs.fixture }}
           DISTRIBUTION_URL: ${{ secrets.DISTRIBUTION_URL }}
           DISTRIBUTION_KEY: ${{ secrets.DISTRIBUTION_KEY }}
-          EXACT_PACK_PROFILE: ${{ vars.EXACT_PACK_PROFILE }}
+          EXACT_PACK_PROFILE: ${{ vars.EXACT_PACK_PROFILE || 'profile_wachiland-elite-beta' }}
           BOOTOPTIM_DISTRIBUTION_TRUSTED_KEYS: ${{ vars.DISTRIBUTION_TRUSTED_KEYS }}
         run: |
           set -euo pipefail
@@ -191,7 +191,7 @@ jobs:
           }
           if [ "$FIXTURE" = legacy ]; then legacy; exit 0; fi
           if [ -z "$DISTRIBUTION_URL" ] || [ -z "$EXACT_PACK_PROFILE" ]; then
-            msg="fixture '$FIXTURE' requested but secret DISTRIBUTION_URL or variable EXACT_PACK_PROFILE is not available; using the legacy pinned fixture"
+            msg="fixture '$FIXTURE' requested but secret DISTRIBUTION_URL is not available; using the legacy pinned fixture"
             echo "::warning::$msg"
             legacy "$msg"
             exit 0
@@ -233,7 +233,7 @@ jobs:
         env:
           DISTRIBUTION_URL: ${{ secrets.DISTRIBUTION_URL }}
           DISTRIBUTION_KEY: ${{ secrets.DISTRIBUTION_KEY }}
-          EXACT_PACK_PROFILE: ${{ vars.EXACT_PACK_PROFILE }}
+          EXACT_PACK_PROFILE: ${{ vars.EXACT_PACK_PROFILE || 'profile_wachiland-elite-beta' }}
           BOOTOPTIM_DISTRIBUTION_TRUSTED_KEYS: ${{ vars.DISTRIBUTION_TRUSTED_KEYS }}
           REVISION: ${{ steps.resolve.outputs.revision }}
           MANIFEST_SHA256: ${{ steps.resolve.outputs.manifest_sha256 }}

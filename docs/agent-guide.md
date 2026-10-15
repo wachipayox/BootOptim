@@ -89,7 +89,7 @@ The project has a pinned public exact-pack fixture and a hosted startup workflow
 
 Current fixture contract:
 
-- default fixture (`latest`): built by the workflow from the latest revision of the Beta Distribution profile (`vars.EXACT_PACK_PROFILE`, server from secret `DISTRIBUTION_URL`, masked) with `tools/exact-pack/build_fixture_from_profile.py`; signatures, parent pins and every object SHA-256 are verified, and the ZIP is cached by `manifest_sha256`. The job summary records profile, revision, manifest SHA-256 and ZIP SHA-256: quote them with any result;
+- default fixture (`latest`): built by the workflow from the latest revision of the Beta Distribution profile (`profile_wachiland-elite-beta`, overridable with `vars.EXACT_PACK_PROFILE`; server from secret `DISTRIBUTION_URL`, masked) with `tools/exact-pack/build_fixture_from_profile.py`; signatures, parent pins and every object SHA-256 are verified, and the ZIP is cached by `manifest_sha256`. The job summary records profile, revision, manifest SHA-256 and ZIP SHA-256: quote them with any result;
 - pinned fixture: `exact-pack-fixture: rev_<id>` (PR body) or the `fixture` dispatch input, built and cached the same way. Compare A/B results only within one fixture;
 - legacy pinned fixture `exact-pack-fixture: legacy`: release `exact-pack-2026-09-02-v1`, asset `bootoptim-exact-pack.zip`, SHA-256 `7f586ecd90497a4d4aa1d2024af2643dbd64691864edbad9eb2ed40551c55639`. It is also the fallback (with a warning) when the secret/variable is unavailable, e.g. fork PRs;
 - the legacy fixture contains the user's enabled resource-pack state and preseeded `mods/mcef-libraries/`; a Distribution fixture contains exactly the profile's effective tree (its `options.txt` object, if any);
