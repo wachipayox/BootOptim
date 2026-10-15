@@ -91,9 +91,28 @@ def print_failure_diagnostics(run_dir: Path) -> None:
     if latest.is_file():
         print(f"--- tail of {latest} ---", file=sys.stderr)
         print(tail(latest, 150), file=sys.stderr)
+    debug = run_dir / "logs" / "debug.log"
+    if debug.is_file():
+        print(f"--- tail of {debug} ---", file=sys.stderr)
+        print(tail(debug, 250), file=sys.stderr)
     for report in sorted((run_dir / "crash-reports").glob("*.txt"))[-2:]:
         print(f"--- {report} ---", file=sys.stderr)
         print(tail(report, 200), file=sys.stderr)
+    pack_dir = os.environ.get("BOOTOPTIM_PACK_DIR", "").strip()
+    mods = Path(pack_dir) / "mods" if pack_dir else None
+    if mods and mods.is_dir():
+        import zipfile
+        jars = sorted(mods.glob("*.jar"))
+        print(f"--- {len(jars)} mod jars in fixture ---", file=sys.stderr)
+        for jar in jars:
+            print(jar.name, file=sys.stderr)
+        for jar in jars:
+            try:
+                with zipfile.ZipFile(jar) as archive:
+                    if any(n.endswith("adapter.init.mixins.json") for n in archive.namelist()):
+                        print(f"adapter.init.mixins.json is in: {jar.name}", file=sys.stderr)
+            except (OSError, zipfile.BadZipFile) as exc:
+                print(f"cannot read {jar.name}: {exc}", file=sys.stderr)
 
 
 def wait_for_process(process: subprocess.Popen, timeout_seconds: int) -> tuple[bool, str]:
