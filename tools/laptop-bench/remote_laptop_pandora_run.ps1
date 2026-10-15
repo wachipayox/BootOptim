@@ -6,8 +6,9 @@ launcher and target Java stopped before any mutation, exact backups restored and
 BootOptim wrapper, effective Java command line validated (never persisted raw), blocking wait without log polling.
 
 Pandora keeps the per-instance JVM flags and Java binary in <instance>\info_v1.json (jvm_flags / jvm_binary)
-and is launched with `--run-instance-normal <name>` (Pandora PR #66), so no launcher config can be rewritten
-behind our back the way Prism rewrites instance.cfg.
+and is launched with `--run-instance-normal <name> --no-update` (Pandora PR #66/#100), so no launcher config
+can be rewritten behind our back the way Prism rewrites instance.cfg, and a pending profile update never
+changes the pack mid-series (it is only reported). Update the instance deliberately, before a series.
 
 Actions (all take -RunId; state lives in <StateRoot>\<RunId>\state.json):
   Stage      back up info_v1.json + live wrapper, install candidate wrapper, write jvm_flags/jvm_binary
@@ -135,12 +136,14 @@ switch ($Action) {
     $st = Load $stateFile
     try {
         $st.phase = 'launching'; $st.launchedUtc = [DateTime]::UtcNow.ToString('o'); Save $st $stateFile
-        $pd = Start-Process -FilePath $st.pandoraExe -ArgumentList @('--run-instance-normal', $st.instanceName) -PassThru
+        $pd = Start-Process -FilePath $st.pandoraExe -ArgumentList @('--run-instance-normal', $st.instanceName, '--no-update') -PassThru
         $st.pandoraPid = $pd.Id; Save $st $stateFile
         $launcherLog = Join-Path (Split-Path -Parent (Split-Path -Parent $st.instanceDir)) 'launcher.log'
         $deadline = (Get-Date).AddSeconds($st.launchGraceSeconds); $java = $null; $launchError = $null; $i = 0
         while (-not $java -and -not $launchError -and (Get-Date) -lt $deadline) {
             Start-Sleep -Seconds 2; $java = Target-Java $st.gameRoot $st.runMarker | Select-Object -First 1
+            # Pandora exits without starting Java on 4 (update failed / instance busy) and 5 (no such instance).
+            if (-not $java -and $pd.HasExited -and $pd.ExitCode -ne 0) { $launchError = "launcher exited with code $($pd.ExitCode) before starting Java" }
             if (-not $java -and (++$i % 5) -eq 0 -and (Test-Path -LiteralPath $launcherLog)) {
                 $launchError = Get-Content -LiteralPath $launcherLog -Tail 200 | Where-Object { $_ -match 'Failed to launch|Auth Flow: Initial' } | Select-Object -Last 1
             }

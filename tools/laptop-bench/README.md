@@ -9,7 +9,7 @@ Private connection details (LAN address, account) live only in the private wbomb
 
 | Runner | Launcher | Use |
 | --- | --- | --- |
-| `remote_laptop_pandora_run.ps1` | Wachiland Launcher (BootOptimPandora) `--run-instance-normal` | **Default since 2026-10-14.** Fast, deterministic preparation; JVM flags and Java binary come from the instance `info_v1.json`, which no launcher rewrites behind our back. |
+| `remote_laptop_pandora_run.ps1` | Wachiland Launcher (BootOptimPandora) `--run-instance-normal --no-update` | **Default since 2026-10-14.** Fast, deterministic preparation; JVM flags and Java binary come from the instance `info_v1.json`, which no launcher rewrites behind our back. |
 | `remote_laptop_transaction.ps1` + `remote_laptop_interactive_run.ps1` | Prism `-l <instance>` | Legacy. On the HDD laptop Prism's pre-launch (metadata refresh, account refresh, Java check, asset downloads) took 10+ minutes and exceeded the 300 s launch grace; it can also rewrite `instance.cfg`. |
 
 Both measure the same thing: BootOptim's startup report counts from JVM start, so the launcher does not
@@ -31,6 +31,16 @@ measured configuration.
   `Failed to launch ... IoError NotFound` until `libraries`/`assets`/`logconfigs` were copied over.
 - **After updating the launcher exe**, check that its data directory did not change and that the instance,
   `libraries`, `assets`, `logconfigs`, `metadata` and the logged-in account are still there.
+
+## Pack revision
+
+- **Prefer a fixed revision of the Beta profile for a measurement series**: control and candidate must run
+  on the same revision (see "Qué pack usar en las pruebas" in wbombo `AGENTS.md`). Record the revision with
+  every result.
+- The runner always launches with `--no-update`: a pending profile update is reported in `launcher.log`
+  (`[WBOMBO-PROFILE] UPDATE-SKIPPED ...`) and never applied during a run.
+- To measure on the latest revision, update the instance **before** the series (launcher UI, or one
+  `--run-instance <name> --update` outside the runner), then rerun the control on it.
 
 ## Pandora transaction
 
