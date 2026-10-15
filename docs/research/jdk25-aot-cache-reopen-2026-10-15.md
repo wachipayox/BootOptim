@@ -1,6 +1,6 @@
 # JDK 25 AOT cache — reopened for the mod-loading phase — 2026-10-15
 
-Status: **ACTIVE, mechanism stage.** Not a rejection and not an integration.
+Status: **ACTIVE, first physical result positive (2026-10-16); not integrated.** The fast-PC ABBA shows about −9.2 s to `main_menu` with a cache trained on the same pack revision and JAR. Still to decide: cache lifecycle in Pandora, and whether the gain holds across revisions. See "Result" below.
 The 2026-09-25 NO-GO ([`archive/research/jdk25-aot-cache-laptop-2026-09-25.md`](../archive/research/jdk25-aot-cache-laptop-2026-09-25.md))
 was measured on a laptop with a failing disk, with n=1 and a fixed order. Its
 JDK-selection premise no longer holds, and the mechanism it tested (class
@@ -82,7 +82,44 @@ whose bytes differ at consumption.
 4. Cache size, training time, and invalidation: the cache is tied to the JDK
    build, the classpath and the pack revision.
 
+## Result (2026-10-16, fast PC, Java 25.0.1, Beta rev_7d5b9e504f8422494860364f9312da8e)
+
+Origin: fast PC through Wachiland Launcher #103, full mask (`FFFF`), no
+`ActiveProcessorCount`, `--no-update`, BootOptim JAR `bootoptim-bench-6b7d84cf.jar`
+(the same JAR for training and every run). Endpoints from `bootoptim-startup.log`.
+
+Training: one run with `-XX:AOTCacheOutput=C:/BootOptimBench/local/aot/b06-rev7d5b.aot`
+(304 MB; training run to menu 67.7 s, not a measurement).
+
+Hit check (one run with `-XX:AOTCache` and class+load logs, not a measurement):
+at `mod_entrypoint`, 27,729 classes loaded: 9,869 non-JDK classes served from the
+cache, 5,443 JDK classes from the base archive, 2,011 classes present in training
+but not served now (`MISMATCH`), 8,455 lambda proxies (run-specific names, never
+match by name).
+
+ABBA ×2 (primer discarded; `A B B A A B B A`, A = control with no AOT flag, B = `-XX:AOTCache`):
+
+| Arm | n | `mod_entrypoint` median | `main_menu` median | `main_menu` range |
+|---|---:|---:|---:|---:|
+| control | 4 | 37.42 s | 58.74 s | 56.63–59.91 s |
+| candidate | 4 | 32.09 s | 49.50 s | 48.72–49.73 s |
+
+Candidate − control: **−9.25 s to `main_menu` (−15.7 %)**, −5.33 s to `mod_entrypoint`.
+The ranges do not overlap. One control run (`ctl1`, first attempt) crashed in
+parallel mod construction (Registrate `OneTimeEventReceiver` NPE, reported as
+Companion issue #6) and was repeated; it is not in the table.
+
+Limits: a single cache from one revision and one JAR; not tested after a pack
+update, a JDK change or a JAR change (all invalidate it by design); training cost
+(about 2 min, one-time) is not in the medians; the arms do not include Pandora
+launch overhead. The gain is measured from JVM uptime, not launcher Start.
+
 ## Plan (run only when the PC is free and the user has said so)
+
+Operational note (2026-10-16): Pandora splits `jvm_flags` with shell-word rules,
+so backslashes in paths are dropped (`C:\BootOptimBench\...` became
+`C:BootOptimBench...`, which broke `-Xlog` and wrote the cache into the game
+folder). Write JVM paths with forward slashes (`C:/BootOptimBench/...`).
 
 Pre-checks: no `WachilandLauncher*` and no game `javaw` running
 (`run_once.ps1` refuses otherwise); the instance `info_v1.json` restored after

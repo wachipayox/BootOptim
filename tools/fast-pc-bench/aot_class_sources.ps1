@@ -29,7 +29,8 @@ foreach ($m in 'mod_entrypoint', 'main_menu') {
 }
 
 $jdkPkg = '^(java|javax|jdk|sun|com\.sun)\.'
-$rx = '^\[(\d+(?:\.\d+)?)s\]\S*\s*\[class,load\]\s+(\S+)\s+source:\s*(.*)$'
+# Accepts both "[0.1s][info][class,load] name source: x" and "[0.1s] name source: x" (uptime-only decorators).
+$rx = '^\[(\d+(?:\.\d+)?)s\](?:\[[^\]]*\])*\s+(\S+)\s+source:\s*(.*)$'
 
 $trained = New-Object 'System.Collections.Generic.HashSet[string]'
 if ($TrainingLog) {
@@ -45,12 +46,17 @@ foreach ($line in [System.IO.File]::ReadLines($ClassLoadLog)) {
         $src = $matches[3].Trim()
         if ($src -like 'shared objects file*') {
             if ($name -match $jdkPkg) { $cls = 'JDK-CDS' } else { $cls = 'AOT/CDS' }
-        } elseif ($src -eq '__JVM_DefineClass__') {
-            if ($trained.Contains($name)) { $cls = 'MISMATCH' } else { $cls = 'DEFINED' }
+        } elseif ($src -eq '__JVM_DefineClass__' -or $src -eq '__JVM_LookupDefineClass__') {
+            $cls = 'DEFINED'
         }
-        elseif ($src -like 'file:*') { $cls = 'JAR' }
+        elseif ($src -like 'file:*' -or $src -like 'union:*') { $cls = 'JAR' }
         elseif ($src -like 'jrt:*') { $cls = 'JRT' }
+        # Lambda proxies: the source is the host class and the name carries a run-specific address, so
+        # they can never match a training run by name.
+        elseif ($name -match '\$\$Lambda') { $cls = 'LAMBDA' }
         else { $cls = 'OTHER' }
+        # Trained but not served from the cache now: its bytes or loader differ from the training run.
+        if ($trained.Count -and $trained.Contains($name) -and $cls -in 'DEFINED', 'JAR', 'JRT', 'OTHER') { $cls = 'MISMATCH' }
         $rows.Add([pscustomobject]@{ ms = $ms; name = $name; cls = $cls })
     }
 }
@@ -60,7 +66,7 @@ foreach ($m in 'mod_entrypoint', 'main_menu') {
     $upto = @($rows | Where-Object { $_.ms -le $limit })
     $groups = $upto | Group-Object cls
     $out = [ordered]@{ marker = $m; uptime_ms = $limit; loaded = $upto.Count }
-    foreach ($k in 'AOT/CDS', 'JDK-CDS', 'DEFINED', 'MISMATCH', 'JAR', 'JRT', 'OTHER') {
+    foreach ($k in 'AOT/CDS', 'JDK-CDS', 'DEFINED', 'MISMATCH', 'JAR', 'JRT', 'LAMBDA', 'OTHER') {
         $g = $groups | Where-Object { $_.Name -eq $k }
         $out[$k] = if ($g) { $g.Count } else { 0 }
     }
