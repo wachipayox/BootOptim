@@ -390,6 +390,21 @@ Hosted check, no PC: [#387](https://github.com/wachipayox/BootOptim/pull/387) (d
 - Stop rules: any `FALLBACK` line in arm G, or a crash, makes arm G invalid until fixed. A mod count change makes it a failure.
 - Decision: a gain of at least 3 s to `modlauncher_start` with non-overlapping ranges, and no startup cost from the agent, makes it a candidate that needs a second machine before any integration. Otherwise document it as rejected with these numbers.
 
+**Result (run 2026-10-16, fast PC, single session, PC free afterwards).** Executed as planned, with two changes: the bench JAR `bootoptim-bench-6b7d84cf.jar` stayed in `mods/` in both arms (it emits no `modlauncher_start` marker, so only `mod_entrypoint` and `main_menu` are compared), and the arms were run as one primer plus S, G, G, S, S, G after two launches were refused by the launcher-running check (a retry added a launcher-exit wait). Three stock and three agent runs remain.
+
+| Arm | Runs | `mod_entrypoint` median | `main_menu` median |
+|---|---|---|---|
+| S, stock | 36.4, 34.2, 34.6 s | 34.6 s | 54.3 s (56.4, 54.3, 54.1) |
+| G, agent | 27.7, 27.2, 26.3 s | 27.2 s | 47.1 s (47.7, 47.1, 45.9) |
+
+Median differences: `mod_entrypoint` −7.4 s, `main_menu` −7.2 s. The ranges do not overlap on either marker. The primer (54.4 s) is in the stock range.
+
+Checks: every run loaded 251 mod files; no `ReadOnlyFileSystemException`, `AccessDenied` or `FileSystemException` in any `latest.log`; the instance `crash-reports` count stayed at 7; `info_v1.json` was restored (SHA-256 identical to the start). A command-line watcher on the game `javaw` captured `-javaagent:C:/BootOptimBench/zipfs-agent/zipfs-readonly-agent.jar` in the agent run, so the flag reaches the game JVM.
+
+Not verified: the agent's own `ACTIVE` and `FALLBACK` lines are written to `System.err`, which the launcher does not capture into `latest.log`, so the active transform is inferred from the timing (a gain of the same size as the attribute in 5e, −7.0 s), not from a log line. No CPU-against-wall split was taken (the bench JAR has no `modlauncher_start` marker). The bench JAR is not the 5e integration JAR, so these numbers are comparable only inside this series.
+
+Decision under the stated rules: the gain is well above 3 s and the ranges do not overlap, so the agent is a candidate that needs a second machine and a confirmed `ACTIVE` path before any integration. Not integrated.
+
 ## 9. Next PC turn (measurements, only when the user gives the turn)
 
 1. **Per-call timing, no game launch.** Time `Files.getFileStore(path)` over the 295 JARs of 5e, twice each, in two arms: no Defender exclusion, and a Defender folder exclusion created by the user. `getFileStore` calls the volume lookup that `checkAccess` uses (`WindowsFileStore.create`); confirm that with a JFR of the microbench. If the wait is antivirus, the per-call time falls with the exclusion. If it is the lookup itself, it stays high with the exclusion. Report the median and the 95th percentile per call.
