@@ -37,5 +37,23 @@ class or method is reported by `CompatInjectionCheck`.
 
 ## Results
 
-Pending: hosted paired A/B (segment: MoreCulling shape listener in the startup reload) and the
-fast-PC in-world F3+T A/B (needs the user's go-ahead: the PC is shared).
+Fast PC (i5-12600KF), Wachiland Launcher, Beta rev 3 (`--no-update`), Java 25, RRLS test JAR
+(world-open overlap + diagnostics). Enter "New World" 0.5 s after model publication, in-world
+F3+T 20 s later. Order primer, ctl1, cand1, cand2, ctl2; control `-Dboot_optim.stateShapeMemo=false`.
+"Final pause" = longest frame gap during the in-world F3+T.
+
+| Guard | Final pause ctl (ms) | Final pause cand (ms) | F3+T ctl / cand (s) | ACTIVE |
+|---|---|---|---|---|
+| warm-up 256, 1/1,024 (`f602318`) | 2,473 / 2,510 | 2,225 / 2,276 | 12.96, 12.66 / 11.63, 11.69 | pizza only, ~1 s before the reload ends; railings never left warm-up |
+| warm-up 32, 1/256 (`ae59293`) | 2,323 / 2,469 | 2,155 / 2,204 | 12.18, 12.13 / 12.61, 12.16 | both, at the start of MoreCulling's shape pass; 0 FALLBACK |
+
+- Final F3+T pause: about -0.2 s, with non-overlapping ranges in both series. This matches the JFR
+  ceiling (34 of 165 render-thread samples in the final pause, about 0.34 s).
+- Total F3+T time does not change measurably. Its run-to-run spread is about 2 s (11.5-13.5 s in
+  the RRLS#7 series with this memo off), so the -1.1 s seen with the first guard is noise.
+- With warm-up 256 the guard defeated the memo: each state is asked about once per reload, so a
+  single F3+T never got past verification.
+- Hosted CI (to menu): 0 mixin errors and no FALLBACK. It cannot reach ACTIVE, because there are
+  too few repeat lookups before the menu.
+
+Decision: integrate (default on, guarded).
