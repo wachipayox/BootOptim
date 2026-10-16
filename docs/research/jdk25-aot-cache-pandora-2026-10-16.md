@@ -148,6 +148,46 @@ Validations (local build `94069a985`):
   window to JVM exit 20 s (profile write 19.1 s, 326 MiB), create 18.0 s, cache 320 MiB. "Optimizing"
   shows ≈ 2 s after the window closes.
 
+## With the zipfs read-only agent (BootOptimPandora #105, #106)
+
+Pandora #105 starts Java 25 Wachiland games with `-javaagent:<launcher>/agents/zipfs-readonly-agent.jar`
+(`tools/zipfs-readonly-agent`). Two problems with the AOT cache, both fixed:
+
+1. **The create step failed at once** (exit 1 after 0 s, so the option turned itself off), with the old and
+   the new agent. The agent's manifest has `Boot-Class-Path: zipfs-readonly-agent.jar`, which becomes part of
+   the boot class path of the training run, and the run records it. The `create` step loads no agents
+   (HotSpot jdk25u `CDSConfig::check_aotmode_create` → `JvmtiAgentList::disable_agent_list()`), so the JVM
+   reported `Required classpath entry does not exist` and `class path and/or module path are not compatible`.
+   It was reproduced with a one-class program. Fix in Pandora #104 (`8cdee715b`): the create command adds
+   `-Xbootclasspath/a:` with the `Boot-Class-Path` entries of every `-javaagent` JAR, resolved against the
+   JAR's folder. An absolute path works from any working directory.
+   Rejected alternative: drop `Boot-Class-Path` and call `appendToBootstrapClassLoaderSearch` in `premain`.
+   The JVM then warns "Sharing is only supported for boot loader classes because bootstrap classpath has
+   been appended", which would turn CDS/AOT off for application classes. The manifest entry does not have
+   that effect: the default CDS archive still served 976 classes of the test program with the agent, against
+   838 without it.
+2. **The old agent kept its transformer** for the whole game, so every class load posted a ClassFileLoadHook,
+   and every class served from the cache rebuilt its bytes for the hook. Fixed in the agent (#390: the
+   transformer removes itself once `ZipFileSystemProvider` is patched), embedded by Pandora #106.
+
+Fast PC, 2026-10-17, Beta `rev_0abae9be…` pinned, Java 25.0.1, all cores, normal priority. Timed from JVM
+start to `main_menu`, medians, ABBA. Local build of Pandora `8cdee715b` with the agent JAR of #106; old
+agent = CI exe `4c6c4f6` (#104 before the fix, old JAR). An orphan `find / -iname jei-*.jar` of another
+session (≈ 0.9 core) was stopped before the series.
+
+| Arm | Runs | Median | Range |
+|---|---|---:|---:|
+| new agent, cache off (`WBOMBO_AOT_CACHE=off`) | 47.9 / 49.5 / 47.7 / 48.4 | 48.1 s | 47.7–49.5 |
+| new agent + cache | 42.8 / 41.5 / 43.2 / 41.8 | **42.3 s (−5.8 s)** | 41.5–43.2 |
+| old agent + the same cache | 47.5 / 48.2 / 47.1 | 47.5 s | 47.1–48.2 |
+
+The arms do not overlap. With the old agent the hook ate almost all of the gain. Training with the agent:
+58.6 s to the menu, close 19.0 s, cache 292 MiB. Agent `ACTIVE` lines appear in `launcher.log` and in
+`.minecraft/logs/wbombo-zipfs-agent.log`. Classes served from the cache with the agent: 28,340 of 66,645
+class loads (`-Xlog:class+load` through `JAVA_TOOL_OPTIONS`, which is not part of the cache key; 43.2 s to
+the menu with that logging). `ZipFileSystemProvider` is loaded from `jrt` and redefined, so it is not
+cached, as expected.
+
 ## Not validated (open)
 
 - The UI buttons (Stop during record and during create, Cancel optimization, quit confirmation): no
