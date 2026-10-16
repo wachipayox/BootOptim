@@ -43,7 +43,7 @@ again when they differ. No stale class was served in any case.
 
 - Most classes are not rewritten: they reach `defineClass` with the jar bytes,
   so they match training by construction. The 2026-09-04 exact-pack analysis
-  counted 1,199 rewritten classes ([`archive/research/fml-modlauncher-lifecycle-critical-path-2026-09-04.md`](archive/research/fml-modlauncher-lifecycle-critical-path-2026-09-04.md), PR #48).
+  counted 1,199 rewritten classes ([`archive/research/fml-modlauncher-lifecycle-critical-path-2026-09-04.md`](../archive/research/fml-modlauncher-lifecycle-critical-path-2026-09-04.md), PR #48).
 - ModLauncher 11.0.5 (`javap -c`, 78 classes): no `identityHashCode`, clock or
   `Random` calls; 12 `HashMap`/`HashSet` sites, unchecked per site.
 - securejarhandler 3.0.8: same scan, no identity hash or clock; 39 sites.
