@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim;
 
 import dev.wachipayox.bootoptim.compat.client.CompatInjectionCheck;
 import dev.wachipayox.bootoptim.optimization.client.CitResewnGlowingTrimLegacyWarningSuppression;
+import dev.wachipayox.bootoptim.optimization.client.FmlEventTraceProducerFilter;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
 import net.neoforged.api.distmarker.Dist;
@@ -27,6 +28,7 @@ public final class BootOptim {
     public BootOptim(IEventBus modEventBus) {
         StartupProfiler.markModEntrypoint();
         if (FMLEnvironment.dist == Dist.CLIENT) {
+            FmlEventTraceProducerFilter.install();
             CitResewnGlowingTrimLegacyWarningSuppression.install(modEventBus);
             modEventBus.addListener(FMLClientSetupEvent.class, event -> CompatInjectionCheck.reportMissingPseudoTargets());
             // Common setup runs after the first reload has started, so it is not a registration boundary.
