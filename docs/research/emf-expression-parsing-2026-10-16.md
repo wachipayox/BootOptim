@@ -63,4 +63,20 @@ fixture `legacy` (its `options.txt` enables the user's resource packs; EMF 3.2.4
 - The earlier runs on Beta revisions (`rev_7d5b9e50…`, `rev_0abae9be…`) do not exercise the parser:
   their `options.txt` enables only `fabric`, so no part reaches 64 verified calls.
 
-Decision pending gate 2 (fast-PC in-world F3+T A/B), the measurement that can resolve ~0.2 s.
+
+Fast PC, in-world A/B (2026-10-16), Beta instance with the players' resource packs enabled for the series (Fresh Animations and addons; the legacy fixture's list). BootOptim `71e934ea` (CI build), RRLS #10 + auto-world-entry diagnostic, `renderer-emf-phase-trace` on in both arms. 1 primer + 4 control (`-Dboot_optim.emfExpressionParsing=false`) + 4 candidate runs, interleaved; each run starts, opens the world and does one automatic F3+T.
+
+- Gate 2 passed: the nine parts `ACTIVE` in every candidate, none in controls, 0 `FALLBACK`; every run reached the menu, joined the world and finished F3+T.
+- Same work in both arms: 98,510 `expression-parse` calls per reload.
+- `EntityRenderers.createEntityRenderers` wall per reload (medians, ms; range in brackets):
+
+| Reload | Control | Candidate | Δ |
+|---|---|---|---|
+| Startup | 1785 [1664–1966] | 1166 [1033–1370] | **−0.62 s** |
+| In-world F3+T | 1738 [1332–2335] | 754 [715–1016] | **−0.98 s** |
+
+  Exclusive `expression-parse` inside it: startup 985 → 376 ms, F3+T 970 → 258 ms; `jem-prepare` (includes the animation-text pass) about 150 → 50 ms.
+- End-to-end F3+T (17–18 s) and time to menu (52–55 s) do not separate from run-to-run noise (±1.5 s) with 4 pairs; ctl1 is an outlier (slow world entry) and is excluded from those two.
+- Caveat: the phase trace times every parse call (same overhead in both arms), so absolute numbers are inflated; the earlier RRLS measurement (2026-09-27, without per-call tracing on that segment) was 409 → 245 ms. The difference between arms is the figure that matters.
+
+Conclusion: the port does what the RRLS experiment did, without the version pin, and the guards stayed silent on the real pack.
