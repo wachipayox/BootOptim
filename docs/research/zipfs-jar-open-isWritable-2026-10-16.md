@@ -421,7 +421,14 @@ Reopen with a runtime change only if all hold:
 
 ## Result
 
-**Open.** Owner and count are established. The gain is attributed on the main thread: a volume lookup (`GetVolumePathName0`, about 10 ms per open) inside SecureJarHandler's lock, which serializes the JAR opens; the monitor waits follow from it. No loader component was found that writes into `libraries/` or `mods/`. Pandora needs about twenty changes before a read-only scheme would be safe (section 7), and the proposal (section 8) is not implemented. A read-only Java agent (8b, branch `claude/zipfs-readonly-agent-2026-10-16`) gives the same zip state without touching files; it is built and self-tested, and its launch ABBA is prepared (8c) but not run. The next steps are the measurement in section 9 (no game launch for its first part) and the agent ABBA of 8c on the next PC turn. No runtime code is integrated and no Pandora change is made.
+**Decision: integrate the agent path as an optional, flagged mechanism; the read-only attribute is not integrated.** Decided on 2026-10-16 by the coordinator, with the user's approval to continue; the final switch on by default needs the user's PC validation of the Pandora build.
+
+- Agent: BootOptim [#387](https://github.com/wachipayox/BootOptim/pull/387) (draft; tool, status file, CI artifact, and the hosted exact-pack gate of section 8c; the exact-pack gate passed per the coordinator's review).
+- Launcher: BootOptimPandora [#105](https://github.com/wachipayox/BootOptimPandora/pull/105) (draft): `-javaagent` for Wachiland Java 25 starts on Windows, JAR embedded with its source commit and SHA-256, switch `WBOMBO_ZIPFS_AGENT=0`, `[WBOMBO-COMPAT]` lines in `launcher.log`, and the agent's own status file.
+- Attribute (section 5e, section 7): stays documented and out of integration; it needs about twenty Pandora changes and a user decision on shared files.
+- Still open before default-on: the PC validation of the Pandora build (the status file on the reference PC), and a second machine for the ABBA.
+
+Evidence summary: the main menu is about 7 s earlier with the agent on the fast PC (8c, three runs each); hosted Linux runs show no breakage; no loader writer was found (section 6).
 
 ## Links
 
