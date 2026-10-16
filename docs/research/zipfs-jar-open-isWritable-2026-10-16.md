@@ -140,6 +140,21 @@ What this does and does not show:
 - It does not cover a copy outside `%APPDATA%` or a copy with the DOS read-only attribute set (variant (e) in the coordinating session's plan). Both still need approval.
 - The read-only attribute does not skip `GetFileSecurity`, because the ACL check (line 395 of `WindowsFileSystemProvider.checkAccess`) runs before the attribute check (line 405). It does skip `GetVolumePathName` (line 413), since the attribute check throws first. Any gain from the attribute depends on that.
 
+### 5c. Startup baseline on a fixed Beta revision (fast PC, 2026-10-16)
+
+Measured with `tools/fast-pc-bench` (`run_once.ps1`, `--no-update`, `exitOnTitle`, affinity FFFF, no JVM flags) on Beta revision `rev_0abae9beeefc7d7fa49f3ad03da2e7fd` (the latest published revision, confirmed in the instance manifest), with BootOptim integration `5e1162f` (`boot_optim-bootstrap-0.1.0.jar`), Java 25.0.1, Pandora 103 (`da9c7aa`). One primer and three baseline runs; no candidate.
+
+| Run | `modlauncher_start` | `root_mod_discovery_end` | `dependency_discovery_end` | `bootstrap_start` | `mod_entrypoint` | `main_menu` |
+|---|---|---|---|---|---|---|
+| primer | 8.89 s | 11.86 s | 18.12 s | 28.59 s | 36.42 s | 55.61 s |
+| base 1 | 8.72 s | 12.56 s | 19.01 s | 29.83 s | 37.74 s | 57.32 s |
+| base 2 | 8.28 s | 11.28 s | 17.48 s | 27.57 s | 35.76 s | 55.03 s |
+| base 3 | 8.57 s | 11.29 s | 17.17 s | 26.04 s | 33.26 s | 51.03 s |
+
+Reading: the `modlauncher_start` window is 8.3–8.9 s on this revision, below the 10.0 s of section 1 (measured on an earlier revision with an earlier build; not a like-for-like comparison). The three baseline runs are a same-revision series, so their spread is the noise estimate for this machine: about 0.6 s on `main_menu`.
+
+Not done: the JFR attribution of the window and any read-only-attribute experiment on the live instance files. Both need a separate decision (see the reopening criteria below). Revision and JAR are fixed for any follow-up series.
+
 ## Reopening criteria
 
 Reopen with a runtime change only if all hold:
