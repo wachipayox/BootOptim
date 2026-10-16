@@ -1,0 +1,4 @@
+Premain-Class: dev.wachipayox.bootoptim.zipfsagent.ZipfsReadOnlyAgent
+Can-Redefine-Classes: false
+Can-Retransform-Classes: true
+Boot-Class-Path: zipfs-readonly-agent.jar

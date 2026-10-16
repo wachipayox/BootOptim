@@ -23,16 +23,17 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
  */
 public final class CompatInjectionCheck {
     /** Package prefix of a third-party target class -> owning mod id. Vanilla targets map to null. */
-    private static final Map<String, String> MOD_BY_PACKAGE = Map.of(
-            "xaero.map.", "xaeroworldmap",
-            "net.caffeinemc.mods.sodium.", "sodium",
-            "com.cinemamod.mcef.", "mcef",
-            "de.keksuccino.fancymenu.", "fancymenu",
-            "schm.shsupercm.citresewn.", "citresewn",
-            "ca.fxco.moreculling.", "moreculling",
-            "com.github.talrey.createdeco.", "createdeco",
-            "dev.averageanime.", "createfood",
-            "com.razz.decocraft.", "decocraft");
+    private static final Map<String, String> MOD_BY_PACKAGE = Map.ofEntries(
+            Map.entry("xaero.map.", "xaeroworldmap"),
+            Map.entry("net.caffeinemc.mods.sodium.", "sodium"),
+            Map.entry("com.cinemamod.mcef.", "mcef"),
+            Map.entry("de.keksuccino.fancymenu.", "fancymenu"),
+            Map.entry("schm.shsupercm.citresewn.", "citresewn"),
+            Map.entry("ca.fxco.moreculling.", "moreculling"),
+            Map.entry("com.github.talrey.createdeco.", "createdeco"),
+            Map.entry("dev.averageanime.", "createfood"),
+            Map.entry("traben.entity_model_features.", "entity_model_features"),
+            Map.entry("com.razz.decocraft.", "decocraft"));
     private static final Set<String> DECLARED_TARGETS = ConcurrentHashMap.newKeySet();
     private static final Set<String> APPLIED_TARGETS = ConcurrentHashMap.newKeySet();
     /** Internal target name -> injectors to verify once the class is fully transformed. */
