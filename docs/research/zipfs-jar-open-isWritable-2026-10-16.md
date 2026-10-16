@@ -182,7 +182,45 @@ Reading:
 
 Caveats: one run; sample counts converted to time with an assumed 10 ms period; JFR itself adds overhead to the window.
 
-Next (not done): the read-only-attribute experiment on live instance files, which needs its own decision.
+### 5e. Read-only attribute experiment on the live instance files (fast PC, 2026-10-16)
+
+Scope and safety: the user confirmed the experiment on the real files (no copies). The list was the 295 `.jar` files under the launcher's shared `libraries/` (133) and the instance `mods/` (162, plus the integration JAR `5e1162f` for the run), saved before the change; none had the read-only attribute beforehand. Arm B set `IsReadOnly` on the whole list; a `finally` cleared it on every file after the last run, and the check after the restore found 0 of 295 still read-only. The bench JAR and `info_v1.json` were restored afterwards. No Defender or system setting was touched.
+
+Design: revision `rev_0abae9…` with `--no-update`, integration JAR `5e1162f`, `run_once` with `exitOnTitle`. Order: one primer (A), then ABBA: A B B A A B. Two extra runs with JFR, one per arm.
+
+Startup timings (uptime, seconds):
+
+| Arm | Runs | `modlauncher_start` | `dependency_discovery_end` | `mod_entrypoint` | `main_menu` |
+|---|---|---|---|---|---|
+| A, no attribute | 8.79, 9.93, 9.33 | 9.33 median | 19.39 median | 38.45 median | 59.69 median |
+| B, read-only | 5.02, 6.49, 5.41 | 5.41 median | 11.69 median | 31.97 median | 52.73 median |
+
+The ranges do not overlap on any marker. Median differences: `modlauncher_start` −3.9 s, `dependency_discovery_end` −7.7 s, `mod_entrypoint` −6.5 s, `main_menu` −7.0 s. The JFR runs fall in the same ranges (A 9.2 s and 67.9 s to menu, one run with JFR overhead; B 5.7 s and 57.3 s).
+
+Parity: every run found the same 251 mod lines in `latest.log` and no crash was logged. The instance `crash-reports` folder has the same 7 files as before the series.
+
+JFR, main thread, inside the window (10 ms sampling assumed as before):
+
+| Measure | A (9.16 s window) | B (5.74 s window) |
+|---|---|---|
+| `ZipFileSystem` in stack | 141 (1.41 s) | 40 (0.40 s) |
+| `WindowsFileSystemProvider.checkAccess` in stack | 124 (1.24 s) | 25 (0.25 s) |
+| `GetVolumePathName0` (top frame in the volume lookup) | 105 (1.05 s) | 0 |
+| `GetFileSecurity0` | 6 (0.06 s) | 8 (0.08 s) |
+
+Reading:
+
+- The attribute removes the `GetVolumePathName0` cost completely on the main thread. That is the check the code predicts: with the read-only attribute set, `checkAccess` throws before the volume lookup at line 413. It does not affect the ACL check at line 395, which still costs about 0.08 s.
+- The start-to-menu gain is about 7 s on this PC, more than the ~1.05 s of `GetVolumePathName0` alone. The extra is not explained by these samples: the main-thread samples cover only part of each window, so the rest is either the same unattributed time or a shift in what the thread waits on. It needs a separate attribution before it is claimed as zipfs.
+- Sample counts are small (one JFR run per arm). The wall-clock ranges are the stronger evidence, and they come from six non-JFR runs.
+
+Equivalence and risks (not verified in full):
+
+- No loader error and the same mod set were observed in arm B. A general claim needs a check that nothing writes into these JARs. ModLauncher, FML and securejarhandler were not audited for writes in this section.
+- On Windows, deleting or overwriting a read-only file fails. Any update or removal of these files must clear the attribute first. Pandora does not do that today, and this change was not implemented anywhere.
+- The attribute is on files shared by every instance that uses `libraries/`, not only this instance.
+
+Decision: **open, with evidence.** No integration and no Pandora change. Proposal for the owner of the launcher, if it is pursued: set the attribute when Pandora installs or verifies files it owns, clear it before any update, delete or repair, and restore the normal state on uninstall. Before any such change: (1) a second physical run on another machine or the laptop; (2) an audit of writers into these JARs; (3) a user decision on touching shared files. Reopening criteria: any of the three above passes, or a regression in these numbers on the next revision.
 
 ## Reopening criteria
 
