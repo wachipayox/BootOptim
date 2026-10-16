@@ -1,6 +1,6 @@
 # YACL image preparation off the calling thread — 2026-10-16
 
-Status: **candidate, pending hosted A/B and physical manual-reload validation.** Not integrated.
+Status: **candidate, not integrated.** Hosted CI green; physical manual-reload A/B (2026-10-17) showed no reload-wall benefit and did not measure the synchronous return. See the result section.
 
 Origin: RRLS experiment `compat.YaclPreparationMixin` (commit `18a5615`, 2026-09-26), which
 dispatched YACL's image `prepare` on the preparation executor behind an opt-in marker. Physical
@@ -105,6 +105,41 @@ Residual risks, not claimed as proven:
 
 No time saving is claimed. The expected effect is a shorter synchronous `reload0` return on the render
 thread during manual reloads, based on the RRLS measurement of 98 ms and 96 ms.
+
+## Physical A/B result (2026-10-17, PC, manual reload)
+
+Setup: instance with the September resource packs, `-Drrls.diagnostics=true`, RRLS test jar with
+`rrls-auto-manual-reload.enabled = exit` (reload 10 s after title, then exit). Candidate = PR #389 build
+artifact (`bootstrap` jar, nested `boot_optim-0.1.0.jar`). Control = same jar with
+`-Dboot_optim.yaclImagePreparation=false`. One warm-up (control), then three control/candidate pairs,
+alternating order. Run logs are outside git (`C:\BootOptimBench\local\yacl-ab-20261017uns`).
+
+| Run | Variant | Manual reload wall (request -> done, s) |
+|---|---|---|
+| warm-up | control | 15.04 |
+| p1 | control / candidate | 14.78 / 14.91 |
+| p2 | candidate / control | 15.27 / 14.94 |
+| p3 | control / candidate | 14.95 / 15.25 |
+
+Mean: control 14.89 s (n=3 + warm-up excluded), candidate 15.14 s (n=3). The candidate was not faster.
+
+Mechanism markers: candidate runs logged `[WBOMBO-COMPAT] ACTIVE mechanism=yacl-image-preparation`
+(all three); control runs did not. No `FALLBACK` line in any run. Every reload finished with
+`failed=false`.
+
+What this does not show:
+
+- The metric above is the whole reload wall time, not the render-thread time this port targets. The
+  port's claim is a shorter synchronous return of `reload0` (98 ms in RRLS). That return time is not
+  logged by the current build, so this run cannot confirm or reject it.
+- `rrls-menu-freezes.log` samples taken on the render thread never showed `YACLImageReloadListener`
+  in any run (0 of 7). The sampler period is probably longer than a ~100 ms prefix, so absence is not
+  evidence of absence.
+
+Decision: **not integrated.** The run did not show a benefit, and the metric that would show it is not
+measured yet. Next step before any decision: add a timestamp around the `reload0` call (before and
+after the prefix dispatch) behind the diagnostics flag, and repeat the paired run. If the synchronous
+return does not drop, reject this with that evidence.
 
 ## Reopen or reject criteria
 
