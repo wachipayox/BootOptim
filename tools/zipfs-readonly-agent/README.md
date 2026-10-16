@@ -34,6 +34,20 @@ Any failure in the transform or in the policy logs `[WBOMBO-COMPAT] FALLBACK pro
 mechanism=zipfs-readonly-agent reason=...` and leaves the JDK code or the caller's environment unchanged, which is
 stock behaviour. The first successful change logs `[WBOMBO-COMPAT] ACTIVE ...`.
 
+## Status output
+
+The launcher does not keep the game's stderr on a normal start, so the agent writes its own lines to a status file
+when the JVM is started with `-Dwbombo.zipfs.statusFile=<path>`:
+
+    [WBOMBO-COMPAT] ACTIVE project=BootOptim mechanism=zipfs-readonly-agent java=25.0.1
+    [WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=zipfs-readonly-agent reason=...
+
+Without the property the lines go to stderr. Pandora sets the property and logs its own decision in `launcher.log`.
+
+## Artifact
+
+The CI job publishes `zipfs-readonly-agent-<commit sha>` with the built JAR and this README.
+
 ## Known risks
 
 - A mod that writes into its own JAR through the zip file system API will now get `ReadOnlyFileSystemException` on
@@ -53,9 +67,13 @@ The self-test opens JARs in a temporary folder twice, once without and once with
 flag and that writes are rejected. The same script runs in `.github/workflows/zipfs-readonly-agent.yml` on
 `windows-latest` with Temurin 25.
 
+## Measured
+
+- Fast PC, ABBA with `-javaagent` in `jvm_flags` (research entry, section 8c): main menu about 7 s earlier than stock,
+  on the same revision and JAR. The activation line was not visible in that run; the status file added here makes it
+  visible.
+- Hosted exact-pack A/B (PR #387): menu reached, no fallback, no access errors (see the PR comment).
+
 ## Not done yet
 
-- A launch measurement with `-javaagent` in `jvm_flags` (ABBA against stock and against the attribute). Prepared in
-  the research entry, section 8; not run.
-- An exact-pack CI run with the agent. Linux `isWritable` is cheap, so it would only prove that the game reaches the
-  menu and nothing breaks.
+- A launch with the status file on the reference PC (done by the user on the next PC turn).

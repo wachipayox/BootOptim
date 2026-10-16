@@ -26,6 +26,9 @@ public final class SelfTest {
         Path root = Path.of(args[0]).toAbsolutePath().normalize();
         boolean expectAgent = Boolean.parseBoolean(args[1]);
         Files.createDirectories(root);
+        Path status = root.resolve("status.log");
+        Files.deleteIfExists(status);
+        System.setProperty(ZipfsReadOnlyPolicy.STATUS_PROPERTY, status.toString());
 
         Path mods = root.resolve(".minecraft").resolve("mods");
         Path library = root.resolve("libraries").resolve("net").resolve("x").resolve("lib.jar");
@@ -53,6 +56,13 @@ public final class SelfTest {
             }
         }
 
+        String statusText = Files.exists(status) ? Files.readString(status, StandardCharsets.UTF_8) : "";
+        long active = statusText.lines().filter(line -> line.contains(
+                "ACTIVE project=BootOptim mechanism=zipfs-readonly-agent")).count();
+        long fallback = statusText.lines().filter(line -> line.contains("FALLBACK project=BootOptim")).count();
+        expect(failures, "status ACTIVE lines", (int) active, expectAgent ? 1 : 0);
+        expect(failures, "status FALLBACK lines", (int) fallback, 0);
+
         if (failures.isEmpty()) {
             System.out.println("SELFTEST PASS expectAgent=" + expectAgent);
         } else {
@@ -64,6 +74,12 @@ public final class SelfTest {
     private static boolean readOnly(Path jar, Map<String, ?> env) throws IOException {
         try (FileSystem fs = FileSystems.newFileSystem(jar, env)) {
             return fs.isReadOnly();
+        }
+    }
+
+    private static void expect(List<String> failures, String label, int actual, int expected) {
+        if (actual != expected) {
+            failures.add(label + ": expected " + expected + " got " + actual);
         }
     }
 

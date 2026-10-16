@@ -23,3 +23,12 @@ jobs:
       - name: Build the agent and run the stock and agent self-tests
         shell: pwsh
         run: ./tools/zipfs-readonly-agent/run-selftest.ps1 -Java "$env:JAVA_HOME"
+
+      - name: Publish the agent JAR and README as a versioned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zipfs-readonly-agent-${{ github.sha }}
+          path: |
+            tools/zipfs-readonly-agent/build/zipfs-readonly-agent.jar
+            tools/zipfs-readonly-agent/README.md
+          if-no-files-found: error

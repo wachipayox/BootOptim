@@ -1,6 +1,10 @@
 package dev.wachipayox.bootoptim.zipfsagent;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -25,9 +29,30 @@ public final class ZipfsReadOnlyPolicy {
     static final String LOG_PREFIX = "[WBOMBO-COMPAT]";
     static final String MECHANISM = "zipfs-readonly-agent";
 
+    /**
+     * Optional status file. The launcher does not keep the game's stderr on a normal start, so the agent's own
+     * ACTIVE and FALLBACK lines go to this file when the JVM is started with {@code -Dwbombo.zipfs.statusFile=...}.
+     */
+    public static final String STATUS_PROPERTY = "wbombo.zipfs.statusFile";
+
     private static final AtomicBoolean ACTIVE_LOGGED = new AtomicBoolean();
 
     private ZipfsReadOnlyPolicy() {
+    }
+
+    /** Writes one status line to the status file if configured, otherwise to stderr. Never throws. */
+    public static void status(String line) {
+        String file = System.getProperty(STATUS_PROPERTY);
+        if (file != null && !file.isBlank()) {
+            try {
+                Files.writeString(Path.of(file), line + System.lineSeparator(), StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                return;
+            } catch (IOException | RuntimeException ignored) {
+                // fall through to stderr
+            }
+        }
+        System.err.println(line);
     }
 
     /** Called from the patched JDK method on every zip open. */
@@ -39,13 +64,12 @@ public final class ZipfsReadOnlyPolicy {
             Map<String, Object> adjusted = new HashMap<>(env);
             adjusted.put(ACCESS_MODE, READ_ONLY);
             if (ACTIVE_LOGGED.compareAndSet(false, true)) {
-                System.err.println(LOG_PREFIX + " ACTIVE project=BootOptim mechanism=" + MECHANISM
+                status(LOG_PREFIX + " ACTIVE project=BootOptim mechanism=" + MECHANISM
                         + " java=" + System.getProperty("java.version"));
             }
             return adjusted;
         } catch (Throwable failure) {
-            System.err.println(LOG_PREFIX + " FALLBACK project=BootOptim mechanism=" + MECHANISM
-                    + " reason=" + failure);
+            status(LOG_PREFIX + " FALLBACK project=BootOptim mechanism=" + MECHANISM + " reason=" + failure);
             return env;
         }
     }

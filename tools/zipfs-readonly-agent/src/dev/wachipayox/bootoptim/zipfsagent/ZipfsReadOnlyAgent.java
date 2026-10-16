@@ -34,6 +34,22 @@ public final class ZipfsReadOnlyAgent {
     private static final MethodTypeDesc ADJUST_DESC = MethodTypeDesc.of(
             ClassDesc.of("java.util.Map"), ClassDesc.of("java.nio.file.Path"), ClassDesc.of("java.util.Map"));
 
+    /** Same sink as the policy: the status file when configured, otherwise stderr. */
+    static void status(String line) {
+        String file = System.getProperty(ZipfsReadOnlyPolicy.STATUS_PROPERTY);
+        if (file != null && !file.isBlank()) {
+            try {
+                java.nio.file.Files.writeString(java.nio.file.Path.of(file), line + System.lineSeparator(),
+                        java.nio.charset.StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE,
+                        java.nio.file.StandardOpenOption.APPEND);
+                return;
+            } catch (java.io.IOException | RuntimeException ignored) {
+                // fall through to stderr
+            }
+        }
+        System.err.println(line);
+    }
+
     private ZipfsReadOnlyAgent() {
     }
 
@@ -48,8 +64,7 @@ public final class ZipfsReadOnlyAgent {
                 instrumentation.retransformClasses(provider);
             }
         } catch (Throwable failure) {
-            System.err.println("[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=zipfs-readonly-agent reason="
-                    + failure);
+            status("[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=zipfs-readonly-agent reason=" + failure);
         }
     }
 
@@ -92,8 +107,7 @@ public final class ZipfsReadOnlyAgent {
             try {
                 return patchProvider(classfileBuffer);
             } catch (Throwable failure) {
-                System.err.println("[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=zipfs-readonly-agent reason="
-                        + failure);
+                status("[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=zipfs-readonly-agent reason=" + failure);
                 return null;
             }
         }
