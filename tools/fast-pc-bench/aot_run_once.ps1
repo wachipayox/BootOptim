@@ -16,6 +16,10 @@ param(
     [int]$TimeoutMin = 20
 )
 $ErrorActionPreference = 'Stop'
+function Add-Result([string]$file, [string]$text) {
+    for ($i = 0; $i -lt 50; $i++) { try { [IO.File]::AppendAllText($file, $text + "`r`n"); return } catch { Start-Sleep -Milliseconds 200 } }
+    throw "cannot write $file"
+}
 $inst = Join-Path $Data "instances\$Instance"
 $info = Join-Path $inst 'info_v1.json'
 $game = Join-Path $inst '.minecraft'
@@ -42,7 +46,7 @@ $f = [pscustomobject]@{ enabled = $true; flags = $all }
 if ($j.PSObject.Properties['jvm_flags']) { $j.jvm_flags = $f } else { $j | Add-Member jvm_flags $f }
 [IO.File]::WriteAllText($info, ($j | ConvertTo-Json -Depth 20), (New-Object Text.UTF8Encoding $false))
 Remove-Item (Join-Path $game 'logs\bootoptim-startup.log') -EA SilentlyContinue
-$logStart = if (Test-Path $launcherLog) { (Get-Item $launcherLog).Length } else { 0 }
+# The launcher rotates launcher.log at start: the whole file is this run.
 
 # Affinity and priority class are inherited by the game JVM and by the create JVM.
 $env:WBOMBO_AOT_CACHE = $(if ($Aot -eq 'off') { 'off' } else { '' })
@@ -74,7 +78,7 @@ while ((Get-Date) -lt $deadline) {
     $tail = ''
     if (Test-Path $launcherLog) {
         $fs = [IO.File]::Open($launcherLog, 'Open', 'Read', 'ReadWrite')
-        try { [void]$fs.Seek([math]::Min($logStart, $fs.Length), 'Begin'); $tail = (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Close() }
+        try { $tail = (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Close() }
     }
     $recorded = $tail -match 'mode=recorded'
     $done = $tail -match 'mode=created|create-failed|create-output-invalid|could not start the create step|training discarded'
@@ -100,5 +104,5 @@ $closeS = ''
 if ($mm) { $closeS = '{0:N1}' -f (($gameExit - $javaStart.AddMilliseconds([int]$mm)).TotalSeconds) }
 $optS = '{0:N1}' -f (($optEnd - $gameExit).TotalSeconds)
 $line = "$id tag=$Tag aot=$Aot mode=$mode cores=$Cores priority=$Priority javaAffinity=$aff javaPriority=$prioClass mod_entrypoint_ms=$me main_menu_ms=$mm close_after_menu_s=$closeS record_write_s=$write profile_mib=$profile create_s=$createS cache_mib=$cacheMib after_exit_s=$optS exit=$($p.ExitCode)"
-Add-Content (Join-Path $Out 'results.txt') $line
+Add-Result (Join-Path $Out 'results.txt') $line
 $line
