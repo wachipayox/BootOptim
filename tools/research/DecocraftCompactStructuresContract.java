@@ -2,7 +2,9 @@ import com.razz.decocraft.models.bbmodel.BBModel;
 import com.razz.decocraft.models.bbmodel.BBModelParts;
 import dev.wachipayox.bootoptim.compat.client.DecocraftContracts;
 import dev.wachipayox.bootoptim.compat.client.MethodContract;
+import com.razz.decocraft.models.bbmodel.BlockbenchBakery;
 import com.razz.decocraft.models.libgdx.Vector3;
+import dev.wachipayox.bootoptim.optimization.client.DecocraftBakeScratch;
 import dev.wachipayox.bootoptim.optimization.client.DecocraftFaceMaps;
 import dev.wachipayox.bootoptim.optimization.client.DecocraftRotationScratch;
 import dev.wachipayox.bootoptim.optimization.client.SmallOrderedMap;
@@ -15,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import net.minecraft.core.Direction;
@@ -40,6 +43,8 @@ public final class DecocraftCompactStructuresContract {
         faceMapsPreflightIsAtomic();
         fingerprintIgnoresMetadataButNotBody();
         rotationScratchIsOwnedPerBakeryAndThread();
+        everyContractMethodHasAFingerprint();
+        bakeScratchIsALeaseWithIndependentVertices();
         System.out.println("DECOCRAFT_COMPACT_STRUCTURES_CONTRACT PASS checks=" + checks);
     }
 
@@ -196,6 +201,69 @@ public final class DecocraftCompactStructuresContract {
         DecocraftFaceMaps.compact(bad);
         check(good.faces == untouched, "no partial write when a later element has another shape");
         check(!DecocraftContracts.active("decocraft-compact-face-maps"), "mechanism disabled after shape change");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void everyContractMethodHasAFingerprint() throws Exception {
+        Properties expected = new Properties();
+        try (var in = DecocraftCompactStructuresContract.class.getResourceAsStream("/bootoptim-decocraft-contracts.properties")) {
+            expected.load(in);
+        }
+        Field field = DecocraftContracts.class.getDeclaredField("CONTRACTS");
+        field.setAccessible(true);
+        int methods = 0;
+        for (Object contract : ((Map<String, Object>) field.get(null)).values()) {
+            var accessor = contract.getClass().getDeclaredMethod("methods");
+            accessor.setAccessible(true);
+            for (String key : (List<String>) accessor.invoke(contract)) {
+                check(expected.getProperty(key) != null, "no fingerprint for " + key);
+                methods++;
+            }
+        }
+        check(methods >= 36, "contract coverage " + methods);
+    }
+
+    private static void bakeScratchIsALeaseWithIndependentVertices() throws Exception {
+        var scratch = new DecocraftBakeScratch();
+        var first = new BlockbenchBakery.VertexData();
+        scratch.enter();
+        check(scratch.vertex(0) == null, "nothing staged before the first quad");
+        scratch.rememberVertex(0, first);
+        check(scratch.vertex(0) == first, "vertex reused inside the lease");
+        check(scratch.vertex(4) == null && scratch.vertex(-1) == null, "index outside the four slots");
+        var position = new Vector3(1f, 2f, 3f);
+        scratch.rememberPosition(position);
+        Random random = new Random(7);
+        for (int i = 0; i < 50_000; i++) {
+            float a = Float.intBitsToFloat(random.nextInt());
+            float b = Float.intBitsToFloat(random.nextInt());
+            float c = Float.intBitsToFloat(random.nextInt());
+            check(scratch.position(a, b, c) == position
+                    && Float.floatToRawIntBits(position.x) == Float.floatToRawIntBits(a)
+                    && Float.floatToRawIntBits(position.y) == Float.floatToRawIntBits(b)
+                    && Float.floatToRawIntBits(position.z) == Float.floatToRawIntBits(c), "raw-bit position");
+        }
+        scratch.exit();
+        check(scratch.vertex(0) == null && scratch.position(1, 2, 3) == null, "no reuse outside bakeQuad");
+        final Object[] foreign = {first};
+        scratch.enter();
+        Thread other = new Thread(() -> {
+            scratch.enter();
+            foreign[0] = scratch.vertex(0);
+        });
+        other.start();
+        other.join();
+        check(foreign[0] == null, "another thread takes the original allocations");
+        scratch.exit();
+        var wrongType = new DecocraftBakeScratch();
+        wrongType.enter();
+        wrongType.rememberVertex(0, new BlockbenchBakery.OddVertexData());
+        check(wrongType.vertex(0) == null, "unexpected vertex shape never staged");
+        var nested = new DecocraftBakeScratch();
+        nested.enter();
+        nested.rememberVertex(1, new BlockbenchBakery.VertexData());
+        nested.enter();
+        check(nested.vertex(1) == null, "re-entrant bake leaves the lease");
     }
 
     private static void rotationScratchIsOwnedPerBakeryAndThread() throws Exception {
