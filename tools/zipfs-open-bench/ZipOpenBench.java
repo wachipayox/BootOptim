@@ -1,7 +1,7 @@
 /*
  * Diagnostic only, not part of the shipped mod. See docs/research/zipfs-jar-open-isWritable-2026-10-16.md.
  *
- * Times one ZipFileSystem open + close per .jar in a directory, through the same
+ * Times one ZipFileSystem open + close per .jar under a directory (recursive), through the same
  * provider call that SecureJarHandler's UnionFileSystem makes
  * (FileSystems.newFileSystem(path) == provider.newFileSystem(path, emptyMap)).
  *
@@ -41,8 +41,9 @@ public class ZipOpenBench {
                 .orElseThrow(() -> new IllegalStateException("jdk.zipfs provider not installed"));
 
         List<Path> jars;
-        try (var entries = Files.list(dir)) {
-            jars = entries.filter(p -> p.getFileName().toString().endsWith(".jar")).sorted().toList();
+        try (var entries = Files.walk(dir)) {
+            jars = entries.filter(p -> p.getFileName().toString().endsWith(".jar") && Files.isRegularFile(p))
+                    .sorted().toList();
         }
         if (jars.isEmpty()) {
             throw new IllegalStateException("no .jar files in " + dir);

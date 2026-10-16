@@ -1,6 +1,6 @@
 # JAR opens through JDK ZipFS and `Files.isWritable` before ModLauncher — 2026-10-16
 
-Status: **PROFILED** — static attribution of the owner and of the call count is complete. The per-open cost and the antivirus split are **not measured yet**; they need a physical fast-PC run (the PC was in use by another session). No optimization is proposed, promoted or rejected here.
+Status: **PROFILED** — static attribution of the owner and of the call count is complete, and a first physical microbench is in (section 5). The antivirus split (Defender exclusion) is **not measured yet**. No optimization is proposed, promoted or rejected here.
 
 Measurement environment for the numbers below: fast PC (Windows 11, NVMe), Pandora-launched instance `Wachiland Elite BETA`, Beta rev 3, Java 25.0.1 (`java-runtime-epsilon`), NeoForge 21.1.248 (FML 4.0.43, ModLauncher 11.0.5, BootstrapLauncher 2.0.2, SecureJarHandler 3.0.8). Origin and endpoints come from [#365](https://github.com/wachipayox/BootOptim/pull/365) and [modloading-subphases-pc-vs-ci-2026-10-15](modloading-subphases-pc-vs-ci-2026-10-15.md): start = JVM start, end = `modlauncher_start` (10.0 s on the PC, 3.0 s on hosted CI).
 
@@ -74,6 +74,36 @@ Plan (the user runs the Defender part; agents do not change security settings):
 | Read-only attribute on the JARs | Yes, but it changes the user's files and the launcher's ability to update them | Rejected |
 | BootOptim code | No. BootOptim runs after `modlauncher_start`, i.e. after the whole window. | Not possible from BootOptim |
 | Defender exclusion | Only as a measurement | Not a product change without the user's decision |
+
+## 5. Microbench result (fast PC, 2026-10-16)
+
+Run: `tools/zipfs-open-bench/ZipOpenBench.java`, Mojang `java-runtime-epsilon` 25.0.1, recursive over the instance's `libraries/` under `%APPDATA%` (133 JARs, natives included), ABBA (stock, readonly, readonly, stock), 3 rounds each. Each open is `ZipFileSystemProvider.newFileSystem(jar, env)` + root touch + close. Read-only run; no file was written. The Gradle daemon was the only other Java process; no launcher or game was running.
+
+| Mode | Round | total ms | per open ms |
+|---|---|---|---|
+| stock | 1 (A) | 3525 | 26.50 |
+| stock | 2 | 2301 | 17.30 |
+| stock | 3 | 2211 | 16.62 |
+| readonly | 1 (B) | 669 | 5.03 |
+| readonly | 2 | 663 | 4.98 |
+| readonly | 3 | 597 | 4.49 |
+| readonly | 1 (B) | 733 | 5.51 |
+| readonly | 2 | 909 | 6.83 |
+| readonly | 3 | 743 | 5.59 |
+| stock | 1 (A) | 3105 | 23.35 |
+| stock | 2 | 2947 | 22.16 |
+| stock | 3 | 4527 | 34.04 |
+
+Medians per open: **stock 22.8 ms, readonly 5.3 ms**, a difference of about 17.5 ms per open.
+
+Extrapolated to the ≈ 210 opens before `modlauncher_start` (estimate, not the real launch): stock ≈ 4.8 s, readonly ≈ 1.1 s, difference ≈ 3.7 s. That is about a third of the 10.0 s window. It is an upper bound for the `isWritable` share, because the microbench runs with a warm OS cache and does not reproduce BootstrapLauncher's real order, its locks, or its extra work.
+
+What this does and does not show:
+
+- It reproduces that the per-open cost is dominated by the JDK's `isWritable` path on this machine: the `readonly` mode keeps the open and the central-directory read and drops most of the time.
+- It does not split Windows from Defender. That needs the temporary folder exclusion (step 3), which the user has not approved.
+- It does not cover a copy outside `%APPDATA%` or a copy with the DOS read-only attribute set (variant (e) in the coordinating session's plan). Both still need approval.
+- The read-only attribute does not skip `GetFileSecurity`, because the ACL check (line 395 of `WindowsFileSystemProvider.checkAccess`) runs before the attribute check (line 405). It does skip `GetVolumePathName` (line 413), since the attribute check throws first. Any gain from the attribute depends on that.
 
 ## Reopening criteria
 
