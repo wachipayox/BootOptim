@@ -1,8 +1,8 @@
 # JAR opens through JDK ZipFS and `Files.isWritable` before ModLauncher — 2026-10-16
 
-Status: **PROFILED** — static attribution of the owner and of the call count is complete, and a first physical microbench is in (section 5). The antivirus split (Defender exclusion) is **not measured yet**. No optimization is proposed, promoted or rejected here.
+Status: **OPEN** — owner and call count are established (1–2); the read-only attribute experiment (5e) and the attribution of its gain on the main thread (5f) are measured; the writers in the loader stack and in the mod JARs (6) and the Pandora write paths (7) are audited statically. The Pandora proposal (8) is written and **not implemented**. The antivirus split is only partly measured (5b). No optimization is promoted or rejected here.
 
-Measurement environment for the numbers below: fast PC (Windows 11, NVMe), Pandora-launched instance `Wachiland Elite BETA`, Beta rev 3, Java 25.0.1 (`java-runtime-epsilon`), NeoForge 21.1.248 (FML 4.0.43, ModLauncher 11.0.5, BootstrapLauncher 2.0.2, SecureJarHandler 3.0.8). Origin and endpoints come from [#365](https://github.com/wachipayox/BootOptim/pull/365) and [modloading-subphases-pc-vs-ci-2026-10-15](modloading-subphases-pc-vs-ci-2026-10-15.md): start = JVM start, end = `modlauncher_start` (10.0 s on the PC, 3.0 s on hosted CI).
+Measurement environment for the numbers below: fast PC (Windows 11, NVMe), Pandora-launched instance `Wachiland Elite BETA`, Beta revision as stated in each section (5c–5f: `rev_0abae9…`), Java 25.0.1 (`java-runtime-epsilon`), NeoForge 21.1.248 (FML 4.0.43, ModLauncher 11.0.5, BootstrapLauncher 2.0.2, SecureJarHandler 3.0.8). Origin and endpoints come from [#365](https://github.com/wachipayox/BootOptim/pull/365) and [modloading-subphases-pc-vs-ci-2026-10-15](modloading-subphases-pc-vs-ci-2026-10-15.md): start = JVM start, end = `modlauncher_start` (10.0 s on the PC, 3.0 s on hosted CI).
 
 ## Premise
 
@@ -157,7 +157,7 @@ Not done: the read-only-attribute experiment on the live instance files (needs a
 
 ### 5d. JFR attribution of the window (one run, same revision and build)
 
-One `run_once` startup with `-XX:StartFlightRecording=settings=profile,dumponexit=true` on `rev_0abae9…` and `5e1162f`. The recording starts at JVM start (14:11:44 UTC); the window is 0 to 9.056 s (`modlauncher_start`). Samples were counted per thread and stack from `jfr print --stack-depth 64`. Sampling period assumed 10 ms (`profile` settings; not checked in the file).
+One `run_once` startup with `-XX:StartFlightRecording=settings=profile,dumponexit=true` on `rev_0abae9…` and `5e1162f`. The recording starts at JVM start (14:11:44 UTC); the window is 0 to 9.056 s (`modlauncher_start`). Samples were counted per thread and stack from `jfr print --stack-depth 64`. Sampling period assumed 10 ms here; the runtime's `profile.jfc` was checked later (section 5f): 10 ms for Java samples, **20 ms for native samples**. The native-time figures in this subsection are therefore about half of the real time; section 5f corrects them.
 
 Main thread, inside the window:
 
@@ -177,7 +177,7 @@ Reading:
 
 - Of the 9.06 s window, the main thread has about 2.9 s of samples. The other ~6 s have no samples on the main thread; they are blocked, parked or in the VM, and this run does not attribute them.
 - The `ZipFileSystem` native work on the main thread is about 1.5 s (overlapping with `checkAccess`), so the main-thread union is about 1.6 to 1.7 s, above the 1 s threshold set for stopping.
-- `GetVolumePathName0` is the largest single native frame on the main thread (about 1.0 s), which is consistent with the check order in section 3: the volume lookup runs only when the DOS read-only attribute is not set.
+- `GetVolumePathName0` is the largest single native frame on the main thread (about 1.0 s at 10 ms per sample; about 2.0 s at the real 20 ms native period, see 5f), which is consistent with the check order in section 3: the volume lookup runs only when the DOS read-only attribute is not set.
 - The number of ZipFileSystem openings is not obtained from this recording; the ~210 figure in section 2 is still a static estimate.
 
 Caveats: one run; sample counts converted to time with an assumed 10 ms period; JFR itself adds overhead to the window.
@@ -205,22 +205,152 @@ JFR, main thread, inside the window (10 ms sampling assumed as before):
 |---|---|---|
 | `ZipFileSystem` in stack | 141 (1.41 s) | 40 (0.40 s) |
 | `WindowsFileSystemProvider.checkAccess` in stack | 124 (1.24 s) | 25 (0.25 s) |
-| `GetVolumePathName0` (top frame in the volume lookup) | 105 (1.05 s) | 0 |
+| `GetVolumePathName0` (top frame in the volume lookup) | 105 (≈ 2.1 s at 20 ms per native sample; 1.05 s as first converted) | 0 |
 | `GetFileSecurity0` | 6 (0.06 s) | 8 (0.08 s) |
 
 Reading:
 
 - The attribute removes the `GetVolumePathName0` cost completely on the main thread. That is the check the code predicts: with the read-only attribute set, `checkAccess` throws before the volume lookup at line 413. It does not affect the ACL check at line 395, which still costs about 0.08 s.
-- The start-to-menu gain is about 7 s on this PC, more than the ~1.05 s of `GetVolumePathName0` alone. The extra is not explained by these samples: the main-thread samples cover only part of each window, so the rest is either the same unattributed time or a shift in what the thread waits on. It needs a separate attribution before it is claimed as zipfs.
+- The start-to-menu gain is about 7 s on this PC, more than the `GetVolumePathName0` share on the main thread. Section 5f attributes most of the rest to monitor waits on the same open path (the loader's lock); what remains is listed there.
 - Sample counts are small (one JFR run per arm). The wall-clock ranges are the stronger evidence, and they come from six non-JFR runs.
 
 Equivalence and risks (not verified in full):
 
-- No loader error and the same mod set were observed in arm B. A general claim needs a check that nothing writes into these JARs. ModLauncher, FML and securejarhandler were not audited for writes in this section.
+- No loader error and the same mod set were observed in arm B. A general claim needs a check that nothing writes into these JARs; section 6 audits the writers statically, and section 7 lists the Pandora paths that would break.
 - On Windows, deleting or overwriting a read-only file fails. Any update or removal of these files must clear the attribute first. Pandora does not do that today, and this change was not implemented anywhere.
 - The attribute is on files shared by every instance that uses `libraries/`, not only this instance.
 
-Decision: **open, with evidence.** No integration and no Pandora change. Proposal for the owner of the launcher, if it is pursued: set the attribute when Pandora installs or verifies files it owns, clear it before any update, delete or repair, and restore the normal state on uninstall. Before any such change: (1) a second physical run on another machine or the laptop; (2) an audit of writers into these JARs; (3) a user decision on touching shared files. Reopening criteria: any of the three above passes, or a regression in these numbers on the next revision.
+Decision: **open, with evidence** (updated in 5f–9). No integration and no Pandora change. Proposal for the owner of the launcher, if it is pursued: set the attribute when Pandora installs or verifies files it owns, clear it before any update, delete or repair, and restore the normal state on uninstall. Before any such change: (1) a second physical run on another machine or the laptop; (2) a runtime check of the writers (the static audit in section 6 is done; see section 9); (3) a user decision on touching shared files. Reopening criteria: any of the three above passes, or a regression in these numbers on the next revision.
+
+### 5f. Where the remaining gain goes (JFR of both arms, no new run)
+
+Source: the two JFR recordings of 5e (`jfrsin` = arm A, `jfrcon` = arm B). Windows: 9.16 s and 5.74 s, from JVM start to `modlauncher_start`. The recording start comes from `jfr summary` (second precision, so the window start is ±0.5 s). Sampling periods from the runtime's `lib/jfr/profile.jfc` (`java-runtime-epsilon`, 25.0.1): `ExecutionSample` 10 ms, `NativeMethodSample` 20 ms, and `JavaMonitorEnter` / `ThreadPark` recorded only from 10 ms. Both arms were parsed with the same script.
+
+Process CPU at `modlauncher_start` (BootOptim's own `JVM` marker, all threads, in the non-JFR runs whose logs were parsed): arm A 5.38 s, arm B 5.31 s. Wall time in the same runs: 9.33 s and 5.41 s. The 3.9 s difference is not computation: the process used the same CPU to reach the same point. The time is waiting.
+
+Main thread, inside the window (samples converted with 10 ms Java / 20 ms native):
+
+| Component | A | B | A − B |
+|---|---|---|---|
+| Window | 9.16 s | 5.74 s | 3.42 s |
+| Native samples | 186 → 3.72 s | 92 → 1.84 s | 1.88 s |
+| — top frame `GetVolumePathName0` | 109 → 2.18 s | 0 | 2.18 s |
+| — other native top frames | 77 → 1.54 s | 92 → 1.84 s | −0.30 s |
+| Java samples | 91 → 0.91 s | 122 → 1.22 s | −0.31 s |
+| Monitor waits ≥ 10 ms (`JavaMonitorEnter`) | 1.88 s (23 events) | 0.57 s (14 events) | 1.31 s |
+| Neither sampled nor a recorded wait (residual) | 2.65 s | 2.11 s | 0.54 s |
+
+The components add up to the window difference (1.88 − 0.31 + 1.31 + 0.54 = 3.42 s).
+
+**The waits are on one monitor.** In SecureJarHandler 3.0.8, `UnionFileSystemProvider.newFileSystemInternal` holds the monitor of the `fileSystems` map while it constructs a `UnionFileSystem` (bytecode: `monitorenter` at offset 46, `new UnionFileSystem` at 47, `put` at 61–68, `monitorexit` at 78). The `UnionFileSystem` constructor opens every embedded JAR through `FileSystems.newFileSystem(Path)`, so the JDK zipfs open, including `Files.isWritable`, runs inside that lock. `removeFileSystem` takes the same monitor. The loader therefore serializes the JAR opens; the JDK does not do it alone.
+
+Samples whose stack is inside `UnionFileSystem.<init>` (so the lock holder's time, all threads):
+
+| Measure | A, window | B, window | A, to menu | B, to menu |
+|---|---|---|---|---|
+| Inside the lock, sampled | 4.20 s | 0.74 s | 7.76 s | 1.86 s |
+| — `GetVolumePathName0` | 3.48 s | 0 | 5.72 s | 0.06 s |
+| Main thread inside the lock | 2.66 s | 0.55 s | 6.22 s | 1.67 s |
+
+Monitor waits on `newFileSystemInternal`, all threads, in the window: A 14.4 s, B 0.6 s. Several threads wait at once, so these totals are not wall time.
+
+Reading:
+
+- With the stock open, every JAR open pays a volume lookup inside the lock. From 109 samples over about 210 opens (section 2, still an estimate), that is about 10 ms per open.
+- The opens are serialized, so their costs add up on the critical path, and the other loader threads and the main thread queue behind the lock. The read-only attribute takes the volume lookup out of the lock, so the lock is held about five times less in the window (4.2 s → 0.74 s). The queue largely disappears.
+- The main-thread accounting closes: `GetVolumePathName0` (2.18 s) plus monitor waits (1.31 s) is the 3.42 s window difference within sampling noise. Section 5e's "unexplained" remainder came mostly from the 10 ms conversion, and the rest is blocked time that appears as waits, not samples.
+- `GetVolumePathName0` samples are wall time inside a native call. The CPU data says they are waits, not work: the call blocks in the kernel or in a filter driver. Antivirus is one candidate. JFR cannot say which. The Defender-exclusion microbench (5b) cut the stock per-open cost from 22.8 ms to 15.2 ms, so part of it is antivirus and part is not.
+- Not attributed: the residual 0.54 s, and the 2.1–2.7 s per arm that is neither sampled nor a recorded wait (VM state, or waits under the 10 ms threshold). The monitor totals are therefore a lower bound.
+
+Correction: 5d and 5e converted native samples with 10 ms. With the real 20 ms period, the main-thread `GetVolumePathName0` share is about 2.2 s in arm A (109 samples here; 5e listed 105 from an earlier parser), not 1.0 s.
+
+Caveats: one JFR run per arm; JFR adds overhead (arm A reached the menu at 67.9 s with JFR and 59.7 s without); the window start is ±0.5 s; the sample periods are nominal. This is attribution, not a timing claim. The timing claim stays with the six non-JFR runs of 5e. Section 9 lists the measurement that would separate antivirus from the lookup itself.
+
+### 6. Writers in `libraries/` and `mods/` (static audit)
+
+Question: while the game runs, does anything write, rename or delete a JAR in `libraries/` or `mods/`? If yes, the read-only attribute changes that behaviour.
+
+Method: (a) constant-pool scan of the 24 loader-stack JARs in `libraries/` and of the 162 JARs in `mods/` for write-capable file APIs (`Files.write`, `move`, `delete`, `copy`, `newOutputStream`, `FileOutputStream`, `RandomAccessFile`, `FileChannel`, `WRITE`, `TRUNCATE_EXISTING`), keeping classes that also contain a path literal (`mods`, `libraries`, `.jar`); (b) bytecode of the flagged runtime paths; (c) bytecode of `jdk.nio.zipfs.ZipFileSystem` from the 25.0.1 runtime; (d) the BootOptim source at `feadc6f4`; (e) the access-error lines of the nine start-to-menu logs. This is a heuristic scan, not a data-flow proof.
+
+| Component | What it writes | Verdict |
+|---|---|---|
+| JDK zipfs 25.0.1 | Opens an existing JAR with a `READ` channel. Writes only in `sync()`, which runs only when `hasUpdate` is set by a modification through the zip API. It then writes a temp file in the JAR's directory and replaces the JAR. | Only code that modifies a JAR through the zip API can write into `libraries/` or `mods/`. With the attribute, `isWritable` is false, so the zip is `readOnly` and such a modification throws `ReadOnlyFileSystemException` instead of replacing the JAR. |
+| SecureJarHandler 3.0.8 | `UnionFileSystemProvider` implements write methods (`move`, `delete`, `copy`, `setAttribute`, `newByteChannel`) for union paths. | No startup caller found; not traced to the end. |
+| BootstrapLauncher 2.0.2, ModLauncher 11.0.5 | ModLauncher `ClassTransformer` uses `Files.write` / `replace`, likely a class-dump option. | Not reviewed in detail. No JAR writer found. |
+| FML 4.0.43, NeoForge 21.1.248 | `ConfigTracker` and `FMLConfig` write under `config/`. `ModDirTransformerDiscoverer` uses move and write. NeoForge `IOUtilities`, `UsernameCache`, `DumpCommand` (server). | No JAR writer found. The last two rows were not reviewed in detail. |
+| sponge-mixin 0.8.7 | Export and decompile helpers (`ExtensionClassExporter`, `RuntimeDecompiler`) write to debug folders. | Debug features. Default-off not verified in this audit. |
+| Sinytra Connector b17 (in `mods/`) | Reads input JARs (`readAllBytes`, SHA-256). Writes its outputs and sidecars under `FMLPaths.GAMEDIR/.cache/connector` (`ConnectorUtil.CONNECTOR_FOLDER`); its deletes target those cache files. | Verified in bytecode: no write into `mods/` or `libraries/`. Not traced: the destination of Fabric's nested-mod copy (`ModCandidateImpl.copyToDir`). |
+| BootOptim (`feadc6f4`) | Only `.minecraft/.bootoptim/` (`mod-scan-cache-v1`, `embedded-mod-v1`, `cache`). The wrapper JAR is read with `ZipFile`. | Verified in source. |
+| MCEF | `mcef.libraries.path` and `mcef-cache`: CEF files and a hash temp file. The final directory was not traced. | Open. No JAR write identified. |
+| Xaero World Map, Iris, Ixeris | Config files (`configSubFolder`, `iris-excluded.json`, TOML). | Not JARs. |
+| Jade, Spark, AnalogAudio, CosmeticArmorReworked, Decocraft, LDLib, FancyMenu fork, RRLS test | `copy` / `delete` calls near the `mods` literal (Spark's ByteBuddy agent writes a temporary JAR). | Not reviewed in detail. |
+
+Hard links: Pandora links files from its content library into instances (section 7, rows 5 and 14). A hard link shares the inode, and the attribute is on the inode, so the library copy would be read-only too. This instance has no `contentlibrary` folder, and none of its 162 mods has more than one hard-link name, so this run is not affected. Any future install that uses a hard link changes the attribute for every link.
+
+Logs: the nine start-to-menu logs (arms A and B, the primer and the JFR runs) contain no `AccessDenied`, `Access is denied`, `ReadOnlyFileSystem` or `FileSystemException` line, and each lists the same 251 mod files.
+
+Conclusion: no loader component was found that writes into `libraries/` or `mods/` during startup. This does not prove that no mod writes there: the 162 mods were scanned for patterns, and the 14 flagged JARs were reviewed only where they touch paths. Stronger evidence would be a run that logs every access error on those paths (section 9).
+
+### 7. Pandora write paths over `libraries/` and `mods/` (static audit)
+
+Scope: `agent/integration-current` at `fe2d7cdd` (Merge PR #103). Locations: `launcher/libraries` is shared by every instance; `launcher/contentlibrary` is the content store; `instances/<name>/.minecraft/mods` is per instance. The attribute is on the file, so a read-only file in `libraries/` affects every instance that uses it.
+
+| # | Where | Operation on an existing managed file | Effect of the read-only attribute | Where it would be cleared |
+|---|---|---|---|---|
+| 1 | `launch/mod.rs` ≈ 2200–2270, library provisioning | Writes missing artifacts; existing files are trusted (`ProvisionMissing`) | None for existing files. Repair or verify modes that rewrite a file would fail. | Before the write, in those modes |
+| 2 | `launch/mod.rs` ≈ 727–745, 786, 840 | `write_safe` into library and install targets (error ignored at 739) | Rename over a read-only destination fails on Windows: library not installed | In `write_safe` |
+| 3 | `fs.rs:82` `write_safe` | Temp file, then rename over the target | Same as 2 | In `write_safe` |
+| 4 | `fs.rs:383` `fastcopy` | `remove_file(to)` first | `AccessDenied` returned, no fallback | Before the removal |
+| 5 | `install_content.rs:335` | `fastcopy(from, mods/x.jar, reflink, hard_link)` | Install fails and is reported (`content_copy_failed`) | Through row 4 |
+| 6 | `install_content.rs:344` | `remove_file(replace)`: the old version after an update; error ignored (`let _`) | **The old JAR stays next to the new one, with no error shown.** Two versions of one mod would load. | Before the removal; stop ignoring the error |
+| 7 | `install_content.rs:1342`, `1370` | Download with `File::create` (truncates); `remove_file` on hash mismatch (error ignored) | Truncation fails; a corrupt file can stay | Before both calls |
+| 8 | `install_content.rs:1061–1088` | Renames of aux sidecars and shader settings (errors ignored) | Renames of read-only files are expected to work (verify on Windows) | Not needed if verified |
+| 9 | `profile_layout_flow.rs:1092–1119`, apply | `rename(live → backup)`, `rename(staged → live)` | Renames are expected to work; replacing a read-only destination does not happen here | Verify |
+| 10 | `profile_layout_flow.rs:1196–1221`, rollback | `remove_file(live)` for `Install` and `Replace`, then `rename(backup → live)` | Removing a read-only live file fails, so the rollback aborts and the journal stays | Before the removal |
+| 11 | `profile_layout_flow.rs:1900–1906`, `remove_regular_file` | Removes a managed file (for example, an update that drops a mod) | Fails; the transaction errors | Before the removal |
+| 12 | `profile_layout_flow.rs:1830–1831`, `stage_source` | `fs::copy(source, target)`, then opens `target` for write | Rust's `fs::copy` copies permissions, so a read-only source gives a read-only target, and the write open fails | After the copy, or reset the target |
+| 13 | `duplicate.rs:65` | `set_permissions(to, from.permissions())` | Duplicated instances inherit the read-only attribute | Reset on the copy |
+| 14 | `duplicate.rs:190` | Hard link to the content library (`fastcopy(…, hard_link)`) | The attribute is shared with the library file | Do not mark linked inodes, or clear through all links |
+| 15 | `backend.rs:1059–1064`, frozen-mods restore | `remove_dir_all(mod_dir)` (errors ignored), then `rename(original_mods → mod_dir)` | The removal stops at the first read-only file; the rename then fails. The mods folder is left half removed; the error only reaches the UI. | Recursively, before the removal |
+| 16 | `backend.rs:1323`, `1368`, `1373`, prelaunch copies | `fastcopy` from the content library (error ignored); `std::fs::write` for bytes | A stale or missing mod stays silently; the write fails | Before the copy; log an error |
+| 17 | `backend_handler.rs:274`, delete instance | `remove_dir_all(instance.root_path)` | Stops at the first read-only file; the instance folder is half deleted. Libraries are outside the instance root. | Recursively, before the removal |
+| 18 | `backend_handler.rs:793`, enable or disable a mod | `rename(x.jar ↔ x.jar.disabled)` | Expected to work (verify on Windows) | Not needed if verified |
+| 19 | `distribution.rs:1164`, `1398`, object cache | Rename of a temp object; `remove_file` of a corrupt object | Fails if objects are marked | Do not mark cache objects |
+| 20 | `launcher_import/*`, `copy_content_recursive` | Copies external instance folders into new instances | Depends on how the copy sets permissions (not traced) | Reset on import (not traced) |
+
+Summary: rows 2, 4, 6, 7, 10, 11, 15 and 17 fail, or stop halfway, when their target is read-only. Row 6 is the most dangerous because it fails silently. Rows 12 and 13 spread the attribute to new files. Row 14 spreads it to other links. Rows 1, 8, 9 and 18 are expected to work, but only the rename rows need a Windows check.
+
+Repository check: Pandora's CI has Windows jobs (seven `windows-2022` and one `windows-latest` workflow runs in `.github/workflows`), so a test on Windows is possible without a new runner.
+
+## 8. Proposal for Pandora (written, not implemented)
+
+- **Scope.** Only JARs that Pandora installed for a managed revision and checked by hash (manifest entries under `libraries/` and `mods/`). Never configs, saves or user files.
+- **Set.** After the transaction commits and the live file's hash is verified (row 9). Never on staged or backup files, and not on hard-linked inodes (row 14) unless the content library is changed too.
+- **Clear.** One helper, for example `managed_clear_readonly(path)`, called before every mutating operation on a managed path: `fastcopy`, `write_safe`, the removals in `install_content` (old version, corrupt download), the rollback and removal steps in `profile_layout_flow`, the frozen-mods restore, instance deletion (recursive), and the copy in `stage_source` and `duplicate` (the target inherits the attribute). The helper returns an error that names the path. Call sites that ignore errors today (`let _ =`) log a WARN and surface the failure.
+- **Kill switch.** A launcher setting, off in the first release. With it off, the code still clears any attribute it finds, so switching it off leaves no read-only files behind.
+- **Recovery.** At startup, clear the attribute from files that are not in the active manifest, so a crash between clear and set cannot leave orphans read-only.
+- **Logging.** `[WBOMBO-COMPAT] ACTIVE project=Pandora mechanism=readonly-managed-jars` at INFO when enabled; `[WBOMBO-COMPAT] FALLBACK project=Pandora mechanism=readonly-managed-jars reason=<clear|set failed>` at WARN.
+- **Manual changes.** Explorer asks for confirmation before it deletes or overwrites a read-only file. After a confirmed delete, the next launch finds the file missing and reprovisions it. An edited file is detected only if the verification policy checks hashes, which library provisioning does not do today (row 1). The attribute does not change that.
+- **Other tools.** Backup and sync tools may skip or fail on read-only files. Git and archivers are not affected.
+- **Platform.** Windows only (`cfg(windows)`). The Linux and Android paths are untouched.
+
+Risks: a crash between clear and write; hard links; the antivirus interaction (5f, section 9); the silent errors of rows 6, 7 and 16; mods that write into their own JARs, which were not found but not proven absent (section 6).
+
+Validation before any integration:
+
+1. Unit tests for the helper, and one test per row of section 7 with a read-only target, on the Windows CI runners.
+2. A scenario test: install, update, rollback, remove, duplicate, frozen restore and instance delete, each with the managed set read-only.
+3. A second physical machine (the laptop or another PC) with the same ABBA protocol as 5e, on one fixed revision.
+4. Stop rules: no integration if a scenario leaves a silent stale file or a half-removed folder, or if the second machine does not reproduce a gain of at least 3 s to `modlauncher_start`.
+5. A user decision: whether Pandora may change files in the shared `libraries/`, and whether the feature ships off or on.
+
+Recommendation: keep open. The next step is the cheap measurement in section 9. The proposal is about twenty call sites in Pandora and should not start before the gain is reproduced on a second machine.
+
+## 9. Next PC turn (measurements, only when the user gives the turn)
+
+1. **Per-call timing, no game launch.** Time `Files.getFileStore(path)` over the 295 JARs of 5e, twice each, in two arms: no Defender exclusion, and a Defender folder exclusion created by the user. `getFileStore` calls the volume lookup that `checkAccess` uses (`WindowsFileStore.create`); confirm that with a JFR of the microbench. If the wait is antivirus, the per-call time falls with the exclusion. If it is the lookup itself, it stays high with the exclusion. Report the median and the 95th percentile per call.
+2. **Which driver, only if step 1 shows a large gap.** Process Monitor needs administrator rights, so it is the user's decision.
+3. **Second machine, only if step 1 shows the gap and the user agrees.** The ABBA of 5e on one fixed revision, on another machine.
 
 ## Reopening criteria
 
@@ -232,7 +362,7 @@ Reopen with a runtime change only if all hold:
 
 ## Result
 
-**Open.** Owner and count are established. Decision waits for the physical microbench. No runtime code is added.
+**Open.** Owner and count are established. The gain is attributed on the main thread: a volume lookup (`GetVolumePathName0`, about 10 ms per open) inside SecureJarHandler's lock, which serializes the JAR opens; the monitor waits follow from it. No loader component was found that writes into `libraries/` or `mods/`. Pandora needs about twenty changes before a read-only scheme would be safe (section 7), and the proposal (section 8) is not implemented. The next step is the measurement in section 9, and it does not need a game launch for its first part. No runtime code is added and no Pandora change is made.
 
 ## Links
 
