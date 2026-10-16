@@ -13,9 +13,9 @@ Ledger for moving the accepted Decocraft memory/allocation mechanisms of Wachila
 
 | Mechanism | Order | Status | PR | Production catalog |
 |---|---|---|---|---|
-| Private `Direction.values()` array | 1 | in PR | see catalog | [decocraft-compact-structures](../optimizations/compatibility/decocraft-compact-structures.md) |
-| Ordered compact face maps | 1 | in PR | see catalog | same entry |
-| Equal embedded `data:image` Strings | 2 | not started | | |
+| Private `Direction.values()` array | 1 | integrated (#377) | #377 | [decocraft-compact-structures](../optimizations/compatibility/decocraft-compact-structures.md) |
+| Ordered compact face maps | 1 | integrated (#377) | #377 | same entry |
+| Equal embedded `data:image` Strings | 2 | in PR | see PR | [decocraft-source-strings](../optimizations/compatibility/decocraft-source-strings.md) |
 | Rotation temporaries (identity `Matrix4f`, origin snapshot) | 3 | not started | | |
 | Whole-bake staging (`VertexData` ×4 + position) | 4 | not started | | |
 | Deferred quarter-turn variants + compact snapshots (into `DecocraftRotatedQuadReuse`) | 5 | not started | | |

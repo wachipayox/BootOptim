@@ -1,6 +1,6 @@
 # Decocraft compact structures: private direction array and ordered face maps
 
-Status: **candidate in PR (default proposed ON, awaiting the user's PC-default decision)**. Migrated from Android Support `824b37d` (`0.2.57-bake-staging`); migration ledger and evidence: [`docs/research/decocraft-support-migration-2026-10-16.md`](../../research/decocraft-support-migration-2026-10-16.md).
+Status: **INTEGRATED (#377), default ON on PC (decision relayed by the coordinator session); hosted exact-pack on rev_7d5b9e50 and `latest`: menu reached, 2 ACTIVE, 0 FALLBACK**. Migrated from Android Support `824b37d` (`0.2.57-bake-staging`); migration ledger and evidence: [`docs/research/decocraft-support-migration-2026-10-16.md`](../../research/decocraft-support-migration-2026-10-16.md).
 
 Both mechanisms are structural: they remove allocation or container overhead and change no model, quad, UV or render result. Neither claims a time-to-menu or FPS gain.
 
