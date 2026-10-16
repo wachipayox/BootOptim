@@ -45,6 +45,7 @@ public final class StartupProfiler {
         }
 
         BlockShapeOrMemo.report();
+        VoxelShaperFoldDiagnostics.dump();
         long uptimeMs = uptimeMs();
         // Finish the on-disk report before emitting the console marker used by CI to terminate the client.
         if (REPORT_ENABLED) {
