@@ -153,7 +153,36 @@ Measured with `tools/fast-pc-bench` (`run_once.ps1`, `--no-update`, `exitOnTitle
 
 Reading: the `modlauncher_start` window is 8.3–8.9 s on this revision, below the 10.0 s of section 1 (measured on an earlier revision with an earlier build; not a like-for-like comparison). The three baseline runs are a same-revision series, so their spread is the noise estimate for this machine: about 0.6 s on `main_menu`.
 
-Not done: the JFR attribution of the window and any read-only-attribute experiment on the live instance files. Both need a separate decision (see the reopening criteria below). Revision and JAR are fixed for any follow-up series.
+Not done: the read-only-attribute experiment on the live instance files (needs a separate decision). Revision and JAR are fixed for any follow-up series.
+
+### 5d. JFR attribution of the window (one run, same revision and build)
+
+One `run_once` startup with `-XX:StartFlightRecording=settings=profile,dumponexit=true` on `rev_0abae9…` and `5e1162f`. The recording starts at JVM start (14:11:44 UTC); the window is 0 to 9.056 s (`modlauncher_start`). Samples were counted per thread and stack from `jfr print --stack-depth 64`. Sampling period assumed 10 ms (`profile` settings; not checked in the file).
+
+Main thread, inside the window:
+
+| Measure | Samples | Approx. time |
+|---|---|---|
+| Native samples, all frames | 185 | 1.85 s |
+| — with `ZipFileSystem` in the stack | 150 | 1.50 s |
+| — with `WindowsFileSystemProvider.checkAccess` in the stack | 121 | 1.21 s |
+| — top frame `GetVolumePathName0` | 100 | 1.00 s |
+| — top frame `GetFileSecurity0` | 5 | 0.05 s |
+| Java (execution) samples | 107 | 1.07 s |
+| — with `ZipFileSystem` in the stack | 22 | 0.22 s |
+
+All threads: `ZipFileSystem` native samples 237, `checkAccess` 198, `GetVolumePathName0` 164. Most of the rest runs on background threads (JFR, Drippy early window, ForkJoinPool workers) and is not on the main critical path.
+
+Reading:
+
+- Of the 9.06 s window, the main thread has about 2.9 s of samples. The other ~6 s have no samples on the main thread; they are blocked, parked or in the VM, and this run does not attribute them.
+- The `ZipFileSystem` native work on the main thread is about 1.5 s (overlapping with `checkAccess`), so the main-thread union is about 1.6 to 1.7 s, above the 1 s threshold set for stopping.
+- `GetVolumePathName0` is the largest single native frame on the main thread (about 1.0 s), which is consistent with the check order in section 3: the volume lookup runs only when the DOS read-only attribute is not set.
+- The number of ZipFileSystem openings is not obtained from this recording; the ~210 figure in section 2 is still a static estimate.
+
+Caveats: one run; sample counts converted to time with an assumed 10 ms period; JFR itself adds overhead to the window.
+
+Next (not done): the read-only-attribute experiment on live instance files, which needs its own decision.
 
 ## Reopening criteria
 
