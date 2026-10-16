@@ -1,6 +1,6 @@
 # Decocraft rotation temporaries
 
-Status: **candidate in PR**, default ON on PC (decision relayed by the coordinator session, 2026-10-16; kill switch kept). Migrated from Android Support `824b37d` (`memory.decocraftRotationTemporaries`). Ledger: `docs/research/decocraft-support-migration-2026-10-16.md`. Uses the code-shape contracts and ownership rule of [decocraft-compact-structures](decocraft-compact-structures.md).
+Status: **INTEGRATED**, default ON on PC (decision relayed by the coordinator session, 2026-10-16; kill switch kept). Migrated from Android Support `824b37d` (`memory.decocraftRotationTemporaries`). Ledger: `docs/research/decocraft-support-migration-2026-10-16.md`. Uses the code-shape contracts and ownership rule of [decocraft-compact-structures](decocraft-compact-structures.md).
 
 ## Mechanism
 
