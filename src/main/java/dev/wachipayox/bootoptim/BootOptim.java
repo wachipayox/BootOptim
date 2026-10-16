@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim;
 
 import dev.wachipayox.bootoptim.compat.client.CompatInjectionCheck;
 import dev.wachipayox.bootoptim.optimization.client.CitResewnGlowingTrimLegacyWarningSuppression;
+import dev.wachipayox.bootoptim.optimization.client.DecocraftSourceStrings;
 import dev.wachipayox.bootoptim.optimization.client.FmlEventTraceProducerFilter;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
@@ -31,6 +32,7 @@ public final class BootOptim {
             FmlEventTraceProducerFilter.install();
             CitResewnGlowingTrimLegacyWarningSuppression.install(modEventBus);
             modEventBus.addListener(FMLClientSetupEvent.class, event -> CompatInjectionCheck.reportMissingPseudoTargets());
+            modEventBus.addListener(FMLClientSetupEvent.class, event -> DecocraftSourceStrings.install());
             // Common setup runs after the first reload has started, so it is not a registration boundary.
             modEventBus.addListener(FMLCommonSetupEvent.class, event -> StartupProfiler.markPhase("common_setup_start"));
             // One mark per registry dispatch: shows the registration timeline inside the mod-loading segment.

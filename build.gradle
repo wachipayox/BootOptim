@@ -275,6 +275,22 @@ var decocraftCompactStructuresContract = tasks.register('decocraftCompactStructu
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
 }
 tasks.named('check') { dependsOn decocraftCompactStructuresContract }
+// Host-only contract for the Decocraft embedded-source String sharing.
+var decocraftSourceStringsContractClasses = layout.buildDirectory.dir('classes/decocraftSourceStringsContract')
+var compileDecocraftSourceStringsContract = tasks.register('compileDecocraftSourceStringsContract', JavaCompile) {
+    dependsOn tasks.named('classes')
+    source = files('tools/research/DecocraftSourceStringsContract.java')
+    classpath = sourceSets.main.runtimeClasspath
+    destinationDirectory = decocraftSourceStringsContractClasses
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+var decocraftSourceStringsContract = tasks.register('decocraftSourceStringsContract', JavaExec) {
+    dependsOn compileDecocraftSourceStringsContract
+    classpath = files(decocraftSourceStringsContractClasses) + sourceSets.main.runtimeClasspath
+    mainClass = 'DecocraftSourceStringsContract'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check') { dependsOn decocraftSourceStringsContract }
 
 // Manual: ./gradlew verifyDecocraftContracts -PdecocraftJar=<installed Decocraft JAR> (not part of check; the JAR is only read).
 var decocraftVerifyClasses = layout.buildDirectory.dir('classes/decocraftContractsVerify')

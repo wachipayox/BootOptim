@@ -13,11 +13,11 @@ Ledger for moving the accepted Decocraft memory/allocation mechanisms of Wachila
 
 | Mechanism | Order | Status | PR | Production catalog |
 |---|---|---|---|---|
-| Private `Direction.values()` array | 1 | in PR | see catalog | [decocraft-compact-structures](../optimizations/compatibility/decocraft-compact-structures.md) |
-| Ordered compact face maps | 1 | in PR | see catalog | same entry |
-| Equal embedded `data:image` Strings | 2 | not started | | |
-| Rotation temporaries (identity `Matrix4f`, origin snapshot) | 3 | in PR (stacked on the structures PR) | see PR | [decocraft-rotation-temporaries](../optimizations/compatibility/decocraft-rotation-temporaries.md) |
-| Whole-bake staging (`VertexData` ×4 + position) | 4 | in PR (stacked on rotation temporaries) | see PR | [decocraft-bake-scratch](../optimizations/compatibility/decocraft-bake-scratch.md) |
+| Private `Direction.values()` array | 1 | integrated (#377) | #377 | [decocraft-compact-structures](../optimizations/compatibility/decocraft-compact-structures.md) |
+| Ordered compact face maps | 1 | integrated (#377) | #377 | same entry |
+| Equal embedded `data:image` Strings | 2 | integrated (#379) | #379 | [decocraft-source-strings](../optimizations/compatibility/decocraft-source-strings.md) |
+| Rotation temporaries (identity `Matrix4f`, origin snapshot) | 3 | integrated (#381) | #381 | [decocraft-rotation-temporaries](../optimizations/compatibility/decocraft-rotation-temporaries.md) |
+| Whole-bake staging (`VertexData` ×4 + position) | 4 | integrated (#382) | #382 | [decocraft-bake-scratch](../optimizations/compatibility/decocraft-bake-scratch.md) |
 | Deferred quarter-turn variants + compact snapshots (into `DecocraftRotatedQuadReuse`) | 5 | not started | | |
 | 3D inventory icons (optional, default off) | 6 | not started | | |
 
