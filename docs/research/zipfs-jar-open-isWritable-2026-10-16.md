@@ -426,7 +426,7 @@ Reopen with a runtime change only if all hold:
 - Agent: BootOptim [#387](https://github.com/wachipayox/BootOptim/pull/387) (draft; tool, status file, CI artifact, and the hosted exact-pack gate of section 8c; the exact-pack gate passed per the coordinator's review).
 - Launcher: BootOptimPandora [#105](https://github.com/wachipayox/BootOptimPandora/pull/105) (draft): `-javaagent` for Wachiland Java 25 starts on Windows, JAR embedded with its source commit and SHA-256, switch `WBOMBO_ZIPFS_AGENT=0`, `[WBOMBO-COMPAT]` lines in `launcher.log`, and the agent's own status file.
 - Attribute (section 5e, section 7): stays documented and out of integration; it needs about twenty Pandora changes and a user decision on shared files.
-- Still open before default-on: the PC validation of the Pandora build (the status file on the reference PC), and a second machine for the ABBA.
+- Default: **on** for Wachiland Java 25 starts on Windows (user decision, 2026-10-16); `WBOMBO_ZIPFS_AGENT=0` switches it off. Still open: the PC validation of the Pandora build (launch with ACTIVE, the A/B against the switch, and a repaired JAR), and a second machine for the ABBA.
 
 Evidence summary: the main menu is about 7 s earlier with the agent on the fast PC (8c, three runs each); hosted Linux runs show no breakage; no loader writer was found (section 6).
 
