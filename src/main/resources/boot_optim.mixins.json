@@ -12,6 +12,8 @@
     "client.SodiumQuadFlagClassifierMixin",
     "client.SodiumQuadCoordinateBridgeMixin",
     "client.BlockStateModelLoaderIndexedVariantMixin",
+    "client.BootstrapStartupPhaseMixin",
+    "client.MinecraftReloadStartPhaseMixin",
     "client.FancyMenuBrowserElementFirstConsumerMixin",
     "client.FancyMenuMcefBrowserFirstConsumerMixin",
     "client.FancyMenuMcefVideoFirstConsumerMixin",

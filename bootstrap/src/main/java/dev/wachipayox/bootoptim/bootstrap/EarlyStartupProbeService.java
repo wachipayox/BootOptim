@@ -40,6 +40,7 @@ public final class EarlyStartupProbeService implements ITransformationService {
 
         var config = BootstrapStartupConfig.initialize(gameDirectory);
         StartupDiagnostics.initialize();
+        StartupDiagnostics.phase("modlauncher_start");
         StartupDiagnostics.event(
                 "STARTUP_PATH",
                 "game_dir=" + config.gameDirectory() + " source=" + (authoritative ? "modlauncher" : "user_dir_fallback"));
