@@ -2,6 +2,7 @@ package dev.wachipayox.bootoptim.compat.client;
 
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -36,6 +37,8 @@ public final class DecocraftContracts {
     private static final String CONTRACT_RESOURCE = "/bootoptim-decocraft-contracts.properties";
     private static final String LEGACY_SUPPORT_PACKAGE = "net/wachiland/atlasbatch/mixin/";
     private static final String BBLOADER = "com/razz/decocraft/models/bbmodel/BBModelLoader#";
+    private static final String BAKERY = "com/razz/decocraft/models/bbmodel/BlockbenchBakery#";
+    private static final String MATRIX = "org/joml/Matrix4f#";
 
     /** Kill-switch property, contract methods and the mixins that must apply together. */
     private record Contract(String property, List<String> methods, Set<String> mixins) {}
@@ -52,7 +55,26 @@ public final class DecocraftContracts {
                             BBLOADER + "parseOutlinerGroup(Lcom/razz/decocraft/models/bbmodel/BBModel;Lcom/razz/decocraft/models/bbmodel/BBModelParts$OutlinerGroup;Lcom/razz/decocraft/models/bbmodel/BBModelParts$OutlinerGroup;)V",
                             BBLOADER + "parseLocator(Lcom/razz/decocraft/models/bbmodel/BBModel;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Locator;Lcom/razz/decocraft/models/bbmodel/BBModelParts$OutlinerGroup;)V",
                             BBLOADER + "parseOutliner(Lcom/razz/decocraft/models/bbmodel/BBModel;Lcom/razz/decocraft/models/bbmodel/BBModelParts$OutlinerNode;Lcom/razz/decocraft/models/bbmodel/BBModelParts$OutlinerGroup;)V"),
-                    Set.of("DecocraftCompactFaceMapsMixin")));
+                    Set.of("DecocraftCompactFaceMapsMixin")),
+            "decocraft-rotation-temporaries", new Contract("boot_optim.decocraftRotationTemporaries",
+                    rotationMethods(),
+                    Set.of("DecocraftRotationTemporariesMixin")));
+
+    private static List<String> rotationMethods() {
+        List<String> methods = new ArrayList<>(List.of(
+                "com/razz/decocraft/models/libgdx/Vector3#set(FFF)Lcom/razz/decocraft/models/libgdx/Vector3;",
+                BAKERY + "applyModelRotation(Lcom/razz/decocraft/models/libgdx/Vector3;Lcom/razz/decocraft/models/libgdx/Vector3;Lorg/joml/Matrix4f;)V",
+                BAKERY + "applyElementRotation(Lcom/razz/decocraft/models/libgdx/Vector3;Lcom/razz/decocraft/models/bbmodel/BBModelParts$Element;)V",
+                "com/razz/decocraft/models/libgdx/Vector3#<init>(FFF)V",
+                MATRIX + "<init>()V",
+                MATRIX + "equals(Ljava/lang/Object;)Z"));
+        for (int row = 0; row < 4; row++) {
+            for (int column = 0; column < 4; column++) {
+                methods.add(MATRIX + "m" + row + column + "()F");
+            }
+        }
+        return List.copyOf(methods);
+    }
 
     private static final Map<String, Boolean> VERIFIED = new HashMap<>();
     private static final Map<String, Set<String>> APPLIED = new HashMap<>();
@@ -239,6 +261,17 @@ public final class DecocraftContracts {
         }
         var resource = list.findResource(owner + ".class");
         if (resource == null) {
+            if (owner.equals("org/joml/Matrix4f")) {
+                // JOML is a library outside the mod roots: read its packaged bytes, nothing is initialised.
+                try (InputStream input = DecocraftContracts.class.getClassLoader().getResourceAsStream(owner + ".class")) {
+                    if (input == null) {
+                        throw new ClassNotFoundException(owner);
+                    }
+                    ClassNode library = new ClassNode();
+                    new ClassReader(input).accept(library, 0);
+                    return library;
+                }
+            }
             throw new ClassNotFoundException(owner);
         }
         ClassNode node = new ClassNode();
