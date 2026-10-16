@@ -33,7 +33,8 @@ public final class CompatInjectionCheck {
             Map.entry("com.github.talrey.createdeco.", "createdeco"),
             Map.entry("dev.averageanime.", "createfood"),
             Map.entry("traben.entity_model_features.", "entity_model_features"),
-            Map.entry("com.razz.decocraft.", "decocraft"));
+            Map.entry("com.razz.decocraft.", "decocraft"),
+            Map.entry("dev.isxander.yacl3.", "yet_another_config_lib_v3"));
     private static final Set<String> DECLARED_TARGETS = ConcurrentHashMap.newKeySet();
     private static final Set<String> APPLIED_TARGETS = ConcurrentHashMap.newKeySet();
     /** Internal target name -> injectors to verify once the class is fully transformed. */
