@@ -31,7 +31,15 @@
     "client.PizzaShapeMemoMixin",
     "client.WallBlockShapeOrMemoMixin",
     "client.CrossCollisionBlockShapeOrMemoMixin",
-    "client.PipeBlockShapeOrMemoMixin"
+    "client.PipeBlockShapeOrMemoMixin",
+    "client.EmfExpressionParserMixin",
+    "client.EmfMethodArgumentsMixin",
+    "client.EmfVariablePatternMixin",
+    "client.EmfAsmVariableHandlerMixin",
+    "client.EmfAnimationScopeMixin",
+    "client.EmfAnimationLineMixin",
+    "client.EmfAnimationTextMixin",
+    "client.EmfDirectorySuffixMixin"
   ],
   "injectors": {
     "defaultRequire": 0
