@@ -23,6 +23,7 @@
     "client.CitResewnModelBakeryCacheLifecycleMixin",
     "client.ModelBakerImplGeneratedItemDirectMixin",
     "client.UnbakedGeometryHelperDecocraftReuseMixin",
+    "client.MoreCullingTranslucencyIndexMixin",
     "client.XaeroWorldMapUpdateCheckMixin",
     "client.WallBlockShapeOrMemoMixin",
     "client.CrossCollisionBlockShapeOrMemoMixin",
