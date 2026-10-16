@@ -29,7 +29,9 @@ public final class CompatInjectionCheck {
             "com.cinemamod.mcef.", "mcef",
             "de.keksuccino.fancymenu.", "fancymenu",
             "schm.shsupercm.citresewn.", "citresewn",
-            "ca.fxco.moreculling.", "moreculling");
+            "ca.fxco.moreculling.", "moreculling",
+            "com.github.talrey.createdeco.", "createdeco",
+            "dev.averageanime.", "createfood");
     private static final Set<String> DECLARED_TARGETS = ConcurrentHashMap.newKeySet();
     private static final Set<String> APPLIED_TARGETS = ConcurrentHashMap.newKeySet();
     /** Internal target name -> injectors to verify once the class is fully transformed. */
