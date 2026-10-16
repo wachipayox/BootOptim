@@ -8,6 +8,7 @@
     "client.FilePackOrderedPrefixIndexMixin",
     "client.FileUtilStrictPathSegmentMixin",
     "client.ModelManagerDecocraftArchiveBatchMixin",
+    "client.ModelManagerDecocraftInventoryMixin",
     "client.PathPackResourcesRootAccessor",
     "client.SodiumQuadFlagClassifierMixin",
     "client.SodiumQuadCoordinateBridgeMixin",

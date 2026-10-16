@@ -3,6 +3,8 @@ package dev.wachipayox.bootoptim;
 import dev.wachipayox.bootoptim.compat.client.CompatInjectionCheck;
 import dev.wachipayox.bootoptim.optimization.client.CitResewnGlowingTrimLegacyWarningSuppression;
 import dev.wachipayox.bootoptim.optimization.client.DecocraftSourceStrings;
+import dev.wachipayox.bootoptim.optimization.client.DecocraftInventoryModel;
+import dev.wachipayox.bootoptim.optimization.client.DecocraftInventoryPatch;
 import dev.wachipayox.bootoptim.optimization.client.FmlEventTraceProducerFilter;
 import dev.wachipayox.bootoptim.profiling.StartupProfiler;
 import dev.wachipayox.bootoptim.profiling.client.ClientStartupHooks;
@@ -30,6 +32,10 @@ public final class BootOptim {
         StartupProfiler.markModEntrypoint();
         if (FMLEnvironment.dist == Dist.CLIENT) {
             FmlEventTraceProducerFilter.install();
+            if (DecocraftInventoryPatch.enabled()) {
+                modEventBus.addListener(net.neoforged.neoforge.client.event.ModelEvent.RegisterGeometryLoaders.class,
+                        event -> event.register(DecocraftInventoryModel.LOADER_ID, DecocraftInventoryModel.LOADER));
+            }
             CitResewnGlowingTrimLegacyWarningSuppression.install(modEventBus);
             modEventBus.addListener(FMLClientSetupEvent.class, event -> CompatInjectionCheck.reportMissingPseudoTargets());
             modEventBus.addListener(FMLClientSetupEvent.class, event -> DecocraftSourceStrings.install());
