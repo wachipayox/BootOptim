@@ -2,7 +2,9 @@ import com.razz.decocraft.models.bbmodel.BBModel;
 import com.razz.decocraft.models.bbmodel.BBModelParts;
 import dev.wachipayox.bootoptim.compat.client.DecocraftContracts;
 import dev.wachipayox.bootoptim.compat.client.MethodContract;
+import com.razz.decocraft.models.libgdx.Vector3;
 import dev.wachipayox.bootoptim.optimization.client.DecocraftFaceMaps;
+import dev.wachipayox.bootoptim.optimization.client.DecocraftRotationScratch;
 import dev.wachipayox.bootoptim.optimization.client.SmallOrderedMap;
 import java.lang.reflect.Field;
 import java.util.AbstractMap;
@@ -16,6 +18,7 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import net.minecraft.core.Direction;
+import org.joml.Matrix4f;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -36,6 +39,7 @@ public final class DecocraftCompactStructuresContract {
         faceMapsKeepOrderAndIdentity();
         faceMapsPreflightIsAtomic();
         fingerprintIgnoresMetadataButNotBody();
+        rotationScratchIsOwnedPerBakeryAndThread();
         System.out.println("DECOCRAFT_COMPACT_STRUCTURES_CONTRACT PASS checks=" + checks);
     }
 
@@ -192,6 +196,49 @@ public final class DecocraftCompactStructuresContract {
         DecocraftFaceMaps.compact(bad);
         check(good.faces == untouched, "no partial write when a later element has another shape");
         check(!DecocraftContracts.active("decocraft-compact-face-maps"), "mechanism disabled after shape change");
+    }
+
+    private static void rotationScratchIsOwnedPerBakeryAndThread() throws Exception {
+        var scratch = new DecocraftRotationScratch();
+        var owned = new Vector3(0f, 0f, 0f);
+        var source = new Vector3(3f, 5f, 7f);
+        check(scratch.reuse(1, 2, 3) == null, "uninitialized scratch builds a fresh vector");
+        scratch.initialize(owned);
+        Random random = new Random(5516);
+        for (int i = 0; i < 100_000; i++) {
+            float a = Float.intBitsToFloat(random.nextInt());
+            float b = Float.intBitsToFloat(random.nextInt());
+            float c = Float.intBitsToFloat(random.nextInt());
+            Object result = scratch.reuse(a, b, c);
+            check(result == owned
+                    && Float.floatToRawIntBits(owned.x) == Float.floatToRawIntBits(a)
+                    && Float.floatToRawIntBits(owned.y) == Float.floatToRawIntBits(b)
+                    && Float.floatToRawIntBits(owned.z) == Float.floatToRawIntBits(c), "raw-bit snapshot");
+        }
+        check(source.x == 3 && source.y == 5 && source.z == 7, "source origin never touched");
+        final Object[] foreign = {owned};
+        Thread other = new Thread(() -> foreign[0] = scratch.reuse(1, 2, 3));
+        other.start();
+        other.join();
+        check(foreign[0] == null, "another thread takes the original constructor");
+        var second = new DecocraftRotationScratch();
+        second.initialize(new Vector3(1f, 2f, 3f));
+        check(second.reuse(4, 5, 6) != owned, "scratch is per bakery");
+        var invalid = new DecocraftRotationScratch();
+        invalid.initialize(new Object());
+        check(invalid.reuse(1, 2, 3) == null, "unknown shape falls back");
+        Matrix4f identity = new Matrix4f();
+        for (int i = 0; i < 10_000; i++) {
+            Matrix4f m = new Matrix4f();
+            if (i % 3 != 0) {
+                m.m00(Float.intBitsToFloat(random.nextInt()));
+            }
+            if (i % 5 == 0) {
+                m.m31(-0f);
+            }
+            check(m.equals(identity) == m.equals(new Matrix4f()), "shared identity equals a fresh one");
+        }
+        check(!DecocraftRotationScratch.activeFor(new Matrix4f() {}), "subclass never sees the shared identity");
     }
 
     private static void fingerprintIgnoresMetadataButNotBody() throws Exception {

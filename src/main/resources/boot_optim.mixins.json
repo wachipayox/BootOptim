@@ -33,7 +33,8 @@
     "client.CrossCollisionBlockShapeOrMemoMixin",
     "client.PipeBlockShapeOrMemoMixin",
     "client.DecocraftPrivateDirectionsMixin",
-    "client.DecocraftCompactFaceMapsMixin"
+    "client.DecocraftCompactFaceMapsMixin",
+    "client.DecocraftRotationTemporariesMixin"
   ],
   "injectors": {
     "defaultRequire": 0
