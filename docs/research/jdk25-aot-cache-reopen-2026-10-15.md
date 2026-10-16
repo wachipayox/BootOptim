@@ -126,8 +126,8 @@ launcher Start, so Pandora's own overhead is not included.
 
 - The gain after a pack revision change: train again on the new revision and
   repeat the ABBA. Without this, the −9.25 s applies only to rev `7d5b9e50…`.
-  2026-10-16: no newer Beta revision exists yet; only the invalidation and retraining flow was
-  verified (see the Pandora entry).
+  2026-10-16: a newer Beta revision (`b5d3b8a1…`) exists but crashes at startup (Companion#8); the
+  invalidation and retraining flow was verified on it, the gain was not measurable (see the Pandora entry).
 
 ## Reopening criteria (if the revision-change check fails)
 

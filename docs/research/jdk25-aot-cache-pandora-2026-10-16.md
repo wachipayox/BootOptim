@@ -2,7 +2,7 @@
 
 Status: **implemented in Pandora** (BootOptimPandora PR #104, one-step training). Follows the
 reopening in [`jdk25-aot-cache-reopen-2026-10-15.md`](jdk25-aot-cache-reopen-2026-10-15.md) (#364).
-**Still open:** the gain after a *real* pack revision change (see "Not validated").
+**Still open:** the gain after a *real* pack revision change (see "Not validated"; the first real second revision crashes at startup, Companion#8).
 
 ## Origin of the numbers
 
@@ -84,11 +84,18 @@ key), disk-space guard, Stop handling, retry without Java-21 fallback, not-appli
 
 ## Not validated (open)
 
-- **Gain after a real revision change.** Distribution had no newer Beta revision (the launcher
-  reported `UP-TO-DATE rev_7d5b9e50…`; `PACK.md` lists rev 3 as the latest). Series 3 changed only
-  the revision id in the instance's committed profile state (backed up and restored, hash
-  identical afterwards): it proves invalidation and retraining, **not** that a cache trained on a
-  different mod set keeps the gain. Needs a published second revision, then train + ABBA.
+- **Gain after a real revision change.** A second Beta revision was published later the same day
+  (`rev_b5d3b8a16bb52cc5897f32643c7999b6`, manifest `560101dc…`, Companion 1.0.5a8). The real flow
+  was run on it: a cache trained on rev 3 (key `465f2965…`), then `--update` → `UPDATED`, `cache for
+  this instance no longer matches its key; removing it to train again`, `mode=train key=543e541c…`.
+  **The gain could not be measured: rev `b5d3b8a1…` crashes at startup** with
+  `IllegalAccessError: Update to non-static final field … AbstractRegistrate.registrations` from the
+  `we_companion` mixin `protectDeclarationTable` (2 of 2 starts, also with `WBOMBO_AOT_CACHE=off`,
+  so not caused by the cache; [Companion#8](https://github.com/wachipayox/WachilandEliteCompanion/issues/8)).
+  The training run of that revision was discarded as designed (exit −1). Needs a revision that
+  reaches the menu, then train + ABBA. Earlier the same day a simulated change (only the revision id
+  in the local state, backed up and restored) had verified invalidation and retraining
+  (series 3), which does not show that a cache trained on another mod set keeps its gain.
 - The player's Stop button during training (unit-tested only; it gives an assembling JVM up to
   10 extra minutes before the 3 s kill, once).
 - A long real play session (close time, size), a weaker CPU/laptop (training cost, `create`
