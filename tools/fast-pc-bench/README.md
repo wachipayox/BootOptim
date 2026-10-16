@@ -42,3 +42,15 @@ counts, up to `mod_entrypoint` and `main_menu`, where classes come from:
 `MISMATCH` (loaded in training too, but bytes differ now, so the cache is rejected for it), `JAR`, `JRT`.
 The log needs `-Xlog:class+load=info:file=<path>:uptime`. See
 [`docs/research/jdk25-aot-cache-reopen-2026-10-15.md`](../../docs/research/jdk25-aot-cache-reopen-2026-10-15.md).
+
+## AOT cache, two steps (BootOptimPandora #104)
+
+`aot_campaign.ps1 -Exe <launcher.exe> [-Cores 4] [-Priority low]` runs one series for one simulated machine: a
+record run from an empty `aot-cache` (training cost, profile write at close, launcher `create`), one discarded
+primer, then ABBA ×2 with the cache off (`WBOMBO_AOT_CACHE=off`) and on. `aot_run_once.ps1` is one run; unlike
+`run_once.ps1` it waits for the launcher's `create` step (killing the launcher kills it) and reads
+`write_seconds`/`create_seconds` from `launcher.log`. `-Cores N` sets the affinity to the first N logical CPUs and
+`-XX:ActiveProcessorCount=N`; `-Priority` is the `start` priority class. Both apply only to the launcher process
+tree (the game and the `create` JVM inherit them); no system setting changes. Disk speed is not simulated.
+Afterwards restore the instance's `info_v1.json` and delete `aot-cache/` if the instance should be left as it was.
+
