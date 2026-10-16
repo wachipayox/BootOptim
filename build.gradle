@@ -259,6 +259,24 @@ var strictPathTransformContract = tasks.register('strictPathTransformContract', 
 }
 tasks.named('check') { dependsOn strictPathTransformContract }
 
+// Host-only contract for deferred Decocraft quarter-turn variants and compact snapshots (package-private access).
+var decocraftLazyRotationsContractClasses = layout.buildDirectory.dir('classes/decocraftLazyRotationsContract')
+var compileDecocraftLazyRotationsContract = tasks.register('compileDecocraftLazyRotationsContract', JavaCompile) {
+    dependsOn tasks.named('classes')
+    source = fileTree('tools/research/dev')
+    classpath = sourceSets.main.runtimeClasspath
+    destinationDirectory = decocraftLazyRotationsContractClasses
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+var decocraftLazyRotationsContract = tasks.register('decocraftLazyRotationsContract', JavaExec) {
+    dependsOn compileDecocraftLazyRotationsContract
+    classpath = files(decocraftLazyRotationsContractClasses) + sourceSets.main.runtimeClasspath
+    mainClass = 'dev.wachipayox.bootoptim.optimization.client.DecocraftLazyRotationsContract'
+    systemProperty 'boot_optim.decocraftLazyRotations', 'true'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check') { dependsOn decocraftLazyRotationsContract }
+
 // Host-only contract for the Decocraft compact-structure mechanisms; stand-in classes stay under tools/ and are never packaged.
 var decocraftCompactContractClasses = layout.buildDirectory.dir('classes/decocraftCompactStructuresContract')
 var compileDecocraftCompactStructuresContract = tasks.register('compileDecocraftCompactStructuresContract', JavaCompile) {

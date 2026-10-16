@@ -140,7 +140,7 @@ public final class DecocraftRotatedQuadReuse {
         }
 
         long started = System.nanoTime();
-        List<BakedQuad> rotated = rotateQuads(cached.quads, relative);
+        List<BakedQuad> rotated = DecocraftLazyRotations.defer(cached.quads, relative, DecocraftRotatedQuadReuse::rotateQuads);
         if (rotated == null) {
             return fallback(originalBake);
         }
@@ -285,7 +285,7 @@ public final class DecocraftRotatedQuadReuse {
         return result;
     }
 
-    private static @Nullable List<BakedQuad> rotateQuads(List<BakedQuad> source, Matrix4f relative) {
+    static @Nullable List<BakedQuad> rotateQuads(List<BakedQuad> source, Matrix4f relative) {
         ArrayList<BakedQuad> result = new ArrayList<>(source.size());
         for (BakedQuad quad : source) {
             int[] sourceData = quad.getVertices();
