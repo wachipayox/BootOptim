@@ -31,7 +31,11 @@
     "client.PizzaShapeMemoMixin",
     "client.WallBlockShapeOrMemoMixin",
     "client.CrossCollisionBlockShapeOrMemoMixin",
-    "client.PipeBlockShapeOrMemoMixin"
+    "client.PipeBlockShapeOrMemoMixin",
+    "client.DecocraftPrivateDirectionsMixin",
+    "client.DecocraftCompactFaceMapsMixin",
+    "client.DecocraftRotationTemporariesMixin",
+    "client.DecocraftBakeScratchMixin"
   ],
   "injectors": {
     "defaultRequire": 0

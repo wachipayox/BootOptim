@@ -30,12 +30,21 @@ public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
         }
     }
     @Override public String getRefMapperConfig() { return null; }
-    @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) { return true; }
+    @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        return DecocraftContracts.shouldApply(simpleName(mixinClassName));
+    }
     @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) { CompatInjectionCheck.declareTargets(myTargets); }
     @Override public List<String> getMixins() { return null; }
-    @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
+    @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        DecocraftContracts.beforeApply(simpleName(mixinClassName), targetClass);
+    }
     @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        DecocraftContracts.installed(simpleName(mixinClassName));
         CompatInjectionCheck.afterApply(targetClassName, targetClass, mixinClassName, mixinInfo);
+    }
+
+    private static String simpleName(String className) {
+        return className.substring(className.lastIndexOf('.') + 1);
     }
 
     /** Runs after all mixins (registered after MixinExtras' own extension) to verify injections. */

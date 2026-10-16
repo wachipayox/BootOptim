@@ -31,7 +31,8 @@ public final class CompatInjectionCheck {
             "schm.shsupercm.citresewn.", "citresewn",
             "ca.fxco.moreculling.", "moreculling",
             "com.github.talrey.createdeco.", "createdeco",
-            "dev.averageanime.", "createfood");
+            "dev.averageanime.", "createfood",
+            "com.razz.decocraft.", "decocraft");
     private static final Set<String> DECLARED_TARGETS = ConcurrentHashMap.newKeySet();
     private static final Set<String> APPLIED_TARGETS = ConcurrentHashMap.newKeySet();
     /** Internal target name -> injectors to verify once the class is fully transformed. */
@@ -84,6 +85,7 @@ public final class CompatInjectionCheck {
                 if (!missing.isEmpty()) {
                     CompatLog.fallback(entry.mixin(), modFor(entry.targetClassName()),
                             "injection_target_not_found target=" + entry.targetClassName() + " handlers=" + missing);
+                    DecocraftContracts.injectionMissing(entry.mixin());
                 }
             }
         } catch (RuntimeException failure) {

@@ -1,10 +1,10 @@
 # JDK 25 AOT cache — reopened for the mod-loading phase — 2026-10-15
 
-Status: **research closed on the fast PC; not integrated.** The ABBA shows
-about −9.25 s to `main_menu` with a cache trained on the same pack revision and
-the same BootOptim JAR. No runtime code is proposed here. Pandora design and
-implementation go to a separate session. **Pending validation:** whether the
-gain holds after a pack revision change, by training again on the new revision.
+Status: **research closed on the fast PC; implemented in Pandora** (BootOptimPandora #104, design and
+measurements in [`jdk25-aot-cache-pandora-2026-10-16.md`](jdk25-aot-cache-pandora-2026-10-16.md)).
+The ABBA below shows about −9.25 s to `main_menu` with a cache trained on the same pack revision and
+the same BootOptim JAR. The Pandora product series (2026-10-16) measured −5.0 s: the cache arms
+match (≈ 50–52 s) and the control arms were 1–3 s faster, so use −5 to −6 s. **Revision-change validation (2026-10-16): done.** On the real second revision `rev_0abae9be…` a cache trained there gives −4.3 s (−7.5 %, 16 runs, 4/4 blocks) with the revision pinned: smaller than on rev 3, control arm noisier (Pandora entry, section 4).
 
 The 2026-09-25 NO-GO ([`archive/research/jdk25-aot-cache-laptop-2026-09-25.md`](../archive/research/jdk25-aot-cache-laptop-2026-09-25.md))
 used a laptop with a failing disk, n=1 and a fixed order. It tested class
@@ -111,7 +111,7 @@ launcher Start, so Pandora's own overhead is not included.
   maps `union:` and `__JVM_LookupDefineClass__` sources, and separates lambda
   proxies.
 
-## Requirements for a Pandora design (not implemented here)
+## Requirements for a Pandora design (implemented in Pandora #104)
 
 1. Training runs off the play path (background after a normal start, never
    blocking the player).
@@ -124,6 +124,8 @@ launcher Start, so Pandora's own overhead is not included.
 
 - The gain after a pack revision change: train again on the new revision and
   repeat the ABBA. Without this, the −9.25 s applies only to rev `7d5b9e50…`.
+  2026-10-16: done on the real revision `rev_0abae9be…`: invalidation, retraining and a −4.3 s gain
+  (see the Pandora entry, section 4).
 
 ## Reopening criteria (if the revision-change check fails)
 
