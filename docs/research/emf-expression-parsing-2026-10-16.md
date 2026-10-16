@@ -52,4 +52,15 @@ confirmations.
 
 ## Results
 
-Pending.
+Hosted exact-pack paired run [38889138409](https://github.com/wachipayox/BootOptim/actions/runs/38889138409),
+fixture `legacy` (its `options.txt` enables the user's resource packs; EMF 3.2.4), 3 pairs, commit `31776f25`:
+
+- Gate 1 passed: in all 3 candidate runs the nine parts logged `ACTIVE`; 0 `FALLBACK` in any run;
+  all 6 runs reached `main_menu`.
+- Wall time, candidate − control per pair: `startup_total` −915 / −207 / +1130 ms (median −207);
+  `reload_to_fancymenu_finish` −1006 / −259 / +1107 ms. Hosted noise (±1 s) is larger than the
+  expected effect (~0.2 s per reload), so the hosted run neither confirms nor refutes the gain.
+- The earlier runs on Beta revisions (`rev_7d5b9e50…`, `rev_0abae9be…`) do not exercise the parser:
+  their `options.txt` enables only `fabric`, so no part reaches 64 verified calls.
+
+Decision pending gate 2 (fast-PC in-world F3+T A/B), the measurement that can resolve ~0.2 s.
