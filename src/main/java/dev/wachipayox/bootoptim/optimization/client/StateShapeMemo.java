@@ -23,8 +23,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public final class StateShapeMemo {
     public static final String PROPERTY = "boot_optim.stateShapeMemo";
     private static final boolean ENABLED = Boolean.parseBoolean(System.getProperty(PROPERTY, "true"));
-    private static final int WARMUP = 256;
-    private static final long SAMPLE = 1_024L;
+    private static final int WARMUP = 32;
+    private static final long SAMPLE = 256L;
 
     public static final StateShapeMemo CATWALK_RAILING = new StateShapeMemo("createdeco-catwalk-railing-shape-memo", "createdeco");
     public static final StateShapeMemo PIZZA = new StateShapeMemo("createfood-pizza-shape-memo", "createfood");

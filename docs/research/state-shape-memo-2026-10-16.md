@@ -30,7 +30,7 @@ resource reload, and the game calls them again for outlines/collisions.
 
 `StateShapeMemo` (default on; `-Dboot_optim.stateShapeMemo=false` restores stock): `@Pseudo`
 HEAD/RETURN injections on each class's `getShape`; key = interned `BlockState`, value = the
-shape stock returned. Differential guard: the first 256 hits per mechanism and 1 in 1,024
+shape stock returned. Differential guard: the first 32 repeat hits per mechanism and 1 in 256
 afterwards re-run stock and compare exactly (`BlockShapeOrMemo.sameShape`: class, grids, boxes);
 a mismatch disables that mechanism with `[WBOMBO-COMPAT] FALLBACK`. Not version-pinned; a missing
 class or method is reported by `CompatInjectionCheck`.
