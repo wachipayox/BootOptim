@@ -1,6 +1,6 @@
 # Decocraft 3D inventory icons (optional, appearance change)
 
-Status: **candidate in PR, default OFF, visual approval pending**. Enable with `-Dboot_optim.decocraftInventoryBlockModels=true`. Migrated from Android Support `824b37d` (`inventory.decocraftBlockModels`, default false). The user decided that on PC this stays optional because it changes how items look. Ledger: `docs/research/decocraft-support-migration-2026-10-16.md`.
+Status: **candidate in PR, default OFF, visual review passed on PC (2026-10-16, user: icons look right, no bad visible differences)**; stays opt-in by the user decision, no RAM claim. Enable with `-Dboot_optim.decocraftInventoryBlockModels=true`. Migrated from Android Support `824b37d` (`inventory.decocraftBlockModels`, default false). The user decided that on PC this stays optional because it changes how items look. Ledger: `docs/research/decocraft-support-migration-2026-10-16.md`.
 
 ## What changes for the player
 
