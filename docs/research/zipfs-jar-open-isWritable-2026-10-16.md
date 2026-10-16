@@ -376,7 +376,9 @@ Recommendation, conditional on the measurement in 8c: the agent removes the disk
 
 ## 8c. ABBA of the agent, prepared for the next PC turn (not run)
 
-Not run in this turn: no PC use.
+Not run on the PC: no PC use in this turn.
+
+Hosted check, no PC: [#387](https://github.com/wachipayox/BootOptim/pull/387) (draft, experiment only) adds a `-javaagent:@ZIPFS_AGENT_JAR@` candidate directive to the exact-pack A/B (one repetition, stock control) and builds the agent in the job. It checks, on the hosted Linux runner, that the agent does not break startup: menu reached, one `ACTIVE`, no `FALLBACK`, no access-error exceptions, same `Found mod file` count as the control. Linux `isWritable` is cheap, so no gain is expected there. Its result is pending and is not recorded here yet.
 
 - Artifact: `tools/zipfs-readonly-agent/run-selftest.ps1` writes `build/zipfs-readonly-agent.jar` (needs a JDK 25 with `javac`). Copy that JAR to `C:/BootOptimBench/zipfs-agent/zipfs-readonly-agent.jar`, outside the instance.
 - Arms, all on `rev_0abae9…`, integration JAR as in 5e, with no read-only attribute on any file:
