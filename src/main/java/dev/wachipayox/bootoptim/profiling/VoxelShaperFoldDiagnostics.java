@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
+import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -55,6 +56,14 @@ public final class VoxelShaperFoldDiagnostics {
     private static final LongAdder BOXSET_EQ_ORDER = new LongAdder();
     private static final LongAdder BOXSET_NE = new LongAdder();
     private static final LongAdder SHAPE_ERR = new LongAdder();
+    private static final LongAdder DECOMP_MISMATCH = new LongAdder();
+    private static final LongAdder DECOMP_ENUM_NS = new LongAdder();
+    private static final LongAdder DECOMP_BOX_NS = new LongAdder();
+    private static final LongAdder DECOMP_FOLD_NS = new LongAdder();
+    private static final LongAdder DECOMP_STEPS = new LongAdder();
+    private static final LongAdder DECOMP_BOXES = new LongAdder();
+    private static final LongAdder DECOMP_CELLS = new LongAdder();
+    private static final LongAdder DECOMP_RESULT_CELLS = new LongAdder();
     private static final long[][] NS = new long[BUCKETS.length][NV];
     private static final long[] CALLS_B = new long[BUCKETS.length];
     /** [bucket][0=once,1=tree] matches. */
@@ -192,6 +201,7 @@ public final class VoxelShaperFoldDiagnostics {
             long b = System.nanoTime();
             VoxelShape o = j.optimize();
             long c = System.nanoTime();
+            decompose(j, o);
             tJoin += b - a;
             tOpt += c - b;
             if (!BlockShapeOrMemo.sameShape(o, s.accs.get(i))) {
@@ -246,6 +256,39 @@ public final class VoxelShaperFoldDiagnostics {
         }
     }
 
+    private static long cells(VoxelShape x) {
+        return (long) Math.max(x.getCoords(Direction.Axis.X).size() - 1, 0) * Math.max(x.getCoords(Direction.Axis.Y).size() - 1, 0)
+                * Math.max(x.getCoords(Direction.Axis.Z).size() - 1, 0);
+    }
+
+    /** Splits stock {@code optimize()} into box enumeration (forAllBoxes) and the fold of joinUnoptimized, on the real operand. */
+    private static void decompose(VoxelShape j, VoxelShape optimized) {
+        List<double[]> boxes = new ArrayList<>();
+        long t0 = System.nanoTime();
+        j.forAllBoxes((x1, y1, z1, x2, y2, z2) -> boxes.add(new double[] {x1, y1, z1, x2, y2, z2}));
+        long t1 = System.nanoTime();
+        List<VoxelShape> shapes = new ArrayList<>(boxes.size());
+        for (double[] d : boxes) {
+            shapes.add(Shapes.box(d[0], d[1], d[2], d[3], d[4], d[5]));
+        }
+        long t2 = System.nanoTime();
+        VoxelShape r = Shapes.empty();
+        for (VoxelShape b : shapes) {
+            r = Shapes.joinUnoptimized(r, b, BooleanOp.OR);
+        }
+        long t3 = System.nanoTime();
+        if (!BlockShapeOrMemo.sameShape(r, optimized)) {
+            DECOMP_MISMATCH.increment();
+        }
+        DECOMP_ENUM_NS.add(t1 - t0);
+        DECOMP_BOX_NS.add(t2 - t1);
+        DECOMP_FOLD_NS.add(t3 - t2);
+        DECOMP_STEPS.increment();
+        DECOMP_BOXES.add(boxes.size());
+        DECOMP_CELLS.add(cells(j));
+        DECOMP_RESULT_CELLS.add(cells(optimized));
+    }
+
     /** Does the stock result keep exactly the input boxes (as a set / in order)? Bears on any remap-by-rotation idea. */
     private static void boxSets(Session s, VoxelShape stock) {
         List<AABB> in = new ArrayList<>();
@@ -298,6 +341,10 @@ public final class VoxelShaperFoldDiagnostics {
                 STEP_REPLAY_MISMATCH.sum(), SHAPE_ERR.sum(), ManagementFactory.getRuntimeMXBean().getUptime());
         LOGGER.info("BOOTOPTIM_VOXELSHAPER_FOLD split join_ms={} optimize_ms={} final_step_join_ms={} final_step_optimize_ms={}",
                 ms(JOIN_NS.sum()), ms(OPT_NS.sum()), ms(FINAL_JOIN_NS.sum()), ms(FINAL_OPT_NS.sum()));
+        LOGGER.info("BOOTOPTIM_VOXELSHAPER_FOLD optimize_decomposition steps={} mismatches={} enumerate_forAllBoxes_ms={} box_alloc_ms={} "
+                        + "join_fold_ms={} boxes_total={} operand_cells_total={} result_cells_total={}",
+                DECOMP_STEPS.sum(), DECOMP_MISMATCH.sum(), ms(DECOMP_ENUM_NS.sum()), ms(DECOMP_BOX_NS.sum()), ms(DECOMP_FOLD_NS.sum()),
+                DECOMP_BOXES.sum(), DECOMP_CELLS.sum(), DECOMP_RESULT_CELLS.sum());
         LOGGER.info("BOOTOPTIM_VOXELSHAPER_FOLD boxset stock_boxes_equal_input_set={} same_order={} different={}",
                 BOXSET_EQ.sum(), BOXSET_EQ_ORDER.sum(), BOXSET_NE.sum());
         synchronized (NS) {
