@@ -18,8 +18,8 @@ Ledger for moving the accepted Decocraft memory/allocation mechanisms of Wachila
 | Equal embedded `data:image` Strings | 2 | integrated (#379) | #379 | [decocraft-source-strings](../optimizations/compatibility/decocraft-source-strings.md) |
 | Rotation temporaries (identity `Matrix4f`, origin snapshot) | 3 | integrated (#381) | #381 | [decocraft-rotation-temporaries](../optimizations/compatibility/decocraft-rotation-temporaries.md) |
 | Whole-bake staging (`VertexData` ×4 + position) | 4 | integrated (#382) | #382 | [decocraft-bake-scratch](../optimizations/compatibility/decocraft-bake-scratch.md) |
-| Deferred quarter-turn variants + compact snapshots (into `DecocraftRotatedQuadReuse`) | 5 | not started | | |
-| 3D inventory icons (optional, default off) | 6 | not started | | |
+| Deferred quarter-turn variants + compact snapshots (into `DecocraftRotatedQuadReuse`) | 5 | open PR #383, default OFF; PC measurement plan in its catalog entry | #383 | [decocraft-lazy-variants](../optimizations/compatibility/decocraft-lazy-variants.md) (on the PR branch) |
+| 3D inventory icons (optional, default off) | 6 | open PR #384, default OFF; PC visual review plan in its catalog entry | #384 | [decocraft-inventory-block-models](../optimizations/compatibility/decocraft-inventory-block-models.md) (on the PR branch) |
 
 Do not mark a row integrated until its PR is merged into `agent/integration-current`.
 

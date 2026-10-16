@@ -1,6 +1,6 @@
 # Decocraft equal embedded-source Strings
 
-Status: **candidate in PR**, default ON on PC (decision relayed by the coordinator session, 2026-10-16; kill switch kept). Migrated from Android Support `824b37d` (`memory.decocraftSourceStrings`). Ledger: `docs/research/decocraft-support-migration-2026-10-16.md`.
+Status: **INTEGRATED**, default ON on PC (decision relayed by the coordinator session, 2026-10-16; kill switch kept). Migrated from Android Support `824b37d` (`memory.decocraftSourceStrings`). Ledger: `docs/research/decocraft-support-migration-2026-10-16.md`.
 
 ## Mechanism
 
