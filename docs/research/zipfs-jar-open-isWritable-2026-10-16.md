@@ -346,6 +346,48 @@ Validation before any integration:
 
 Recommendation: keep open. The next step is the cheap measurement in section 9. The proposal is about twenty call sites in Pandora and should not start before the gain is reproduced on a second machine.
 
+## 8b. Alternative without touching files: a read-only Java agent (2026-10-16)
+
+Branch `claude/zipfs-readonly-agent-2026-10-16` (BootOptim, `tools/zipfs-readonly-agent/`, CI job `zipfs-readonly-agent-selftest`, not integrated). The agent prepends one call to `jdk.nio.zipfs.ZipFileSystemProvider.getZipFileSystem(Path, Map)`: for a plain `.jar` open under a `mods/` folder or below a `libraries/` folder, it adds `accessMode=readOnly`. The JDK then sets `readOnly = true` and does not call `Files.isWritable`. That is the same zip state the attribute produces (section 5f), with no disk change.
+
+Viability, checked:
+
+- The self-test passes on the JDK 25.0.1 runtime that Pandora ships (a local run that does not start the game): without the agent the mod and library JARs are writable; with it they are read-only, a JAR outside the managed roots stays writable, a caller that passes `create` or `accessMode` keeps its own behaviour, and a write through zipfs fails with `ReadOnlyFileSystemException`. The same test runs on `windows-latest` with Temurin 25 in the CI job.
+- Wiring that was needed: the policy class is on `Boot-Class-Path` so the boot loader sees it; `jdk.zipfs` is defined by the platform loader in this JDK; the agent gives `jdk.zipfs` read access to the boot unnamed module (`Instrumentation.redefineModule`); the transform uses the JDK 25 class-file API, so no ASM is bundled.
+- Fail open: any failure in the transform or the policy leaves stock behaviour and logs `[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=zipfs-readonly-agent`.
+
+Comparison with the attribute:
+
+| Aspect | Attribute on the files (5e) | Agent (`-javaagent`) |
+|---|---|---|
+| Disk and shared state | Changes 295 files shared by every instance | None |
+| Pandora paths to change | About 20 call sites (section 7) must clear before writing | None |
+| Silent failures | Old version kept next to new (row 6); stale mod (row 16) | Fails open to stock, with a log line |
+| Scope | Every open of the file by any process | Plain `.jar` opens in this JVM under managed roots |
+| Launcher change needed | None | `-javaagent:<path>` in `jvm_flags` (Pandora already passes flags) |
+| Depends on | Windows attribute semantics | One private JDK method, matched by name and descriptor; the bundled JDK is fixed (25.0.1) |
+| Measured timing | Yes (5e, six non-JFR runs) | Not yet (8c) |
+| Risk to startup itself | None known | `-javaagent` may change CDS or class loading: unmeasured |
+| Writers | Any writer of those files fails | Only zipfs writers without `create` on managed JARs fail |
+
+On writers: the constant-pool scan of section 6 lists the `create` flag in Sinytra Connector (`FileSystemUtil`, `JarTransformInstance`, `RefmapRemapper`), Iris, Minecraft (`FileZipper`, `LinkFSProvider`) and JarJarFileSystems. None was traced to a managed JAR, and the policy leaves every open with `create` untouched by construction. The residual risk is a zipfs writer without `create` on a managed JAR, which was not found.
+
+Recommendation, conditional on the measurement in 8c: the agent removes the disk-side risks of section 7 and keeps the zip semantics that were measured. If the ABBA confirms the gain, it is the preferred candidate over the attribute, and the Pandora change in section 8 would not be needed for it. Neither is integrated.
+
+## 8c. ABBA of the agent, prepared for the next PC turn (not run)
+
+Not run in this turn: no PC use.
+
+- Artifact: `tools/zipfs-readonly-agent/run-selftest.ps1` writes `build/zipfs-readonly-agent.jar` (needs a JDK 25 with `javac`). Copy that JAR to `C:/BootOptimBench/zipfs-agent/zipfs-readonly-agent.jar`, outside the instance.
+- Arms, all on `rev_0abae9…`, integration JAR as in 5e, with no read-only attribute on any file:
+  - S, stock: `jvm_flags` empty.
+  - G, agent: `jvm_flags` = `-javaagent:C:/BootOptimBench/zipfs-agent/zipfs-readonly-agent.jar` (forward slashes).
+- Order: one primer S, then A B B A A B as in 5e, with `run_once` `exitOnTitle` and mask `FFFF`. Restore `info_v1.json` and the bench JAR afterwards, as in 5e.
+- Per-run checks: arm G has one `[WBOMBO-COMPAT] ACTIVE` line and no `FALLBACK` line; arm S has neither; 251 mod lines; no crash; no `ReadOnlyFileSystemException`, `AccessDenied` or `FileSystemException` in `latest.log`.
+- Metrics: medians of `modlauncher_start`, `dependency_discovery_end`, `mod_entrypoint` and `main_menu`, the process CPU at `modlauncher_start` (CPU against wall), and the uptime of the first JVM marker against the JFR zero, to see any startup cost from `-javaagent`.
+- Stop rules: any `FALLBACK` line in arm G, or a crash, makes arm G invalid until fixed. A mod count change makes it a failure.
+- Decision: a gain of at least 3 s to `modlauncher_start` with non-overlapping ranges, and no startup cost from the agent, makes it a candidate that needs a second machine before any integration. Otherwise document it as rejected with these numbers.
+
 ## 9. Next PC turn (measurements, only when the user gives the turn)
 
 1. **Per-call timing, no game launch.** Time `Files.getFileStore(path)` over the 295 JARs of 5e, twice each, in two arms: no Defender exclusion, and a Defender folder exclusion created by the user. `getFileStore` calls the volume lookup that `checkAccess` uses (`WindowsFileStore.create`); confirm that with a JFR of the microbench. If the wait is antivirus, the per-call time falls with the exclusion. If it is the lookup itself, it stays high with the exclusion. Report the median and the 95th percentile per call.
@@ -362,7 +404,7 @@ Reopen with a runtime change only if all hold:
 
 ## Result
 
-**Open.** Owner and count are established. The gain is attributed on the main thread: a volume lookup (`GetVolumePathName0`, about 10 ms per open) inside SecureJarHandler's lock, which serializes the JAR opens; the monitor waits follow from it. No loader component was found that writes into `libraries/` or `mods/`. Pandora needs about twenty changes before a read-only scheme would be safe (section 7), and the proposal (section 8) is not implemented. The next step is the measurement in section 9, and it does not need a game launch for its first part. No runtime code is added and no Pandora change is made.
+**Open.** Owner and count are established. The gain is attributed on the main thread: a volume lookup (`GetVolumePathName0`, about 10 ms per open) inside SecureJarHandler's lock, which serializes the JAR opens; the monitor waits follow from it. No loader component was found that writes into `libraries/` or `mods/`. Pandora needs about twenty changes before a read-only scheme would be safe (section 7), and the proposal (section 8) is not implemented. A read-only Java agent (8b, branch `claude/zipfs-readonly-agent-2026-10-16`) gives the same zip state without touching files; it is built and self-tested, and its launch ABBA is prepared (8c) but not run. The next steps are the measurement in section 9 (no game launch for its first part) and the agent ABBA of 8c on the next PC turn. No runtime code is integrated and no Pandora change is made.
 
 ## Links
 
