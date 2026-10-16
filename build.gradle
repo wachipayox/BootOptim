@@ -258,3 +258,20 @@ var strictPathTransformContract = tasks.register('strictPathTransformContract', 
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
 }
 tasks.named('check') { dependsOn strictPathTransformContract }
+
+// Host-only contract for the Decocraft compact-structure mechanisms; stand-in classes stay under tools/ and are never packaged.
+var decocraftCompactContractClasses = layout.buildDirectory.dir('classes/decocraftCompactStructuresContract')
+var compileDecocraftCompactStructuresContract = tasks.register('compileDecocraftCompactStructuresContract', JavaCompile) {
+    dependsOn tasks.named('classes')
+    source = files('tools/research/DecocraftCompactStructuresContract.java') + fileTree('tools/research/decocraft-fixture-src')
+    classpath = sourceSets.main.runtimeClasspath
+    destinationDirectory = decocraftCompactContractClasses
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+var decocraftCompactStructuresContract = tasks.register('decocraftCompactStructuresContract', JavaExec) {
+    dependsOn compileDecocraftCompactStructuresContract
+    classpath = files(decocraftCompactContractClasses) + sourceSets.main.runtimeClasspath
+    mainClass = 'DecocraftCompactStructuresContract'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.named('check') { dependsOn decocraftCompactStructuresContract }
