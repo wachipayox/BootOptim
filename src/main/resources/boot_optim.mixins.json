@@ -39,7 +39,11 @@
     "client.EmfAnimationScopeMixin",
     "client.EmfAnimationLineMixin",
     "client.EmfAnimationTextMixin",
-    "client.EmfDirectorySuffixMixin"
+    "client.EmfDirectorySuffixMixin",
+    "client.DecocraftPrivateDirectionsMixin",
+    "client.DecocraftCompactFaceMapsMixin",
+    "client.DecocraftRotationTemporariesMixin",
+    "client.DecocraftBakeScratchMixin"
   ],
   "injectors": {
     "defaultRequire": 0

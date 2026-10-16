@@ -228,6 +228,16 @@ jobs:
             --dir .exact-pack-cache \
             --clobber
 
+      # Objects are content-addressed and re-verified by the builder, so any older
+      # entry is safe to reuse: a new revision downloads only the objects it changed.
+      - name: Restore Distribution object cache
+        if: steps.pack-cache.outputs.cache-hit != 'true' && steps.resolve.outputs.source == 'distribution'
+        uses: actions/cache@v4
+        with:
+          path: .exact-pack-objects
+          key: exact-pack-objects-${{ steps.resolve.outputs.manifest_sha256 }}
+          restore-keys: exact-pack-objects-
+
       - name: Build fixture from the Distribution revision
         if: steps.pack-cache.outputs.cache-hit != 'true' && steps.resolve.outputs.source == 'distribution'
         shell: bash
@@ -246,7 +256,7 @@ jobs:
             --profile "$EXACT_PACK_PROFILE" --revision "$REVISION" --manifest-sha256 "$MANIFEST_SHA256" \
             --out .exact-pack-cache/bootoptim-exact-pack.zip \
             --sidecar .exact-pack-cache/bootoptim-exact-pack.json \
-            --cache "$RUNNER_TEMP/exact-pack-objects"
+            --cache .exact-pack-objects
 
       - name: Verify exact-pack fixture SHA-256
         id: verify
