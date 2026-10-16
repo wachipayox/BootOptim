@@ -46,3 +46,4 @@ repo/
 bootstrap/config/
 bootstrap/logs/
 bootstrap/.bootoptim/
+logs/

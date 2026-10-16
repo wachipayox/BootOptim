@@ -1,3 +1,0 @@
-[16oct2026 11:43:14.518] [main/INFO] [BootOptim/Compat/]: [WBOMBO-COMPAT] ACTIVE project=BootOptim mechanism=decocraft-compact-face-maps mod=decocraft
-[16oct2026 11:43:14.527] [main/INFO] [BootOptim/DecocraftFaceMaps/]: BOOTOPTIM_DECOCRAFT_FACE_MAPS models=1 maps=1 entries=6
-[16oct2026 11:43:14.528] [main/WARN] [BootOptim/Compat/]: [WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=decocraft-compact-face-maps mod=decocraft reason=parser_data_contract_IllegalArgumentException -> stock behaviour
