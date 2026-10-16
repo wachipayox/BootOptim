@@ -8,6 +8,8 @@ import net.neoforged.neoforge.common.NeoForge;
 
 /** Client-only startup probes, installed only while startup profiling is enabled. */
 public final class ClientStartupHooks {
+    /** Optional: milliseconds to stay on the title screen before exitOnTitle stops the game (default 0). */
+    private static final String EXIT_DELAY_PROPERTY = "boot_optim.benchmark.exitOnTitleDelayMs";
     private static boolean installed;
 
     private ClientStartupHooks() {
@@ -28,7 +30,23 @@ public final class ClientStartupHooks {
         }
 
         if (StartupProfiler.markMainMenu() && StartupProfiler.shouldExitOnTitle()) {
-            Minecraft.getInstance().stop();
+            long delayMs = Long.getLong(EXIT_DELAY_PROPERTY, 0L);
+            if (delayMs <= 0L) {
+                Minecraft.getInstance().stop();
+                return;
+            }
+            // Benchmark harness only: stay on the title screen so post-menu steps (no overlay, first tick) can run.
+            Thread exit = new Thread(() -> {
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                Minecraft client = Minecraft.getInstance();
+                client.execute(client::stop);
+            }, "BootOptim-bench-exit");
+            exit.setDaemon(true);
+            exit.start();
         }
     }
 }
