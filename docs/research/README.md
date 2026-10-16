@@ -1,5 +1,6 @@
 # BootOptim research ledger
 
+- [JAR opens through JDK ZipFS and `Files.isWritable` before ModLauncher — 2026-10-16](zipfs-jar-open-isWritable-2026-10-16.md): BootstrapLauncher opens about 210 ZipFileSystems before `modlauncher_start` (each library twice), each with an `isWritable` check on Windows. Owner is SecureJarHandler plus the JDK, no JVM switch. Per-open cost and antivirus split not measured yet. **PROFILED.**
 - [EMF animation-expression parsing, ported from RRLS — 2026-10-16](emf-expression-parsing-2026-10-16.md): unpinned port of the RRLS EMF parser/text equivalents (2026-09-27: expression parse about -40 %, text prep about -110 ms per reload), each with a differential guard. **Pending hosted A/B.**
 - [Decocraft optimizations migrated from Android Support — 2026-10-16](decocraft-support-migration-2026-10-16.md): ledger of the seven Support mechanisms (private directions, compact face maps, source Strings, rotation temporaries, bake staging, deferred variants, 3D icons) moved one PR at a time; mobile numbers kept apart from PC evidence.
 - [Per-state shape memo (Create Deco catwalk, CreateFood pizza) — 2026-10-16](state-shape-memo-2026-10-16.md): memoizes pure-by-state mod `getShape` results with a differential guard; in-world F3+T final pause -0.2 s on the fast PC; integrate.
