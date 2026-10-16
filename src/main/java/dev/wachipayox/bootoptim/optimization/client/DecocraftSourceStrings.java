@@ -39,6 +39,7 @@ public final class DecocraftSourceStrings {
     private static final int MAX_TEXTURES = 20_000;
 
     private static Consumer<ClientTickEvent.Post> listener;
+    private static int PROBE_TICKS;
 
     private DecocraftSourceStrings() {}
 
@@ -55,6 +56,11 @@ public final class DecocraftSourceStrings {
         Minecraft client = Minecraft.getInstance();
         if (!client.isGameLoadFinished() || client.getOverlay() != null || client.level != null
                 || !(client.screen instanceof TitleScreen)) {
+            if (PROBE_TICKS++ % 100 == 0) { // TEMPORARY probe, removed before merge
+                LOGGER.info("PROBE tick={} loadFinished={} overlay={} level={} screen={}", PROBE_TICKS, client.isGameLoadFinished(),
+                        client.getOverlay() == null ? null : client.getOverlay().getClass().getName(), client.level != null,
+                        client.screen == null ? null : client.screen.getClass().getName());
+            }
             return;
         }
         NeoForge.EVENT_BUS.unregister(listener);
