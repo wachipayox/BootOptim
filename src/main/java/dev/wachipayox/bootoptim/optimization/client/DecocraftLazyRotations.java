@@ -42,6 +42,8 @@ final class DecocraftLazyRotations {
     private static final AtomicLong PLANS = new AtomicLong();
     private static final AtomicLong PLANNED_QUADS = new AtomicLong();
     private static final AtomicLong MATERIALIZED = new AtomicLong();
+    private static final AtomicLong REALIZATIONS = new AtomicLong();
+    private static final AtomicLong FIRST_USE_NANOS = new AtomicLong();
     private static final AtomicLong SNAPSHOT_BYTES = new AtomicLong();
     private static final AtomicLong MAX_FIRST_USE_NANOS = new AtomicLong();
 
@@ -93,7 +95,13 @@ final class DecocraftLazyRotations {
                 throw new IllegalStateException("validated_rotation_returned_null");
             }
             MATERIALIZED.addAndGet(size);
-            MAX_FIRST_USE_NANOS.accumulateAndGet(System.nanoTime() - start, Math::max);
+            long elapsed = System.nanoTime() - start;
+            FIRST_USE_NANOS.addAndGet(elapsed);
+            MAX_FIRST_USE_NANOS.accumulateAndGet(elapsed, Math::max);
+            long realized = REALIZATIONS.incrementAndGet();
+            if (realized == 1 || realized % 250 == 0) {
+                LOGGER.info("BOOTOPTIM_DECOCRAFT_LAZY_ROTATIONS first_use {}", status());
+            }
             return result;
         });
     }
@@ -101,6 +109,7 @@ final class DecocraftLazyRotations {
     static String status() {
         return "lazy_rotation_plans=" + PLANS.get() + " planned_quads=" + PLANNED_QUADS.get()
                 + " materialized_quads=" + MATERIALIZED.get() + " cumulative_snapshot_payload=" + SNAPSHOT_BYTES.get()
+                + " realized_variants=" + REALIZATIONS.get() + " total_first_use_ns=" + FIRST_USE_NANOS.get()
                 + " max_first_use_ns=" + MAX_FIRST_USE_NANOS.get() + " " + SplitQuadGeometry.status()
                 + " " + PalettedIntChunk.status();
     }
