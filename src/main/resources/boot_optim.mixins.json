@@ -27,6 +27,8 @@
     "client.UnbakedGeometryHelperDecocraftReuseMixin",
     "client.MoreCullingTranslucencyIndexMixin",
     "client.XaeroWorldMapUpdateCheckMixin",
+    "client.CatwalkRailingShapeMemoMixin",
+    "client.PizzaShapeMemoMixin",
     "client.WallBlockShapeOrMemoMixin",
     "client.CrossCollisionBlockShapeOrMemoMixin",
     "client.PipeBlockShapeOrMemoMixin"
