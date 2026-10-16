@@ -112,13 +112,48 @@ about 4 to 5 s", not the −9 to −10 % of rev 3. `mod_entrypoint` medians of b
 cache 34.9 s. A cache retrained on the next revision therefore keeps a gain, smaller than on rev 3.
 A cache trained on the old revision and used on the new one was not measured: the key forbids it.
 
+## Two-step version (BootOptimPandora #104, phase 2)
+
+Record during the game (`AOTMode=record`), then `AOTMode=create` as a launcher job. Origin: fast PC,
+Beta `rev_0abae9be…` pinned with `--no-update`, Java 25.0.1, launcher artifacts `b343ef2` (series)
+and a local build of `94069a985` (validations). Start point: JVM start; end point: `main_menu`
+(BootOptim startup log). Weaker PCs are simulated per process only: affinity to the first N logical
+CPUs plus `-XX:ActiveProcessorCount=N`, and `start /low` (inherited by the game and the create JVM).
+Disk speed is not simulated. Scripts: `tools/fast-pc-bench/aot_campaign.ps1` (train, primer, ABBA x2).
+
+| Machine | Training run to menu | Close after menu (record) | Profile write | Create | Control median | Cache median | Gain |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| all cores, normal | 71.2 s | 17.1 s | 2.0 s¹ | 15.1 s | 55.8 s | 51.3 s | −4.5 s |
+| 4 cores, low | 88.8 s | 21.8 s | 3.1 s¹ | 15.0 s | 78.3 s | 69.6 s | −8.7 s |
+| 2 cores, low | 130.7 s | 23.6 s | 2.0 s¹ | 16.0 s | 122.0 s | 118.9 s | −3.1 s (noisy) |
+
+Runs (4 per arm): 4 cores control 76.9/76.9/79.7/79.8, cache 71.0/68.2/70.7/68.5; 2 cores control
+125.5/119.2/121.6/122.4, cache 112.2/123.9/117.9/119.8. The 2-core arms overlap: on 2 cores the gain
+is not established. ¹ `b343ef2` timed the write from the moment the profile file appeared; the JVM
+works ≈ 16 s before creating it, which the close column includes. Later builds start the timer when
+the game window closes (19.1 s in the long run below).
+
+The first all-core series was aborted and repeated: an unrelated `find / -iname …` left running by
+another session (≈ 0.7 core, walking the disk) made one training run take 191 s.
+
+Validations (local build `94069a985`):
+
+- Launcher killed during the create step: the profile (295 MiB) stays, no Java is left behind, and the
+  next launcher start runs the create after 1.2 s (15.0 s, 290 MiB) without retraining.
+- Forced AOT error (`WBOMBO_AOT_CACHE=force-error`): `javaw` shows its modal "Java Virtual Machine
+  Launcher" dialog and exits only when it is closed. With the first build a dialog closed after 33 s
+  was not "early", so the option stayed on; the launcher now detects the dialog. Dialog closed after
+  30 s → retry without the cache → option turned off 15 s later with the FALLBACK line and the reason.
+- Long session: game left 25 min at the main menu (not in a world), then the window closed normally:
+  window to JVM exit 20 s (profile write 19.1 s, 326 MiB), create 18.0 s, cache 320 MiB. "Optimizing"
+  shows ≈ 2 s after the window closes.
+
 ## Not validated (open)
 
-- The player's Stop button during training (unit-tested only; it gives an assembling JVM up to
-  10 extra minutes before the 3 s kill, once).
-- A long real play session (close time, size), a weaker CPU/laptop (training cost, `create`
-  contention), two real instances of the same profile (independence is unit-tested; the cache
-  lives inside each instance directory).
+- The UI buttons (Stop during record and during create, Cancel optimization, quit confirmation): no
+  desktop control in the measuring session; the same paths were exercised by killing the launcher.
+- A long session inside a world, a real weaker PC (disk speed), two real instances of the profile
+  (independence is unit-tested; the cache lives in each instance directory).
 - Hit counts by class source were not recounted (the #364 numbers stand).
 
 ## Reopening criteria
