@@ -27,6 +27,12 @@ the same effect as the attribute, for the same JARs, with no disk change. Any ot
 - The agent gives `jdk.zipfs` read access to the boot unnamed module (`Instrumentation.redefineModule`), because named
   modules do not read unnamed modules by default.
 - Only the class-file API of JDK 25 is used. No ASM or other library is bundled.
+- The transformer removes itself as soon as it has patched the provider (at load or through
+  `retransformClasses`). While a transformer is registered the JVM posts a ClassFileLoadHook for every class it
+  loads, which costs on every class load and makes each class served from a JDK 25 AOT cache rebuild its original
+  bytes for the hook. The self-test checks that no class load reaches the transformer after the patch (the earlier
+  version received 416 class loads during the self-test alone). A later retransformation of the provider by another
+  agent would start from the original bytes and drop the patch; nothing in the pack does that.
 
 ## Failure behaviour (fail open)
 

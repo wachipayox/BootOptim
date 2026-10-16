@@ -11,6 +11,7 @@ import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Java agent (JDK 25 class-file API, no external bytecode library).
@@ -22,6 +23,10 @@ import java.util.Set;
  * <p>Wiring: the manifest lists this JAR in {@code Boot-Class-Path}, so the policy class is visible to the
  * boot loader that defines {@code jdk.zipfs}. The module {@code jdk.zipfs} is given read access to the boot
  * unnamed module, because named modules do not read unnamed modules by default.
+ *
+ * <p>The transformer removes itself as soon as it has patched the provider. While a transformer is registered the
+ * JVM posts a ClassFileLoadHook for every class it loads, which makes each class load (and each class served from a
+ * JDK 25 AOT cache, whose original bytes are then rebuilt for the hook) more expensive for the whole game.
  */
 public final class ZipfsReadOnlyAgent {
 
@@ -50,6 +55,9 @@ public final class ZipfsReadOnlyAgent {
         System.err.println(line);
     }
 
+    /** Calls of the transformer, for the self-test: it must stay at the patched provider once removed. */
+    public static final AtomicInteger TRANSFORM_CALLS = new AtomicInteger();
+
     private ZipfsReadOnlyAgent() {
     }
 
@@ -59,9 +67,14 @@ public final class ZipfsReadOnlyAgent {
             Class<?> provider = findProviderClass();
             instrumentation.redefineModule(provider.getModule(), Set.of(policy.getModule()),
                     Map.of(), Map.of(), Set.of(), Map.of());
-            instrumentation.addTransformer(new ProviderTransformer(), true);
+            ProviderTransformer transformer = new ProviderTransformer(instrumentation);
+            instrumentation.addTransformer(transformer, true);
             if (instrumentation.isModifiableClass(provider)) {
                 instrumentation.retransformClasses(provider);
+            }
+            if (!transformer.patched) {
+                // Nothing was patched (the provider could not be retransformed): do not keep the hook for nothing.
+                instrumentation.removeTransformer(transformer);
             }
         } catch (Throwable failure) {
             status("[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=zipfs-readonly-agent reason=" + failure);
@@ -98,14 +111,27 @@ public final class ZipfsReadOnlyAgent {
     }
 
     private static final class ProviderTransformer implements ClassFileTransformer {
+        private final Instrumentation instrumentation;
+        private volatile boolean patched;
+
+        ProviderTransformer(Instrumentation instrumentation) {
+            this.instrumentation = instrumentation;
+        }
+
         @Override
         public byte[] transform(Module module, ClassLoader loader, String className, Class<?> classBeingRedefined,
                                 ProtectionDomain protectionDomain, byte[] classfileBuffer) {
+            TRANSFORM_CALLS.incrementAndGet();
             if (!PROVIDER_INTERNAL.equals(className)) {
                 return null;
             }
             try {
-                return patchProvider(classfileBuffer);
+                byte[] result = patchProvider(classfileBuffer);
+                // Patched once (at load or by retransformClasses): drop the hook so later class loads are free.
+                // A later retransformation of the provider by someone else would start from the original bytes.
+                patched = true;
+                instrumentation.removeTransformer(this);
+                return result;
             } catch (Throwable failure) {
                 status("[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=zipfs-readonly-agent reason=" + failure);
                 return null;

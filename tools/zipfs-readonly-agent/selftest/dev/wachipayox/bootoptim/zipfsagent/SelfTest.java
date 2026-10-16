@@ -56,6 +56,17 @@ public final class SelfTest {
             }
         }
 
+        if (expectAgent) {
+            // The transformer removed itself after patching the provider: loading new classes must not reach it.
+            int calls = ZipfsReadOnlyAgent.TRANSFORM_CALLS.get();
+            for (String name : List.of("java.util.concurrent.Exchanger", "java.util.zip.Adler32",
+                    "javax.naming.NamingException", "java.sql.Timestamp")) {
+                Class.forName(name, false, ClassLoader.getPlatformClassLoader());
+            }
+            expect(failures, "transformer calls after the provider was patched", ZipfsReadOnlyAgent.TRANSFORM_CALLS.get(), calls);
+            expect(failures, "transformer was called for the provider", calls > 0, true);
+        }
+
         String statusText = Files.exists(status) ? Files.readString(status, StandardCharsets.UTF_8) : "";
         long active = statusText.lines().filter(line -> line.contains(
                 "ACTIVE project=BootOptim mechanism=zipfs-readonly-agent")).count();
