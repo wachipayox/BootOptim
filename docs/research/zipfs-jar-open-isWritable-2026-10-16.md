@@ -98,10 +98,45 @@ Medians per open: **stock 22.8 ms, readonly 5.3 ms**, a difference of about 17.5
 
 Extrapolated to the ≈ 210 opens before `modlauncher_start` (estimate, not the real launch): stock ≈ 4.8 s, readonly ≈ 1.1 s, difference ≈ 3.7 s. That is about a third of the 10.0 s window. It is an upper bound for the `isWritable` share, because the microbench runs with a warm OS cache and does not reproduce BootstrapLauncher's real order, its locks, or its extra work.
 
+### 5b. Same ABBA with a temporary Defender folder exclusion
+
+The user added a Defender folder exclusion on the launcher folder (`%APPDATA%\WachilandLauncher`, which contains the runtime, `libraries` and the instances) for the duration of this run only. The exclusion was added by the user; no security setting was changed by the agent. Same JAR set and harness as above, 3 rounds each, ABBA. The exclusion is to be removed by the user after this run.
+
+| Mode | Round | per open ms |
+|---|---|---|
+| stock | 1 (A) | 15.82 |
+| stock | 2 | 15.09 |
+| stock | 3 | 14.91 |
+| readonly | 1 (B) | 4.36 |
+| readonly | 2 | 3.97 |
+| readonly | 3 | 3.80 |
+| readonly | 1 (B) | 4.27 |
+| readonly | 2 | 4.00 |
+| readonly | 3 | 3.80 |
+| stock | 1 (A) | 15.39 |
+| stock | 2 | 15.56 |
+| stock | 3 | 14.79 |
+
+Medians per open, with the exclusion: **stock 15.2 ms, readonly 4.0 ms**, difference about 11.2 ms.
+
+Comparison with section 5 (no exclusion, same machine, measured separately; not paired):
+
+| | No exclusion | With exclusion |
+|---|---|---|
+| stock median | 22.8 ms | 15.2 ms |
+| readonly median | 5.3 ms | 4.0 ms |
+| stock − readonly | 17.5 ms | 11.2 ms |
+
+Reading:
+
+- Defender's folder exclusion lowers the stock open by about 7.6 ms and the readonly open by about 1.3 ms. So part of the per-open cost is antivirus, but the larger part is not.
+- With the exclusion, `isWritable` still costs about 11 ms per open on this machine. Extrapolated to the ≈ 210 pre-`modlauncher_start` opens (upper bound, same caveats as section 5): about 2.3 s of the window remains attributable to the `isWritable` path, against 3.7 s without the exclusion.
+- These are two runs on different moments of the same machine, not paired on the same JAR order. The medians are the reference, not a precise split.
+
 What this does and does not show:
 
 - It reproduces that the per-open cost is dominated by the JDK's `isWritable` path on this machine: the `readonly` mode keeps the open and the central-directory read and drops most of the time.
-- It does not split Windows from Defender. That needs the temporary folder exclusion (step 3), which the user has not approved.
+- It shows that Defender explains part of the cost, not all. That is a partial split, from one folder exclusion.
 - It does not cover a copy outside `%APPDATA%` or a copy with the DOS read-only attribute set (variant (e) in the coordinating session's plan). Both still need approval.
 - The read-only attribute does not skip `GetFileSecurity`, because the ACL check (line 395 of `WindowsFileSystemProvider.checkAccess`) runs before the attribute check (line 405). It does skip `GetVolumePathName` (line 413), since the attribute check throws first. Any gain from the attribute depends on that.
 
