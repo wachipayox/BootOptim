@@ -1,6 +1,6 @@
 # Decocraft deferred quarter-turn variants with compact snapshots
 
-Status: **candidate in PR, default OFF** (`-Dboot_optim.decocraftLazyRotations=true` enables it) until the PC A/B in the PR gives a decision. Migrated from Android Support `824b37d` (`experimental.lazyDecocraftRotations`, default false there as well). Ledger: `docs/research/decocraft-support-migration-2026-10-16.md`. Builds on [decocraft-quarter-turn-reuse](decocraft-quarter-turn-reuse.md).
+Status: **default ON, kill switch `-Dboot_optim.decocraftLazyRotations=false`**. PC menu heap after GC (fast PC, Beta instance, Java 25, ABBA x2, 4 runs per arm after a primer): OFF 2.80 GB (2.80, 2.80, 2.94, 2.80) vs ON 2.27 GB (2.27 x4), about -0.52 GB (-19%) retained at the main menu. NOT measured: in-world retained heap and first-use hitches (no desktop control), so the log counters `realized_variants` / `total_first_use_ns` / `max_first_use_ns` stay for later checks. Migrated from Android Support `824b37d`. Ledger: `docs/research/decocraft-support-migration-2026-10-16.md`. Builds on [decocraft-quarter-turn-reuse](decocraft-quarter-turn-reuse.md).
 
 ## Integration with the quarter-turn path (no wrapper, no double application)
 

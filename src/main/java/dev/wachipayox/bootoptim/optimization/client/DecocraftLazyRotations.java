@@ -28,14 +28,14 @@ import org.slf4j.LoggerFactory;
  *   <li>No OpenGL, no worker threads: the realization runs on whichever thread first reads the quads.</li>
  * </ul>
  *
- * <p>Default off: {@code -Dboot_optim.decocraftLazyRotations=true} enables it. The mechanism changes
+ * <p>Default on (PC decision after the menu heap A/B); {@code -Dboot_optim.decocraftLazyRotations=false} restores stock. The mechanism changes
  * when the rotation CPU is spent (first read instead of bake), not what it computes.</p>
  */
 final class DecocraftLazyRotations {
     static final String PROPERTY = "boot_optim.decocraftLazyRotations";
     private static final String MECHANISM = "decocraft-lazy-rotations";
     private static final Logger LOGGER = LoggerFactory.getLogger("BootOptim/DecocraftLazyRotations");
-    private static final boolean ENABLED = Boolean.getBoolean(PROPERTY);
+    private static final boolean ENABLED = !"false".equalsIgnoreCase(System.getProperty(PROPERTY));
     private static final int MAX_QUADS = 16384;
 
     private static final Map<List<BakedQuad>, WeakReference<FrozenQuadInputs>> SNAPSHOTS = new WeakHashMap<>();
