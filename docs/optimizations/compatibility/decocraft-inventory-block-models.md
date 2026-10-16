@@ -21,3 +21,14 @@ Decocraft's decoration items (about 3,200 in the reference pack) are drawn as fl
 
 - Mobile (Vivo/Java 21, Support registry): previews of six inventory views passed; the atlas shrinks by the excluded icons. Memory effect on PC is unmeasured here (the hosted job reports the atlas size but not heap).
 - Hosted exact-pack A/B in the PR (candidate on vs off) checks the mechanism runs and the menu is reached, and reports the atlas dimensions. **CI cannot judge the look**: a visual review of the inventory (and creative tab, item frames, hand/ground rendering) by the user is required before any default change.
+
+## PC visual review plan (ready to run, needs the shared PC)
+
+Goal: the user decides from side-by-side screenshots whether the 3D icons are acceptable. No timing or memory claim comes from this run.
+
+1. Same instance, Beta revision pinned for both arms (`PACK.md`), BootOptim CI JAR of this PR in `mods/`, `startupLog=true` is not needed.
+2. Arm A (control, stock): launch with nothing extra. Arm B: add the JVM flag `-Dboot_optim.decocraftInventoryBlockModels=true` (Wachiland Launcher instance `jvm_flags`). Confirm in `latest.log`: `[WBOMBO-COMPAT] ACTIVE ... decocraft-inventory-block-models` and `BOOTOPTIM_DECOCRAFT_INVENTORY inventory_models≈3218 excluded_icon_sprites≈3205`. A `FALLBACK` line means the overlay did not apply: stop and report it.
+3. Window 1920x1080, GUI scale 3, the same creative test world in both arms, `F2` screenshots (kept in `screenshots/`, same file names per arm: `A-<n>.png` / `B-<n>.png`).
+4. Shots, in this order: (1) Decocraft creative tab, first page; (2) a middle page and the last page; (3) search `chair`, `table`, `lamp`, `plant`, `sign` in the creative search tab (one shot each); (4) hotbar with 9 different Decocraft items selected one by one; (5) the item held in the main hand, first person and third person (`F5`); (6) a dropped item on the ground (`Q`), two metres away; (7) an item frame holding one item; (8) a non-Decocraft control (a diamond sword and a vanilla block) to confirm nothing else changed.
+5. Look for: items that appear too large, too small, clipped by the slot, floating off-centre, upside down or black; missing or purple textures; icons of tools/odd Decocraft items that must stay flat; a flat icon of any *placed-block* item that should now be 3D; changed vanilla icons (must be none).
+6. Report the pair of folders; do not change the default from this run alone. Reopening the startup question needs a separate physical paired run (see "Relation to the rejected experiment").
