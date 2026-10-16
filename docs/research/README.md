@@ -1,5 +1,6 @@
 # BootOptim research ledger
 
+- [JAR opens through JDK ZipFS and `Files.isWritable` before ModLauncher — 2026-10-16](zipfs-jar-open-isWritable-2026-10-16.md): BootstrapLauncher opens about 210 ZipFileSystems before `modlauncher_start` (each library twice), each with an `isWritable` check on Windows. Owner is SecureJarHandler plus the JDK, no JVM switch. Per-open cost and antivirus split not measured yet. **PROFILED.**
 - [Per-state shape memo (Create Deco catwalk, CreateFood pizza) — 2026-10-16](state-shape-memo-2026-10-16.md): memoizes pure-by-state mod `getShape` results with a differential guard; in-world F3+T final pause -0.2 s on the fast PC; integrate.
 - [Mod-loading subphases: fast PC vs hosted CI — 2026-10-15](modloading-subphases-pc-vs-ci-2026-10-15.md): PC and CI split (2026-10-16): block dispatch 8.8 s PC / 9.0 s CI, CPU-bound in voxel-shape joins (frontier 2 of #360, integrated since); the pre-ModLauncher gap is Windows zipfs cost outside BootOptim. No optimization proposed.
 - [VoxelShaper fold cost: order / single optimize / rotation — 2026-10-16](voxelshaper-fold-cost-2026-10-16.md): **REJECTED at gate 1** (#372 diagnostic). 99 % of fold time is the inner `joinUnoptimized` fold of `optimize()`; single `optimize()` is inexact on 87/631 calls and balanced pairs on 51/631. Reopening: bit-identical faster `BitSetDiscreteVoxelShape.join`.
