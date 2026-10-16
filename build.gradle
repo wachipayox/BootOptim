@@ -291,3 +291,20 @@ var decocraftSourceStringsContract = tasks.register('decocraftSourceStringsContr
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
 }
 tasks.named('check') { dependsOn decocraftSourceStringsContract }
+
+// Manual: ./gradlew verifyDecocraftContracts -PdecocraftJar=<installed Decocraft JAR> (not part of check; the JAR is only read).
+var decocraftVerifyClasses = layout.buildDirectory.dir('classes/decocraftContractsVerify')
+var compileDecocraftContractsVerify = tasks.register('compileDecocraftContractsVerify', JavaCompile) {
+    dependsOn tasks.named('classes')
+    source = files('tools/research/DecocraftContractsVerify.java')
+    classpath = sourceSets.main.runtimeClasspath
+    destinationDirectory = decocraftVerifyClasses
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.register('verifyDecocraftContracts', JavaExec) {
+    dependsOn compileDecocraftContractsVerify
+    classpath = files(decocraftVerifyClasses) + sourceSets.main.runtimeClasspath
+    mainClass = 'DecocraftContractsVerify'
+    args = [providers.gradleProperty('decocraftJar').getOrElse('')]
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
