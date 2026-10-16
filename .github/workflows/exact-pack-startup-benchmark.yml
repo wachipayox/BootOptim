@@ -420,6 +420,54 @@ jobs:
         shell: bash
         run: echo "BOOTOPTIM_JDK25=$JAVA_HOME" >> "$GITHUB_ENV"
 
+      # Optional zipfs read-only agent (tools/zipfs-readonly-agent). Only built when a directive or input
+      # references @ZIPFS_AGENT_JAR@; the placeholder in JVM args is replaced by the built JAR path below.
+      - name: Build and self-test zipfs read-only agent
+        if: >-
+          contains(github.event.pull_request.body, '@ZIPFS_AGENT_JAR@')
+          || contains(github.event.inputs.smoke_jvm_args, '@ZIPFS_AGENT_JAR@')
+          || contains(github.event.inputs.candidate_jvm_args, '@ZIPFS_AGENT_JAR@')
+          || contains(github.event.inputs.control_jvm_args, '@ZIPFS_AGENT_JAR@')
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/zipfs-readonly-agent"
+          agent_dir=tools/zipfs-readonly-agent
+          rm -rf "$work"
+          mkdir -p "$work/agent" "$work/test"
+          "$BOOTOPTIM_JDK25/bin/javac" --release 25 -Xlint:all -d "$work/agent" $(find "$agent_dir/src" -name '*.java')
+          "$BOOTOPTIM_JDK25/bin/javac" --release 25 -cp "$work/agent" -d "$work/test" $(find "$agent_dir/selftest" -name '*.java')
+          "$BOOTOPTIM_JDK25/bin/jar" --create --file "$work/zipfs-readonly-agent.jar" --manifest "$agent_dir/manifest.txt" -C "$work/agent" .
+          "$BOOTOPTIM_JDK25/bin/java" -cp "$work/test:$work/agent" dev.wachipayox.bootoptim.zipfsagent.SelfTest "$work/root-stock" false
+          "$BOOTOPTIM_JDK25/bin/java" "-javaagent:$work/zipfs-readonly-agent.jar" -cp "$work/test:$work/agent" dev.wachipayox.bootoptim.zipfsagent.SelfTest "$work/root-agent" true
+          echo "ZIPFS_AGENT_JAR=$work/zipfs-readonly-agent.jar" >> "$GITHUB_ENV"
+
+      - name: Expand zipfs agent placeholder in JVM args
+        shell: bash
+        env:
+          MATRIX_CONTROL_JVM_ARGS: ${{ matrix.control_jvm_args }}
+          MATRIX_CANDIDATE_JVM_ARGS: ${{ matrix.candidate_jvm_args }}
+        run: |
+          set -euo pipefail
+          agent="${ZIPFS_AGENT_JAR:-}"
+          expand() { printf '%s' "${1//@ZIPFS_AGENT_JAR@/$agent}"; }
+          extra="$(expand "${BOOTOPTIM_PACK_EXTRA_JVM_ARGS:-}")"
+          control="$(expand "${MATRIX_CONTROL_JVM_ARGS:-}")"
+          candidate="$(expand "${MATRIX_CANDIDATE_JVM_ARGS:-}")"
+          if [[ "$extra$control$candidate" == *@ZIPFS_AGENT_JAR@* ]]; then
+            echo "JVM args still contain @ZIPFS_AGENT_JAR@ and no agent was built" >&2
+            exit 1
+          fi
+          write_expanded() {
+            echo "$1<<EXPANDED_EOF" >> "$GITHUB_ENV"
+            if [[ -n "$2" ]]; then printf '%s\n' "$2" >> "$GITHUB_ENV"; fi
+            echo "EXPANDED_EOF" >> "$GITHUB_ENV"
+          }
+          write_expanded BOOTOPTIM_PACK_EXTRA_JVM_ARGS_EXPANDED "$extra"
+          write_expanded BOOTOPTIM_PAIRED_CONTROL_JVM_ARGS_EXPANDED "$control"
+          write_expanded BOOTOPTIM_PAIRED_CANDIDATE_JVM_ARGS_EXPANDED "$candidate"
+          echo "Expanded JVM args (agent placeholder replaced when present)"
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -480,6 +528,8 @@ jobs:
       - name: Launch exact pack to main menu
         if: needs.plan.outputs.mode != 'paired'
         shell: bash
+        env:
+          BOOTOPTIM_PACK_EXTRA_JVM_ARGS: ${{ env.BOOTOPTIM_PACK_EXTRA_JVM_ARGS_EXPANDED }}
         run: |
           python scripts/exact-pack/run_startup.py \
             --variant '${{ matrix.variant }}' \
@@ -490,8 +540,8 @@ jobs:
         if: needs.plan.outputs.mode == 'paired'
         shell: bash
         env:
-          BOOTOPTIM_PAIRED_CONTROL_JVM_ARGS: ${{ matrix.control_jvm_args }}
-          BOOTOPTIM_PAIRED_CANDIDATE_JVM_ARGS: ${{ matrix.candidate_jvm_args }}
+          BOOTOPTIM_PAIRED_CONTROL_JVM_ARGS: ${{ env.BOOTOPTIM_PAIRED_CONTROL_JVM_ARGS_EXPANDED }}
+          BOOTOPTIM_PAIRED_CANDIDATE_JVM_ARGS: ${{ env.BOOTOPTIM_PAIRED_CANDIDATE_JVM_ARGS_EXPANDED }}
         run: |
           python scripts/exact-pack/run_paired.py \
             --pair ${{ matrix.pair }} \
