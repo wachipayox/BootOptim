@@ -4,7 +4,7 @@ Status: **candidate in PR**, default ON on PC (decision relayed by the coordinat
 
 ## Mechanism
 
-Decocraft keeps a persistent cache of parsed models (`ModuleBlocks.MAT_TO_BB_MODEL`). Each model texture carries its PNG as an embedded `data:image/...;base64,` String in the public field `source`; equal images appear in many textures as separate String instances. Once, at the first fully loaded title screen (game load finished, no overlay, no world), `DecocraftSourceStrings` reads those fields through public reflection and points equal Strings (1 KiB – 4 MiB, `data:image/` + `;base64,`) at one canonical instance chosen from a map local to the pass.
+Decocraft keeps a persistent cache of parsed models (`ModuleBlocks.MAT_TO_BB_MODEL`). Each model texture carries its PNG as an embedded `data:image/...;base64,` String in the public field `source`; equal images appear in many textures as separate String instances. Once, at the first fully loaded menu screen (game load finished, no overlay, no world, any screen: a mod may show a welcome screen over the title), `DecocraftSourceStrings` reads those fields through public reflection and points equal Strings (1 KiB – 4 MiB, `data:image/` + `;base64,`) at one canonical instance chosen from a map local to the pass.
 
 Not shared, closed, freed or changed: the text itself, the model/texture/vector objects, atlases and images. Replacement is a compare-and-set, so a value the mod replaced concurrently is left alone. No `String.intern()` (Support interned; here the canonical instance is call-local and the map is dropped afterwards).
 

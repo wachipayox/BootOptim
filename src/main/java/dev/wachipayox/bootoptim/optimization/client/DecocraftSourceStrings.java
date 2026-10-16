@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.TitleScreen;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -16,7 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * One bounded pass at the first fully loaded title screen (no overlay, no world) over Decocraft's
+ * One bounded pass at the first fully loaded menu screen (no loading overlay, no world) over Decocraft's
  * persistent model cache ({@code ModuleBlocks.MAT_TO_BB_MODEL}): equal embedded {@code data:image}
  * source Strings of the models' textures are pointed at a single instance
  * ({@link ExactSourceStrings}). Text, models, vectors and images are not shared, freed or changed.
@@ -39,7 +38,6 @@ public final class DecocraftSourceStrings {
     private static final int MAX_TEXTURES = 20_000;
 
     private static Consumer<ClientTickEvent.Post> listener;
-    private static int PROBE_TICKS;
 
     private DecocraftSourceStrings() {}
 
@@ -54,13 +52,8 @@ public final class DecocraftSourceStrings {
 
     private static void tick(ClientTickEvent.Post event) {
         Minecraft client = Minecraft.getInstance();
-        if (!client.isGameLoadFinished() || client.getOverlay() != null || client.level != null
-                || !(client.screen instanceof TitleScreen)) {
-            if (PROBE_TICKS++ % 100 == 0) { // TEMPORARY probe, removed before merge
-                LOGGER.info("PROBE tick={} loadFinished={} overlay={} level={} screen={}", PROBE_TICKS, client.isGameLoadFinished(),
-                        client.getOverlay() == null ? null : client.getOverlay().getClass().getName(), client.level != null,
-                        client.screen == null ? null : client.screen.getClass().getName());
-            }
+        // Any menu screen will do (a mod may show its own welcome screen over the title); never while loading or in a world.
+        if (!client.isGameLoadFinished() || client.getOverlay() != null || client.level != null || client.screen == null) {
             return;
         }
         NeoForge.EVENT_BUS.unregister(listener);
