@@ -34,7 +34,8 @@
     "client.PipeBlockShapeOrMemoMixin",
     "client.DecocraftPrivateDirectionsMixin",
     "client.DecocraftCompactFaceMapsMixin",
-    "client.DecocraftRotationTemporariesMixin"
+    "client.DecocraftRotationTemporariesMixin",
+    "client.DecocraftBakeScratchMixin"
   ],
   "injectors": {
     "defaultRequire": 0

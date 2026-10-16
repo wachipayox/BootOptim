@@ -58,7 +58,37 @@ public final class DecocraftContracts {
                     Set.of("DecocraftCompactFaceMapsMixin")),
             "decocraft-rotation-temporaries", new Contract("boot_optim.decocraftRotationTemporaries",
                     rotationMethods(),
-                    Set.of("DecocraftRotationTemporariesMixin")));
+                    Set.of("DecocraftRotationTemporariesMixin")),
+            "decocraft-bake-scratch", new Contract("boot_optim.decocraftBakeScratch",
+                    bakeScratchMethods(),
+                    Set.of("DecocraftBakeScratchMixin")));
+
+    /** Nine producer/consumer methods of one bake; makeVertexData also pins the local index of the vertex loop. */
+    private static List<String> bakeScratchMethods() {
+        String vector = "Lcom/razz/decocraft/models/libgdx/Vector3;";
+        String vertexArray = "[Lcom/razz/decocraft/models/bbmodel/BlockbenchBakery$VertexData;";
+        String element = "Lcom/razz/decocraft/models/bbmodel/BBModelParts$Element;";
+        String setting = "Lcom/razz/decocraft/models/bbmodel/BlockbenchLoader$BlockbenchSetting;";
+        String locator = "Lcom/razz/decocraft/models/bbmodel/BBModelParts$Locator;";
+        String uv = "Lcom/razz/decocraft/models/bbmodel/BBModelParts$UVCoordinate;";
+        String resolution = "Lcom/razz/decocraft/models/bbmodel/BBModelParts$Resolution;";
+        String sprite = "Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;";
+        String direction = "Lnet/minecraft/core/Direction;";
+        String matrix = "Lorg/joml/Matrix4f;";
+        return List.of(
+                BAKERY + "selectPosition(Lnet/minecraft/client/renderer/FaceInfo$VertexInfo;FFFFFF)" + vector,
+                BAKERY + "bakeQuad(" + element + setting + locator + uv + resolution + sprite + direction + matrix
+                        + ")Lnet/minecraft/client/renderer/block/model/BakedQuad;",
+                BAKERY + "makeVertexData(" + element + setting + locator + uv + resolution + sprite + direction
+                        + "FFFFFF" + matrix + ")" + vertexArray,
+                BAKERY + "bakeVertex(" + vertexArray + "I" + locator + direction + setting + uv + resolution
+                        + "FFFFFF" + sprite + matrix + element + ")V",
+                BAKERY + "fillVertex(" + vertexArray + "I" + setting + vector + sprite + uv + resolution + ")V",
+                BAKERY + "calculateFacing(" + vertexArray + ")" + direction,
+                "com/razz/decocraft/models/bbmodel/BlockbenchBakery$VertexData#<init>()V",
+                "com/razz/decocraft/models/libgdx/Vector3#<init>(FFF)V",
+                "com/razz/decocraft/models/libgdx/Vector3#set(FFF)" + vector);
+    }
 
     private static List<String> rotationMethods() {
         List<String> methods = new ArrayList<>(List.of(
