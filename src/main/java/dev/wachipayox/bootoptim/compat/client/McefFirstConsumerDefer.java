@@ -150,6 +150,12 @@ public final class McefFirstConsumerDefer {
     }
 
     private static void awaitInFlightInitialization(String consumer) {
+        if (Boolean.TRUE.equals(FORCE_INITIALIZE.get())) {
+            // Re-entry from MCEF's own init callbacks (e.g. WebDisplays calling getApp) on the thread that
+            // is running MCEF.initialize(): the completion future is only completed after that call
+            // returns, so waiting here blocks the client thread for the full timeout. Pass through.
+            return;
+        }
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft != null && minecraft.isSameThread() && !isMcefInitialized()) {
             // A worker may have won the state transition and queued its client-thread initializer.
