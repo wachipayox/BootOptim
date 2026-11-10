@@ -1,6 +1,7 @@
 # BootOptim research ledger
 
 - [Palladium FastBitSet option — 2026-11-10](palladium-fast-bit-sets-2026-11-10.md): **REJECTED** at the shape-equivalence gate. 44,418 strict differences across 1,880,694 shape records, including 330 exact occupied-volume differences. No timed A/B.
+- [AllShapes piston state audit](allshapes-ferritecore-2026-11-10.md).
 - [Block shape class prewarm — 2026-11-10](block-shape-class-prewarm-2026-11-10.md): **KEEP** for four audited initializers. Exact shape dump; Windows Java 25+AOT ABBA: -2.740 s in block registration and -2.419 s to visible menu. Create AllShapes is outside the guarded route.
 - [First MCEF screen task — 2026-11-10](mcef-first-screen-task-2026-11-10.md): **KEEP**. Audited task skip preserves first-consumer initialization; Windows Java 25+AOT ABBA: -1.726 s to main menu, -1.889 s to overlay HIDE, -1.223 s in the affected segment.
 - [YACL image preparation off the calling thread — 2026-10-16](yacl-image-preparation-2026-10-16.md): **REJECTED 2026-10-17.** Port of the RRLS experiment 18a5615 (prepare enumeration off the render thread, manual reloads only). Physical A/B: no reload-wall benefit; synchronous return not measured. PR #389 closed; reopen with the timestamped measurement in the note.

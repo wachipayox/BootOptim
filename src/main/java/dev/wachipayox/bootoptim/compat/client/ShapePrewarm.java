@@ -10,7 +10,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.neoforged.fml.loading.FMLLoader;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.piston.PistonHeadBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 /** Initializes a small audited set of shape tables after vanilla Bootstrap returns. */
@@ -24,6 +28,10 @@ public final class ShapePrewarm {
     private static final String TFMG = "com/drmangotea/tfmg/base/TFMGShapes";
     private static final String ALTERNATOR = "com/mrh0/createaddition/blocks/alternator/AlternatorBlock";
     private static final String CAS = "com/mrh0/createaddition/shapes/CAShapes";
+    private static final String ALL_SHAPES = "com/simibubi/create/AllShapes";
+    private static final String STATE_HOLDER = "net/minecraft/world/level/block/state/StateHolder";
+    private static final String STATE_DEFINITION = "net/minecraft/world/level/block/state/StateDefinition";
+    private static final String FERRITE = "malte0811/ferritecore/";
     private static final String KINETIC = "com/simibubi/create/content/kinetics/base/";
     private static final String VOXEL_SHAPER = "net/createmod/catnip/math/VoxelShaper";
     private static final String AUDIT_INTERFACE =
@@ -65,6 +73,15 @@ public final class ShapePrewarm {
                 Thread.ofPlatform().daemon().name(target.mechanism()).start(() -> prewarm(target));
             }
         }
+        if (loading.getModFileById("create") != null
+                && Boolean.parseBoolean(System.getProperty("boot_optim.allShapesPrewarm", "true"))) {
+            var helpers = Contracts.BY_OWNER.keySet().stream().filter(owner ->
+                    owner.startsWith(FERRITE) || owner.startsWith("net/minecraft/world/level/block/")
+                    || owner.equals(ALL_SHAPES + "$Builder")
+                    || owner.endsWith("/ChuteShapes") || owner.endsWith("/TrackVoxelShapes")).sorted().toList();
+            var target = new Target("create", ALL_SHAPES, helpers);
+            Thread.ofPlatform().daemon().name(target.mechanism()).start(() -> prewarm(target));
+        }
     }
 
     private static void prewarm(Target target) {
@@ -80,8 +97,15 @@ public final class ShapePrewarm {
             }
             checked = target.owner;
             verifyLoaded(target.owner);
+            if (target.owner.equals(ALL_SHAPES) && !pistonTableReady()) {
+                CompatLog.fallback(target.mechanism(), target.modId, "unexpected_piston_state_table");
+                return;
+            }
         } catch (Exception | LinkageError changed) {
             String reason = VALIDATED.getOrDefault(checked, "class_not_observed");
+            if (reason.isEmpty()) {
+                reason = "piston_state_probe_failed";
+            }
             CompatLog.fallback(target.mechanism(), target.modId, reason + " owner=" + checked);
             return;
         }
@@ -95,6 +119,54 @@ public final class ShapePrewarm {
         }
         StartupProfiler.markPhase(target.mechanism() + "_end");
         CompatLog.active(target.mechanism(), target.modId);
+    }
+
+    private static boolean pistonTableReady() throws ReflectiveOperationException {
+        var piston = Blocks.PISTON_HEAD;
+        if (piston.getClass() != PistonHeadBlock.class) {
+            return false;
+        }
+        var holder = Class.forName(STATE_HOLDER.replace('/', '.'), false, ShapePrewarm.class.getClassLoader());
+        var mapGetter = holder.getMethod("getStateMap");
+        var indexGetter = holder.getMethod("getStateIndex");
+        var propertiesGetter = holder.getMethod("getVanillaPropertyMap");
+        Object expectedMap = mapGetter.invoke(piston.defaultBlockState());
+        if (expectedMap == null || !expectedMap.getClass().getName().equals(FERRITE.replace('/', '.') + "fastmap.FastMap")) {
+            return false;
+        }
+        var indices = new java.util.HashSet<Integer>();
+        for (BlockState state : piston.getStateDefinition().getPossibleStates()) {
+            Object properties = propertiesGetter.invoke(state);
+            if (state.getClass() != BlockState.class || mapGetter.invoke(state) != expectedMap
+                    || !properties.getClass().getName().equals(FERRITE.replace('/', '.') + "impl.FastMapEntryMap")
+                    || !(indexGetter.invoke(state) instanceof Integer index) || index < 0 || !indices.add(index)) {
+                return false;
+            }
+        }
+        return !indices.isEmpty();
+    }
+
+    private static String canonicalMixinName(String owner, String name) {
+        if (owner.equals(STATE_HOLDER)) {
+            return name.replaceFirst("^redirect\\$[a-zA-Z0-9]+\\$ferritecore\\$getNeighborFromFastMap$",
+                    "redirect\\$stable\\$ferritecore\\$getNeighborFromFastMap");
+        }
+        return name.replaceFirst("^localvar\\$[a-zA-Z0-9]+\\$modernfix\\$useArrayMap$",
+                "localvar\\$stable\\$modernfix\\$useArrayMap");
+    }
+
+    private static MethodNode contractMethod(ClassNode owner, MethodNode method) {
+        if (!owner.name.equals(STATE_HOLDER) && !owner.name.equals(STATE_DEFINITION)) {
+            return method;
+        }
+        var copy = new MethodNode(method.access, canonicalMixinName(owner.name, method.name), method.desc, null, null);
+        method.accept(copy);
+        for (var instruction : copy.instructions) {
+            if (instruction instanceof MethodInsnNode call && call.owner.equals(owner.name)) {
+                call.name = canonicalMixinName(owner.name, call.name);
+            }
+        }
+        return copy;
     }
 
     private static void verifyLoaded(String owner) throws ClassNotFoundException {
@@ -122,7 +194,11 @@ public final class ShapePrewarm {
             }
             Map<String, MethodNode> methods = new HashMap<>();
             for (MethodNode method : owner.methods) {
-                methods.put(method.name + method.desc, method);
+                var contractMethod = contractMethod(owner, method);
+                if (methods.put(contractMethod.name + contractMethod.desc, contractMethod) != null) {
+                    VALIDATED.put(owner.name, "ambiguous_shape_method");
+                    return;
+                }
             }
             for (var contract : expected.entrySet()) {
                 if (contract.getKey().equals("@type")) {
