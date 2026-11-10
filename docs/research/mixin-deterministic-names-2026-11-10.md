@@ -67,15 +67,35 @@ The gate passes: +3,518 non-JDK classes served. (Before `main_menu` of each run;
 −1.4 s to `main_menu`, −1.5 s to the visible menu; the ranges do not overlap. Wall-clock times of the startup, not
 CPU time.
 
-**Not reproduced — read before integrating.** An earlier series on the same day, `C M M C M C C M`, gave
-`main_menu` 41.0–42.8 s for control and 44.5, 44.7 and 45.4 s for three of the four candidate runs (the fourth: 40.0 s).
-The extra time sat in `register_block` (+4 s) and was not seen again in the later series; no concurrent activity was
-recorded and no cause was found. An agent without the patch (`wbombo.mixinPatchProbe=noop`, transformer present, patch
-refused) gave 43.9 and 41.3 s in two runs. Treat −1.4 s as the best estimate and repeat on another occasion (and on
-the laptop) before embedding the JAR in Pandora.
+**The anomalous series (`C M M C M C C M`) was checked.** The AOT-key hypothesis is ruled out: all eight runs have
+`mode=use` and a stable key per variant (`launcher.log`). The first control run (50 s) was a cold start; the rest is
+spread. It was not a cache problem and no other cause was found.
+
+**New series, 6 + 6, order `C M M C C M M C C M M C`** (after a trained warm-up per variant; every JAR copied with
+`cp -p`; all 12 runs `mode=use` with the same keys; AnalogAudio welcome screen off in both; same FancyMenu build). The
+BootOptim `PHASE` log was not produced in this series, so the ends are RRLS `state=WAIT` (title screen ready) and
+`state=HIDE`, from the JVM start. `HIDE` includes the Mojang skin lookup (no skin cache in this build), hence the
+larger spread.
+
+| | control (6) | candidate (6) |
+|---|---|---|
+| `WAIT` mean / median | 46.6 / 45.3 s | 45.5 / 44.4 s |
+| `HIDE` mean / median | 49.5 / 49.5 s | 48.4 / 47.3 s |
+| `HIDE` range | 44.6–53.9 | 45.8–53.7 |
+
+Candidate −1.1 s (mean) and −0.9 s (median) to `WAIT`; −1.1 s / −2.2 s to `HIDE`. Spread is large (sd ≈ 3 s, three
+slow runs spread over both variants) and the ranges overlap, so this series alone does not prove the gain; it does
+show no regression, and its direction agrees with the 4 + 4 series (−1.4 s). The best estimate stays around −1 s
+(−0.5 to −1.5 s expected). Three series in total: two favorable or neutral, one (`C M M C M C C M`) unfavorable and
+unexplained.
+
+**Safety checked on every error path** (self-test): the transform hook never throws (garbage, null or class without the
+expected call: left untouched, FALLBACK logged); a `MixinNames` not reachable from the boot class path rejects the patch;
+a failing log or `removeTransformer` cannot change the outcome; `anonymousUuid` falls back to `UUID.randomUUID()` if
+it fails. Mixin loading cannot be broken by the hook.
 
 ## Reopen / next steps
 
 - Embed the rebuilt agent in Pandora (update `zipfs-readonly-agent.jar.source` commit + sha256) after this is merged.
-- Repeat the A/B on another day and on the laptop (Java 25 + AOT).
+- Optionally repeat the A/B on the laptop (Java 25 + AOT).
 - Check with the hosted exact-pack CI that the hook does not change behavior when Mixin loads late.
