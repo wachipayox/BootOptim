@@ -89,10 +89,24 @@ show no regression, and its direction agrees with the 4 + 4 series (−1.4 s). T
 (−0.5 to −1.5 s expected). Three series in total: two favorable or neutral, one (`C M M C M C C M`) unfavorable and
 unexplained.
 
+**Series 4 + 4 with the startup log** (control = BootOptim `8e916a87`, FancyMenu skin cache #8 in both variants, order
+`C M M C C M M C`, trained cache per variant, all `mode=use`, welcome screen off; `main_menu` = BootOptim `PHASE`):
+
+| | control | candidate |
+|---|---|---|
+| `main_menu` | 40.17, 37.49, 38.60, 43.80 (mean 40.0) | 36.40, 37.05, 42.88, 41.14 (mean 39.4) |
+| `mod_entrypoint` mean | 28.8 s | 28.1 s |
+
+Candidate −0.65 s at `main_menu`, same sign in the other marks, but the ranges overlap (runs drift ~+5 s late in the
+series). Across the three series the estimate is −0.6 to −1.4 s: small, never significantly negative except in the
+unexplained `C M M C M C C M` series.
+
 **Safety checked on every error path** (self-test): the transform hook never throws (garbage, null or class without the
 expected call: left untouched, FALLBACK logged); a `MixinNames` not reachable from the boot class path rejects the patch;
-a failing log or `removeTransformer` cannot change the outcome; `anonymousUuid` falls back to `UUID.randomUUID()` if
-it fails. Mixin loading cannot be broken by the hook.
+a failing log or `removeTransformer` cannot change the outcome. `anonymousUuid` falls back to `UUID.randomUUID()` (the original
+behaviour, one `[WBOMBO-COMPAT] FALLBACK … reason=duplicate_key|unstable_target` line) if the key was already used in this JVM
+(a repeated name would be a `LinkageError`), if the target text carries an identity hash, or if anything fails. The target
+Mixin passes is `ClassInfo`, whose `toString()` is its class name (checked with `javap`): stable. Mixin loading cannot be broken by the hook.
 
 ## Reopen / next steps
 
