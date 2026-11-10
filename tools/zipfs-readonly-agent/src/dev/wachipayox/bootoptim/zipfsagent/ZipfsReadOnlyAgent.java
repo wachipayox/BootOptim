@@ -62,6 +62,14 @@ public final class ZipfsReadOnlyAgent {
     }
 
     public static void premain(String arguments, Instrumentation instrumentation) {
+        if (!"off".equals(System.getProperty("wbombo.mixinDeterministicNames"))) {
+            try {
+                instrumentation.addTransformer(new MixinDeterminismTransformer(instrumentation), false);
+            } catch (Throwable failure) {
+                status("[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=" + MixinDeterminismTransformer.MECHANISM
+                        + " reason=" + failure);
+            }
+        }
         try {
             Class<?> policy = Class.forName(POLICY, false, null);
             Class<?> provider = findProviderClass();
