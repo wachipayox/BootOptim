@@ -34,6 +34,14 @@ the same effect as the attribute, for the same JARs, with no disk change. Any ot
   version received 416 class loads during the self-test alone). A later retransformation of the provider by another
   agent would start from the original bytes and drop the patch; nothing in the pack does that.
 
+## Second mechanism: deterministic Mixin names
+
+`MixinDeterminismTransformer` replaces the two `UUID.randomUUID()` calls Mixin uses to name generated code, so that
+Mixin-rewritten classes have the same bytes on every launch and the JDK 25 AOT cache can serve them. It applies only
+when the expected single call is found (otherwise `[WBOMBO-COMPAT] FALLBACK ... mechanism=mixin-deterministic-names`),
+removes itself once both Mixin classes were seen (or after 120 s), and can be switched off with
+`-Dwbombo.mixinDeterministicNames=off`. Research entry: `docs/research/mixin-deterministic-names-2026-11-10.md`.
+
 ## Failure behaviour (fail open)
 
 Any failure in the transform or in the policy logs `[WBOMBO-COMPAT] FALLBACK project=BootOptim

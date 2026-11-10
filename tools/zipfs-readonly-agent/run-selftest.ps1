@@ -37,4 +37,7 @@ if ($LASTEXITCODE -ne 0) { throw 'stock self-test failed' }
 & $javaExe ("-javaagent:" + $agentJar) -cp $cp $main (Join-Path $work 'root-agent') true
 if ($LASTEXITCODE -ne 0) { throw 'agent self-test failed' }
 
+& $javaExe -cp $cp dev.wachipayox.bootoptim.zipfsagent.MixinPatchSelfTest
+if ($LASTEXITCODE -ne 0) { throw 'mixin patch self-test failed' }
+
 Write-Output 'ZIPFS-READONLY-AGENT SELFTEST OK'
