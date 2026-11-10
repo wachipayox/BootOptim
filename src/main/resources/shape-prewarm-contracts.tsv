@@ -225,8 +225,6 @@ net/minecraft/world/level/block/state/BlockBehaviour$BlockStateBase	getShape(Lne
 net/minecraft/world/level/block/state/BlockBehaviour$BlockStateBase	getShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;	b706410bc83ffff5c703a97835a22104b9867c4061838f0b5a385746b721dc22
 net/minecraft/world/level/block/state/BlockState	@type	net/minecraft/world/level/block/state/BlockBehaviour$BlockStateBase:net/neoforged/neoforge/common/extensions/IBlockStateExtension,dev/ryanhcode/sable/mixinterface/block_properties/BlockStateExtension
 net/minecraft/world/level/block/state/BlockState	asState()Lnet/minecraft/world/level/block/state/BlockState;	06caba33d61242c6782fa274ee52e98658f3e9222ef5e260aa41cebd0a43af18
-net/minecraft/world/level/block/state/StateDefinition	@type	java/lang/Object:
-net/minecraft/world/level/block/state/StateDefinition	<init>(Ljava/util/function/Function;Ljava/lang/Object;Lnet/minecraft/world/level/block/state/StateDefinition$Factory;Ljava/util/Map;)V	b6523d69d83182b2442a1ea8e226c2decb4bc1f38587859e147f8ed8aa056475
 net/minecraft/world/level/block/state/StateHolder	@type	java/lang/Object:malte0811/ferritecore/ducks/FastMapStateHolder,com/simibubi/create/foundation/mixin/accessor/StateHolderAccessor,com/ishland/c2me/base/mixin/access/IState
 net/minecraft/world/level/block/state/StateHolder	getValue(Lnet/minecraft/world/level/block/state/properties/Property;)Ljava/lang/Comparable;	ec4c7659b3c9ade7a402785507392328d4f5a44d8d57ee7e7f06979aa82ebf63
 net/minecraft/world/level/block/state/StateHolder	setValue(Lnet/minecraft/world/level/block/state/properties/Property;Ljava/lang/Comparable;)Ljava/lang/Object;	4879973f106cee1577008bc62a9a6f796ade754a54e8456c25d3353c30dc4f1b
@@ -243,3 +241,6 @@ net/minecraft/world/level/block/state/BlockState	getShape(Lnet/minecraft/world/l
 net/minecraft/world/level/block/state/BlockState	getShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;	-
 net/minecraft/world/level/block/state/BlockState	getValue(Lnet/minecraft/world/level/block/state/properties/Property;)Ljava/lang/Comparable;	-
 net/minecraft/world/level/block/state/BlockState	setValue(Lnet/minecraft/world/level/block/state/properties/Property;Ljava/lang/Comparable;)Ljava/lang/Object;	-
+net/minecraft/world/level/block/state/StateDefinition	@type	java/lang/Object:
+net/minecraft/world/level/block/state/StateDefinition	<init>(Ljava/util/function/Function;Ljava/lang/Object;Lnet/minecraft/world/level/block/state/StateDefinition$Factory;Ljava/util/Map;)V	a36f1132505cb76ee56e069abe8feb99739657dac441af9258d9312cc5ac82f7
+net/minecraft/world/level/block/state/StateDefinition	localvar$stable$modernfix$useArrayMap(Ljava/util/Map;)Ljava/util/Map;	58dca1bb296eef31a6ac0a08ca2aaa95108f2bcfb9e9992bd52bdfc76e14486b

@@ -30,6 +30,7 @@ public final class ShapePrewarm {
     private static final String CAS = "com/mrh0/createaddition/shapes/CAShapes";
     private static final String ALL_SHAPES = "com/simibubi/create/AllShapes";
     private static final String STATE_HOLDER = "net/minecraft/world/level/block/state/StateHolder";
+    private static final String STATE_DEFINITION = "net/minecraft/world/level/block/state/StateDefinition";
     private static final String FERRITE = "malte0811/ferritecore/";
     private static final String KINETIC = "com/simibubi/create/content/kinetics/base/";
     private static final String VOXEL_SHAPER = "net/createmod/catnip/math/VoxelShaper";
@@ -145,20 +146,24 @@ public final class ShapePrewarm {
         return !indices.isEmpty();
     }
 
-    private static String canonicalRedirect(String name) {
-        return name.replaceFirst("^redirect\\$[a-zA-Z0-9]+\\$ferritecore\\$getNeighborFromFastMap$",
-                "redirect\\$stable\\$ferritecore\\$getNeighborFromFastMap");
+    private static String canonicalMixinName(String owner, String name) {
+        if (owner.equals(STATE_HOLDER)) {
+            return name.replaceFirst("^redirect\\$[a-zA-Z0-9]+\\$ferritecore\\$getNeighborFromFastMap$",
+                    "redirect\\$stable\\$ferritecore\\$getNeighborFromFastMap");
+        }
+        return name.replaceFirst("^localvar\\$[a-zA-Z0-9]+\\$modernfix\\$useArrayMap$",
+                "localvar\\$stable\\$modernfix\\$useArrayMap");
     }
 
     private static MethodNode contractMethod(ClassNode owner, MethodNode method) {
-        if (!owner.name.equals(STATE_HOLDER)) {
+        if (!owner.name.equals(STATE_HOLDER) && !owner.name.equals(STATE_DEFINITION)) {
             return method;
         }
-        var copy = new MethodNode(method.access, canonicalRedirect(method.name), method.desc, null, null);
+        var copy = new MethodNode(method.access, canonicalMixinName(owner.name, method.name), method.desc, null, null);
         method.accept(copy);
         for (var instruction : copy.instructions) {
-            if (instruction instanceof MethodInsnNode call && call.owner.equals(STATE_HOLDER)) {
-                call.name = canonicalRedirect(call.name);
+            if (instruction instanceof MethodInsnNode call && call.owner.equals(owner.name)) {
+                call.name = canonicalMixinName(owner.name, call.name);
             }
         }
         return copy;
@@ -190,7 +195,10 @@ public final class ShapePrewarm {
             Map<String, MethodNode> methods = new HashMap<>();
             for (MethodNode method : owner.methods) {
                 var contractMethod = contractMethod(owner, method);
-                methods.put(contractMethod.name + contractMethod.desc, contractMethod);
+                if (methods.put(contractMethod.name + contractMethod.desc, contractMethod) != null) {
+                    VALIDATED.put(owner.name, "ambiguous_shape_method");
+                    return;
+                }
             }
             for (var contract : expected.entrySet()) {
                 if (contract.getKey().equals("@type")) {
