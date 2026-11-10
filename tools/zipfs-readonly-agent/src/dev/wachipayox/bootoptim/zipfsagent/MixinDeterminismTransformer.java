@@ -56,6 +56,16 @@ final class MixinDeterminismTransformer implements ClassFileTransformer {
     @Override
     public byte[] transform(Module module, ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
+        try {
+            return transformSafely(className, classBeingRedefined, loader, classfileBuffer);
+        } catch (Throwable failure) {
+            // Nothing thrown here may reach the class loader: leave the class as it is.
+            return null;
+        }
+    }
+
+    private byte[] transformSafely(String className, Class<?> classBeingRedefined, ClassLoader loader,
+                                   byte[] classfileBuffer) {
         TRANSFORM_CALLS.incrementAndGet();
         if (className == null || classBeingRedefined != null) {
             return null;
@@ -70,17 +80,33 @@ final class MixinDeterminismTransformer implements ClassFileTransformer {
             return null;
         }
         byte[] result = null;
+        String failure = null;
         try {
+            // The patched code calls MixinNames; it must be reachable from every loader (boot class path).
+            Class.forName("dev.wachipayox.bootoptim.zipfsagent.MixinNames", false, null);
             result = patch(classfileBuffer, loader, processor);
-            ZipfsReadOnlyAgent.status("[WBOMBO-COMPAT] ACTIVE project=BootOptim mechanism=" + MECHANISM
-                    + " mod=mixin class=" + className);
-        } catch (Throwable failure) {
-            ZipfsReadOnlyAgent.status("[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=" + MECHANISM
-                    + " mod=mixin class=" + className + " reason=" + failure);
+        } catch (Throwable error) {
+            result = null;
+            failure = error.toString();
         }
-        if (seen.incrementAndGet() >= 2 && !removed) {
-            removed = true;
-            instrumentation.removeTransformer(this);
+        try {
+            if (failure == null) {
+                ZipfsReadOnlyAgent.status("[WBOMBO-COMPAT] ACTIVE project=BootOptim mechanism=" + MECHANISM
+                        + " mod=mixin class=" + className);
+            } else {
+                ZipfsReadOnlyAgent.status("[WBOMBO-COMPAT] FALLBACK project=BootOptim mechanism=" + MECHANISM
+                        + " mod=mixin class=" + className + " reason=" + failure);
+            }
+        } catch (Throwable ignored) {
+            // logging must not change the outcome
+        }
+        try {
+            if (seen.incrementAndGet() >= 2 && !removed) {
+                removed = true;
+                instrumentation.removeTransformer(this);
+            }
+        } catch (Throwable ignored) {
+            // staying registered only costs a cheap name check per class load
         }
         return result;
     }

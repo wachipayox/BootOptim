@@ -44,6 +44,24 @@ public final class MixinPatchSelfTest {
         processorClass.getDeclaredConstructor().newInstance();
         check(failures, "processor patched", true);
 
+        // Error paths of the hook itself: it must never throw and must leave the class untouched.
+        MixinDeterminismTransformer hook = new MixinDeterminismTransformer(null);
+        String[] names = {"org/spongepowered/asm/mixin/transformer/MixinProcessor",
+                "org/spongepowered/asm/mixin/transformer/InnerClassGenerator"};
+        for (String name : names) {
+            check(failures, "garbage bytes leave " + name + " untouched",
+                    hook.transform(null, null, name, null, null, new byte[]{1, 2, 3}) == null);
+            check(failures, "null bytes leave " + name + " untouched",
+                    hook.transform(null, null, name, null, null, null) == null);
+            check(failures, "valid class without the expected call leaves " + name + " untouched",
+                    hook.transform(null, null, name, null, null, build("x.NoCall", "<init>", MethodTypeDesc.of(ConstantDescs.CD_void), 0)) == null);
+        }
+        check(failures, "unrelated class ignored", hook.transform(null, null, "a/B", null, null, new byte[]{1}) == null);
+        check(failures, "null class name ignored", hook.transform(null, null, null, null, null, new byte[]{1}) == null);
+        check(failures, "names never fail", MixinNames.anonymousUuid(null, new Object() {
+            @Override public String toString() { throw new IllegalStateException("boom"); }
+        }) != null);
+
         // No randomUUID call, or two of them: rejected (fail open to stock).
         try {
             MixinDeterminismTransformer.patch(build("dev.wachipayox.bootoptim.zipfsagent.SyntheticNoCall", "getUniqueReference",

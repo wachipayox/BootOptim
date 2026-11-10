@@ -23,7 +23,11 @@ public final class MixinNames {
 
     /** Unique per (inner class, target class) pair, which is what Mixin asks to be unique, and stable across launches. */
     public static UUID anonymousUuid(String originalName, Object target) {
-        String key = originalName + "|" + target;
-        return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8));
+        try {
+            String key = originalName + "|" + target;
+            return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8));
+        } catch (Throwable failure) {
+            return UUID.randomUUID(); // the original behaviour; a name must never fail Mixin
+        }
     }
 }
