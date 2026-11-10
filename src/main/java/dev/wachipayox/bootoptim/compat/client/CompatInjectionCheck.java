@@ -32,6 +32,12 @@ public final class CompatInjectionCheck {
             Map.entry("ca.fxco.moreculling.", "moreculling"),
             Map.entry("com.github.talrey.createdeco.", "createdeco"),
             Map.entry("dev.averageanime.", "createfood"),
+            Map.entry("dev.simulated_team.simulated.", "simulated"),
+            Map.entry("dev.propulsionteam.propulsionsimulated.", "createpropulsion"),
+            Map.entry("com.drmangotea.tfmg.", "tfmg"),
+            Map.entry("com.mrh0.createaddition.", "createaddition"),
+            Map.entry("com.simibubi.create.", "create"),
+            Map.entry("net.createmod.catnip.", "ponder"),
             Map.entry("traben.entity_model_features.", "entity_model_features"),
             Map.entry("com.razz.decocraft.", "decocraft"));
     private static final Set<String> DECLARED_TARGETS = ConcurrentHashMap.newKeySet();
