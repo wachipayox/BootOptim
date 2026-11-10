@@ -81,8 +81,9 @@ samples or additive worker savings.
 
 The candidate completed all four workers before the preceding registry
 marker in both runs. The worker windows overlap. The latest worker
-completion was 28.175 s in B1 and 26.671 s in B2 from JVM start. Block
-registration and the visible menu were earlier in both candidate runs.
+completion was 28.175 s in B1 and 26.671 s in B2 from JVM start. Both
+candidate block intervals were shorter than both control intervals, and
+both candidates reached the visible menu before either control.
 `main_menu` ranges overlap, so the small median improvement at that marker
 is less certain. The candidate reaches the preceding register marker
 1.010 s later at the median. The bootstrap-end-to-block-end contraction
