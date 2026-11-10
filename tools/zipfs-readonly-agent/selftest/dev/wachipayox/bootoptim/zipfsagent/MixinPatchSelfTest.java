@@ -31,10 +31,13 @@ public final class MixinPatchSelfTest {
         byte[] patchedInner = MixinDeterminismTransformer.patch(inner, MixinPatchSelfTest.class.getClassLoader(), false);
         Class<?> innerClass = MethodHandles.lookup().defineClass(patchedInner);
         String first = call(innerClass, "getUniqueReference", new Class<?>[]{String.class, Object.class}, "a$1", INFO);
+        MixinNames.resetForTest(); // a second launch starts with an empty set of used keys
         String second = call(innerClass, "getUniqueReference", new Class<?>[]{String.class, Object.class}, "a$1", INFO);
+        MixinNames.resetForTest();
         String other = call(innerClass, "getUniqueReference", new Class<?>[]{String.class, Object.class}, "a$2", INFO);
         check(failures, "patched name is stable", first.equals(second));
         check(failures, "patched name differs per inner class", !first.equals(other));
+        MixinNames.resetForTest();
         check(failures, "patched name has no random part", first.equals(MixinNames.anonymousUuid("a$1", INFO).toString()));
 
         // MixinProcessor shape: <init> stores randomUUID().toString()
@@ -58,6 +61,20 @@ public final class MixinPatchSelfTest {
         }
         check(failures, "unrelated class ignored", hook.transform(null, null, "a/B", null, null, new byte[]{1}) == null);
         check(failures, "null class name ignored", hook.transform(null, null, null, null, null, new byte[]{1}) == null);
+        // Name guards: repeated key and unstable target text fall back to random names (original behaviour).
+        MixinNames.resetForTest();
+        java.util.UUID one = MixinNames.anonymousUuid("a$1", INFO);
+        java.util.UUID again = MixinNames.anonymousUuid("a$1", INFO);
+        check(failures, "first use of a key is deterministic", one.equals(java.util.UUID.nameUUIDFromBytes("a$1|".concat(String.valueOf(INFO)).getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        check(failures, "repeated key does not repeat the name", !one.equals(again));
+        check(failures, "repeated key twice more is still distinct", !again.equals(MixinNames.anonymousUuid("a$1", INFO)));
+        MixinNames.resetForTest();
+        Object identity = new Object();
+        check(failures, "identity-hash target is not deterministic", !MixinNames.anonymousUuid("b$1", identity).equals(MixinNames.anonymousUuid("b$1", identity)));
+        Object stable = new Object() { @Override public String toString() { return "pkg/Target"; } };
+        MixinNames.resetForTest();
+        check(failures, "stable text target is deterministic", MixinNames.anonymousUuid("c$1", stable).equals(java.util.UUID.nameUUIDFromBytes("c$1|pkg/Target".getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        check(failures, "null target does not throw", MixinNames.anonymousUuid("d$1", null) != null);
         check(failures, "names never fail", MixinNames.anonymousUuid(null, new Object() {
             @Override public String toString() { throw new IllegalStateException("boom"); }
         }) != null);
