@@ -1,5 +1,6 @@
 # BootOptim research ledger
 
+- [Palladium FastBitSet option — 2026-11-10](palladium-fast-bit-sets-2026-11-10.md): **REJECTED** at the shape-equivalence gate. 44,418 strict differences across 1,880,694 shape records, including 330 exact occupied-volume differences. No timed A/B.
 - [YACL image preparation off the calling thread — 2026-10-16](yacl-image-preparation-2026-10-16.md): **REJECTED 2026-10-17.** Port of the RRLS experiment 18a5615 (prepare enumeration off the render thread, manual reloads only). Physical A/B: no reload-wall benefit; synchronous return not measured. PR #389 closed; reopen with the timestamped measurement in the note.
 - [JAR opens through JDK ZipFS and `Files.isWritable` before ModLauncher — 2026-10-16](zipfs-jar-open-isWritable-2026-10-16.md): BootstrapLauncher opens about 210 ZipFileSystems before `modlauncher_start` (each library twice), each with an `isWritable` check on Windows. Owner is SecureJarHandler plus the JDK, no JVM switch. Per-open cost and antivirus split not measured yet. **PROFILED.**
 - [EMF animation-expression parsing, ported from RRLS — 2026-10-16](emf-expression-parsing-2026-10-16.md): unpinned port of the RRLS EMF parser/text equivalents (2026-09-27: expression parse about -40 %, text prep about -110 ms per reload), each with a differential guard. **Pending hosted A/B.**
