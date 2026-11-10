@@ -77,6 +77,13 @@ per variant. The only BootOptim change between control and candidate was
 the AllShapes mechanism. All four measured runs loaded their variant's
 AOT cache and reached the visible menu.
 
+This is the repeat with the experimental Mixin agent removed. The
+process arguments matched within each pair of training runs and across
+the four measured runs, except for the expected variant-specific AOT
+profile or cache path. All six used the launcher's standard ZipFS agent.
+Pandora reported `mode=record` for training and `mode=use` for each
+measured launch. The JVM also logged `Opened AOT cache` in all four.
+
 All values below are wall-clock seconds. `main_menu` is the BootOptim
 marker at JVM uptime. Visible menu runs from JVM process start to the
 first RRLS `state=HIDE`. The registration interval is the difference
@@ -84,13 +91,21 @@ between the BootOptim `bootstrap_end` and `register_block` markers.
 
 | Launch | main_menu | Visible menu | Bootstrap to block registration |
 | --- | ---: | ---: | ---: |
-| A1 control | 42.170 | 46.964 | 10.520 |
-| B1 candidate | 39.197 | 42.324 | 8.053 |
-| B2 candidate | 37.387 | 40.784 | 7.518 |
-| A2 control | 39.313 | 46.923 | 9.428 |
-| Median B − A | −2.450 | −5.389 | −2.188 |
+| A1 control | 40.079 | 44.036 | 10.655 |
+| B1 candidate | 36.268 | 43.768 | 7.383 |
+| B2 candidate | 40.124 | 47.719 | 8.738 |
+| A2 control | 41.940 | 48.395 | 11.811 |
+| Median B − A | −2.814 | −0.472 | −3.173 |
 
-The AllShapes worker ran from 24.051 to 27.037 s of JVM uptime in B1 and
-from 23.338 to 26.031 s in B2. The visible-menu delta includes later
-startup phases and their variance. The two pairs support proposing the
-guarded prewarm for integration through [#397](https://github.com/wachipayox/BootOptim/pull/397).
+The AllShapes worker ran from 22.840 to 25.535 s of JVM uptime in B1 and
+from 24.988 to 28.750 s in B2. The visible-menu delta includes later
+startup phases and their variance. The registration interval shortened
+in both pairs, supporting the guarded prewarm in
+[#397](https://github.com/wachipayox/BootOptim/pull/397).
+
+The earlier ABBA reported median deltas of −2.450 s for `main_menu`,
+−5.389 s for the visible menu and −2.188 s for registration. Both variants
+used AOT caches whose argument fingerprint matched only when including
+the experimental Mixin agent. The complete command lines from that
+series were not retained. The repeat above supersedes it for the
+standard launcher configuration.
