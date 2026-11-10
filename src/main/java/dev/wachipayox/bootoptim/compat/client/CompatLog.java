@@ -4,6 +4,7 @@ import dev.wachipayox.bootoptim.profiling.StartupReport;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import net.neoforged.fml.ModList;
+import net.neoforged.fml.loading.FMLLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +46,12 @@ public final class CompatLog {
         try {
             ModList mods = ModList.get();
             if (mods == null) {
-                return modId;
+                var loading = FMLLoader.getLoadingModList();
+                var file = loading == null ? null : loading.getModFileById(modId);
+                return file == null ? modId : modId + "@" + file.getMods().stream()
+                        .filter(mod -> mod.getModId().equals(modId))
+                        .map(mod -> mod.getVersion().toString())
+                        .findFirst().orElse("absent");
             }
             return modId + "@" + mods.getModContainerById(modId)
                     .map(container -> container.getModInfo().getVersion().toString())

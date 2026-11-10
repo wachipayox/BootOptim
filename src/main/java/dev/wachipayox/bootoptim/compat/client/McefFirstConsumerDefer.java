@@ -47,16 +47,34 @@ public final class McefFirstConsumerDefer {
      * task while the defer is active. MCEF's download/failure-screen logic still runs in its hook.
      */
     public static boolean shouldSkipAutomaticScreenInitTask() {
-        if (!ENABLED || STATE.get() != State.DEFERRED || !isCompatible()) {
+        if (!ENABLED || McefScreenTaskTransform.enabled() || STATE.get() != State.DEFERRED || !isCompatible()) {
             return false;
         }
         boolean fromMcefScreenHook = SCREEN_HOOK_STACK.walk(frames -> frames.limit(8).anyMatch(frame ->
                 frame.getDeclaringClass() == Minecraft.class
                         && frame.getMethodName().contains("$mcef$redirScreen")));
-        if (fromMcefScreenHook && ++skippedScreenTasks <= 4) {
-            LOGGER.info("BOOTOPTIM_MCEF_FIRST_CONSUMER status=skipped_redundant_screen_init_task count={}", skippedScreenTasks);
+        if (fromMcefScreenHook) {
+            reportSkippedScreenTask();
         }
         return fromMcefScreenHook;
+    }
+
+    /** Called at the audited submission only, after MCEF has finished its download checks. */
+    public static void submitAuditedScreenTask(Minecraft minecraft, Runnable task) {
+        State state = STATE.get();
+        if (minecraft.isSameThread() && (state == State.ARMED || state == State.DEFERRED)
+                && shouldSuppressInitialize()) {
+            CompatLog.active(McefScreenTaskTransform.MECHANISM, "mcef");
+            reportSkippedScreenTask();
+            return;
+        }
+        minecraft.execute(task);
+    }
+
+    private static void reportSkippedScreenTask() {
+        if (++skippedScreenTasks <= 4) {
+            LOGGER.info("BOOTOPTIM_MCEF_FIRST_CONSUMER status=skipped_redundant_screen_init_task count={}", skippedScreenTasks);
+        }
     }
 
     /** Called from the optional MCEF mixin at {@code MCEF.initialize()} HEAD. */
