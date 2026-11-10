@@ -55,6 +55,7 @@ public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
         @Override public void preApply(ITargetClassContext context) {}
         @Override public void postApply(ITargetClassContext context) {
             CompatInjectionCheck.verifyFinal(context.getClassNode());
+            McefScreenTaskTransform.install(context.getClassNode());
         }
         @Override public void export(MixinEnvironment environment, String name, boolean force, ClassNode classNode) {}
     }
