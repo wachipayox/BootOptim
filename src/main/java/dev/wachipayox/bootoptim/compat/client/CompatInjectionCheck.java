@@ -102,6 +102,7 @@ public final class CompatInjectionCheck {
 
     /** Called once mods are loaded: a declared target of a loaded mod that no longer exists. */
     public static void reportMissingPseudoTargets() {
+        McefScreenTaskTransform.reportMissing();
         for (String target : DECLARED_TARGETS) {
             String modId = modFor(target);
             if (modId == null || APPLIED_TARGETS.contains(target) || !isModLoaded(modId)) {
