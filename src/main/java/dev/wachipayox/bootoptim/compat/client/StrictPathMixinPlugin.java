@@ -31,6 +31,10 @@ public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
     }
     @Override public String getRefMapperConfig() { return null; }
     @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        if (mixinClassName.endsWith("ShapePrewarmClassAuditMixin")
+                || mixinClassName.endsWith("ShapePrewarmInterfaceAuditMixin")) {
+            return ShapePrewarm.enabled();
+        }
         return DecocraftContracts.shouldApply(simpleName(mixinClassName));
     }
     @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) { CompatInjectionCheck.declareTargets(myTargets); }
@@ -55,6 +59,7 @@ public final class StrictPathMixinPlugin implements IMixinConfigPlugin {
         @Override public void preApply(ITargetClassContext context) {}
         @Override public void postApply(ITargetClassContext context) {
             CompatInjectionCheck.verifyFinal(context.getClassNode());
+            ShapePrewarm.verifyFinal(context.getClassNode());
             McefScreenTaskTransform.install(context.getClassNode());
         }
         @Override public void export(MixinEnvironment environment, String name, boolean force, ClassNode classNode) {}
