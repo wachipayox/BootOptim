@@ -11,6 +11,7 @@ Before adding a new entry, verify the implementation is actually present on `age
 | Optimization | Scope | Default | Main mechanism |
 | --- | --- | --- | --- |
 | [Sodium face-axis quad classification](compatibility/sodium-quad-classifier.md) | Exact BakedQuad class + Sodium (validated 0.8.12-beta.1+mc1.21.1, not version-pinned) | Enabled with runtime differential guard | Replace normal-axis extrema with equivalent sentinel-aware plane checks |
+| [Post-bootstrap block-shape prewarm](compatibility/block-shape-class-prewarm.md) | Four audited optional mod initializers | Enabled when final bytecode matches; `-Dboot_optim.shapePrewarm=false` disables | Run unchanged initializers on workers before block registration |
 | Persistent mod scan cache | Global / FML discovery | Enabled | Reuse versioned mod metadata scan results across warm launches |
 | Asynchronous scan-cache writes | Global / cache persistence | Enabled with scan cache | Keep cold-cache persistence off FML scan workers |
 | [FancyMenu panorama preload overlap](compatibility/fancymenu-panorama-preload.md) | FancyMenu 3.9.x | Enabled when compatible target exists | Start existing async panorama PNG suppliers before FancyMenu serially waits for them |
