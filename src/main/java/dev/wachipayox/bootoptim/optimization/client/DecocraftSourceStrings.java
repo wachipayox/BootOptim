@@ -20,7 +20,8 @@ import org.slf4j.LoggerFactory;
  * source Strings of the models' textures are pointed at a single instance
  * ({@link ExactSourceStrings}). Text, models, vectors and images are not shared, freed or changed.
  *
- * <p>Runs outside resource reload and rendering. Only public field shapes are used; any class,
+ * <p>Starts outside resource reload and rendering, on its own low-priority thread so no title
+ * frame waits for it. Only public field shapes are used; any class,
  * field, size or count that differs from the audited shape leaves every reference untouched and
  * logs {@code [WBOMBO-COMPAT] FALLBACK}. Kill switch: {@code -Dboot_optim.decocraftSourceStrings=false}.
  * A restart undoes a completed pass; the duplicate String objects already replaced are only
@@ -58,6 +59,16 @@ public final class DecocraftSourceStrings {
         }
         NeoForge.EVENT_BUS.unregister(listener);
         listener = null;
+        // Hashing every embedded source takes tens of milliseconds: more than a title frame. The
+        // pass only reads through volatile access and replaces with compare-and-set, so it runs on
+        // a background thread instead of inside this client tick.
+        Thread worker = new Thread(DecocraftSourceStrings::sharePass, "BootOptim Decocraft source strings");
+        worker.setDaemon(true);
+        worker.setPriority(Thread.MIN_PRIORITY);
+        worker.start();
+    }
+
+    private static void sharePass() {
         long started = System.nanoTime();
         try {
             Class<?> type = Class.forName(CACHE_CLASS, false, DecocraftSourceStrings.class.getClassLoader());
