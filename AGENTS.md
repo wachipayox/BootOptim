@@ -24,5 +24,8 @@ Non-negotiables, in short:
 - State measurement origin, start marker and endpoint for every timing; never
   compare different origins or sum overlapping listener durations.
 - The distributable JAR is `bootstrap/build/libs/`, not root `build/libs`.
+- Versioning: `mod_version` is BootOptim's own semver; bump it for every JAR that goes into
+  the pack. The source commit is in the MANIFEST (`Welite-Commit`, `Welite-Dirty`) of both the
+  bootstrap and the nested mod, so the JAR is not renamed by hand.
 - This repository is public: nothing private (server addresses, tokens,
   relay prompts) goes here.
