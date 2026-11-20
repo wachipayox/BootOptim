@@ -10,6 +10,25 @@ tasks.named('wrapper', Wrapper).configure {
 }
 
 version = mod_version
+
+// Welite build identity: the source commit goes into every JAR MANIFEST so a pack JAR can be traced
+// back to its commit without relying on the file name. See "Versioning" in AGENTS.md.
+def weliteGit = { List<String> args ->
+    try {
+        def exec = providers.exec {
+            commandLine(['git'] + args)
+            ignoreExitValue = true
+        }
+        return exec.result.get().exitValue == 0 ? exec.standardOutput.asText.get().trim() : null
+    } catch (Exception ignored) {
+        return null
+    }
+}
+def weliteCommit = weliteGit(['rev-parse', 'HEAD']) ?: 'unknown'
+def weliteStatus = weliteGit(['status', '--porcelain', '--untracked-files=no'])
+def weliteDirty = weliteStatus == null ? 'unknown' : (!weliteStatus.isEmpty()).toString()
+ext.weliteCommit = weliteCommit
+ext.weliteDirty = weliteDirty
 group = mod_group_id
 
 base {
@@ -214,7 +233,9 @@ neoForge.ideSyncTask generateModMetadata
 
 tasks.named('jar', Jar).configure {
     manifest {
-        attributes('Implementation-Version': project.version)
+        attributes('Implementation-Version': project.version,
+                'Welite-Commit': weliteCommit,
+                'Welite-Dirty': weliteDirty)
     }
 }
 
